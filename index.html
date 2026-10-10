@@ -1,66 +1,160 @@
+
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ffffff">
-  <title>Henry Search</title>
+  <meta name="theme-color" content="#090b14">
+  <meta name="description" content="GOZIE SEARCH helps you explore the web and discover information.">
+  <title>GOZIE SEARCH — Explore Beyond Limits</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <main class="page">
+
     <header class="topbar">
-      <a class="brand-small" href="./" aria-label="Henry Search home">
-        <span class="brand-mark">H</span> Henry Search
+      <a class="brand-small" href="./" aria-label="GOZIE SEARCH home">
+        <span class="brand-mark">G</span>
+        <span>GOZIE <span class="brand-accent">SEARCH</span></span>
       </a>
-      <span class="status">
-        <span class="status-dot"></span> Search prototype
-      </span>
+
+      <div class="top-actions">
+        <button
+          id="theme-toggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch to light theme"
+          title="Switch theme"
+        >
+          <span id="theme-icon" aria-hidden="true">☀</span>
+          <span class="theme-label">Light mode</span>
+        </button>
+
+        <button
+          id="menu-toggle"
+          class="icon-button"
+          type="button"
+          aria-label="Open menu"
+        >☰</button>
+      </div>
     </header>
 
     <section class="hero" id="hero">
-      <div class="brand-mark brand-mark-large">H</div>
-      <p class="eyebrow">EXPLORE THE WEB</p>
-      <h1>Search beyond<br><span>the obvious.</span></h1>
-      <p class="intro">One place to begin exploring information from across the web.</p>
+      <div class="hero-orb orb-one"></div>
+      <div class="hero-orb orb-two"></div>
+
+      <div class="hero-content">
+        <div class="brand-mark brand-mark-large">G</div>
+
+        <p class="eyebrow">
+          <span class="eyebrow-dot"></span>
+          YOUR WORLD. ONE SEARCH.
+        </p>
+
+        <h1>
+          Explore beyond<br>
+          <span>limits.</span>
+        </h1>
+
+        <p class="intro">
+          Discover ideas, explore topics and find your next answer.
+          Your journey across the web starts here.
+        </p>
+      </div>
     </section>
 
     <section class="search-area" aria-label="Web search">
       <form id="search-form" class="search-form">
-        <label class="sr-only" for="query">What do you want to search for?</label>
         <span class="search-icon" aria-hidden="true">⌕</span>
+
+        <label class="sr-only" for="query">
+          What do you want to search for?
+        </label>
+
         <input
           id="query"
           name="q"
           type="search"
-          placeholder="Search anything..."
+          placeholder="What are you looking for?"
           autocomplete="off"
           required
           maxlength="300"
         >
+
         <button type="submit" aria-label="Search">
-          Search <span aria-hidden="true">→</span>
+          <span class="search-button-text">Search</span>
+          <span aria-hidden="true">→</span>
         </button>
       </form>
-      <p class="hint" id="search-hint">Try a question, a topic, a place or a website.</p>
+
+      <p class="hint" id="search-hint">
+        Ask a question. Discover something new.
+      </p>
+
+      <div class="quick-links" aria-label="Popular search ideas">
+        <span class="quick-label">EXPLORE</span>
+        <button type="button" class="quick-chip" data-query="Technology">
+          Technology
+        </button>
+        <button type="button" class="quick-chip" data-query="Science">
+          Science
+        </button>
+        <button type="button" class="quick-chip" data-query="Education">
+          Education
+        </button>
+        <button type="button" class="quick-chip" data-query="World news">
+          World news
+        </button>
+      </div>
     </section>
 
-    <section id="results-section" class="results-section" hidden aria-live="polite">
+    <section
+      id="results-section"
+      class="results-section"
+      hidden
+      aria-live="polite"
+    >
       <div class="results-heading">
         <div>
-          <p class="eyebrow">SEARCH RESULTS</p>
-          <h2 id="results-title">Results</h2>
+          <p class="eyebrow">YOUR DISCOVERIES</p>
+          <h2 id="results-title">Search results</h2>
         </div>
+        <span class="results-symbol" aria-hidden="true">✦</span>
       </div>
 
       <p id="result-status" class="result-status"></p>
       <div id="results-list" class="results-list"></div>
     </section>
 
-    <footer>
-      <span>Henry Search · Early prototype</span>
-      <span>Results are provided by an external search source.</span>
+    <section class="feature-grid" aria-label="Search features">
+      <article class="feature-card">
+        <div class="feature-icon">✦</div>
+        <h2>Discover more</h2>
+        <p>Explore subjects and find useful information for your next idea.</p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-icon">↗</div>
+        <h2>Keep exploring</h2>
+        <p>Move from one question to another with a simple search experience.</p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-icon">◎</div>
+        <h2>Made for you</h2>
+        <p>A clean, responsive interface designed for phones and computers.</p>
+      </article>
+    </section>
+
+    <footer class="footer">
+      <a class="footer-brand" href="./">GOZIE SEARCH</a>
+      <span>Explore beyond limits.</span>
+      <span class="footer-note">
+        Search results are provided by an external search service.
+      </span>
     </footer>
+
   </main>
 
   <script src="app.js"></script>
