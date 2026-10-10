@@ -10,8 +10,12 @@
 <body>
   <main class="page">
     <header class="topbar">
-      <a class="brand-small" href="./" aria-label="Henry Search home"><span class="brand-mark">H</span> Henry Search</a>
-      <span class="status"><span class="status-dot"></span> Search prototype</span>
+      <a class="brand-small" href="./" aria-label="Henry Search home">
+        <span class="brand-mark">H</span> Henry Search
+      </a>
+      <span class="status">
+        <span class="status-dot"></span> Search prototype
+      </span>
     </header>
 
     <section class="hero" id="hero">
@@ -19,14 +23,26 @@
       <p class="eyebrow">EXPLORE THE WEB</p>
       <h1>Search beyond<br><span>the obvious.</span></h1>
       <p class="intro">One place to begin exploring information from across the web.</p>
+    </section>
 
+    <section class="search-area" aria-label="Web search">
       <form id="search-form" class="search-form">
         <label class="sr-only" for="query">What do you want to search for?</label>
         <span class="search-icon" aria-hidden="true">⌕</span>
-        <input id="query" name="q" type="search" placeholder="Search anything..." autocomplete="off" required maxlength="300">
-        <button type="submit" aria-label="Search">Search <span aria-hidden="true">→</span></button>
+        <input
+          id="query"
+          name="q"
+          type="search"
+          placeholder="Search anything..."
+          autocomplete="off"
+          required
+          maxlength="300"
+        >
+        <button type="submit" aria-label="Search">
+          Search <span aria-hidden="true">→</span>
+        </button>
       </form>
-      <p class="hint">Try a question, a topic, a place or a website.</p>
+      <p class="hint" id="search-hint">Try a question, a topic, a place or a website.</p>
     </section>
 
     <section id="results-section" class="results-section" hidden aria-live="polite">
@@ -35,8 +51,8 @@
           <p class="eyebrow">SEARCH RESULTS</p>
           <h2 id="results-title">Results</h2>
         </div>
-        <button id="new-search" class="text-button" type="button">New search ↑</button>
       </div>
+
       <p id="result-status" class="result-status"></p>
       <div id="results-list" class="results-list"></div>
     </section>
@@ -46,6 +62,7 @@
       <span>Results are provided by an external search source.</span>
     </footer>
   </main>
+
   <script src="app.js"></script>
 </body>
 </html>
