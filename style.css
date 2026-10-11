@@ -806,6 +806,7 @@ input:focus-visible {
   .feature-grid {
     grid-template-columns: 1fr;
     gap: 12px;
+
     margin-bottom: 48px;
   }
 
@@ -844,5 +845,122 @@ input:focus-visible {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+
+
+/* GOZIE SEARCH: FINAL MOBILE SEARCH FIX */
+
+.search-area .search-tabs {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.search-area .search-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 17px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.search-area .search-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.search-area .search-form {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.search-area .search-form .search-icon {
+  flex: 0 0 auto;
+}
+
+.search-area .search-form input {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  padding: 8px 2px;
+}
+
+.search-area .search-form .voice-button {
+  flex: 0 0 38px;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 16px;
+}
+
+.search-area .search-form button[type="submit"] {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 13px;
+  gap: 5px;
+  border-radius: 13px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .search-area .search-tabs {
+    gap: 6px;
+  }
+
+  .search-area .search-tab {
+    min-height: 36px;
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+
+  .search-area .search-form {
+    gap: 5px;
+    padding-left: 11px;
+    padding-right: 6px;
+  }
+
+  .search-area .search-form .search-icon {
+    font-size: 22px;
+  }
+
+  .search-area .search-form .voice-button {
+    flex-basis: 34px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    font-size: 14px;
+  }
+
+  .search-area .search-form button[type="submit"] {
+    min-height: 36px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .search-area .search-form .search-button-text {
+    display: inline;
   }
 }
