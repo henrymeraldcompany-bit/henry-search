@@ -1,11 +1,10 @@
-
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#090b14">
-  <meta name="description" content="GOZIE SEARCH helps you explore the web and discover information.">
+  <meta name="theme-color" content="#080d13">
+  <meta name="description" content="GOZIE SEARCH helps you explore the web, images, news and videos.">
   <title>GOZIE SEARCH — Explore Beyond Limits</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -64,7 +63,37 @@
       </div>
     </section>
 
-    <section class="search-area" aria-label="Web search">
+    <section class="search-area" aria-label="Search">
+      <nav class="search-tabs" aria-label="Search category">
+        <button
+          type="button"
+          class="search-tab active"
+          data-category="all"
+          aria-pressed="true"
+        >All</button>
+
+        <button
+          type="button"
+          class="search-tab"
+          data-category="images"
+          aria-pressed="false"
+        >Images</button>
+
+        <button
+          type="button"
+          class="search-tab"
+          data-category="news"
+          aria-pressed="false"
+        >News</button>
+
+        <button
+          type="button"
+          class="search-tab"
+          data-category="videos"
+          aria-pressed="false"
+        >Videos</button>
+      </nav>
+
       <form id="search-form" class="search-form">
         <span class="search-icon" aria-hidden="true">⌕</span>
 
@@ -82,6 +111,16 @@
           maxlength="300"
         >
 
+        <button
+          id="voice-search"
+          class="voice-button"
+          type="button"
+          aria-label="Search by voice"
+          title="Search by voice"
+        >
+          <span aria-hidden="true">🎙</span>
+        </button>
+
         <button type="submit" aria-label="Search">
           <span class="search-button-text">Search</span>
           <span aria-hidden="true">→</span>
@@ -94,15 +133,19 @@
 
       <div class="quick-links" aria-label="Popular search ideas">
         <span class="quick-label">EXPLORE</span>
+
         <button type="button" class="quick-chip" data-query="Technology">
           Technology
         </button>
+
         <button type="button" class="quick-chip" data-query="Science">
           Science
         </button>
+
         <button type="button" class="quick-chip" data-query="Education">
           Education
         </button>
+
         <button type="button" class="quick-chip" data-query="World news">
           World news
         </button>
@@ -120,6 +163,7 @@
           <p class="eyebrow">YOUR DISCOVERIES</p>
           <h2 id="results-title">Search results</h2>
         </div>
+
         <span class="results-symbol" aria-hidden="true">✦</span>
       </div>
 
@@ -151,7 +195,7 @@
       <a class="footer-brand" href="./">GOZIE SEARCH</a>
       <span>Explore beyond limits.</span>
       <span class="footer-note">
-        Search results are provided by an external search service.
+        Search results are provided by external search services.
       </span>
     </footer>
 
