@@ -91,12 +91,8 @@ function renderResults(items) {
     urlLine.className = "result-url";
     urlLine.textContent = new URL(url).hostname;
 
-    const title = document.createElement("a");
+    const title = makeLink(url, item.title || url);
     title.className = "result-title";
-    title.href = url;
-    title.target = "_blank";
-    title.rel = "noopener noreferrer";
-    title.textContent = item.title || url;
 
     card.append(urlLine, title);
 
@@ -107,7 +103,6 @@ function renderResults(items) {
       const description = document.createElement("p");
       description.className = "result-description";
       description.textContent = descriptionText;
-
       card.appendChild(description);
     }
 
@@ -123,6 +118,85 @@ function renderResults(items) {
 }
 
 // ========================================
+// IMAGE GALLERY
+// ========================================
+
+function renderImageGallery(items) {
+  resultsList.replaceChildren();
+
+  if (!Array.isArray(items) || items.length === 0) {
+    showMessage(
+      "No images were found. Try another search phrase."
+    );
+    return;
+  }
+
+  const gallery = document.createElement("div");
+  gallery.className = "image-gallery";
+
+  let validCount = 0;
+
+  for (const item of items) {
+    const thumbnailUrl = safeHttpUrl(item.thumbnail);
+    const originalPage = safeHttpUrl(item.page || item.image);
+
+    if (!thumbnailUrl || !originalPage) continue;
+
+    const card = document.createElement("article");
+    card.className = "image-card";
+
+    const imageLink = makeLink(originalPage, "");
+    imageLink.className = "image-card-link";
+    imageLink.setAttribute(
+      "aria-label",
+      `Open image: ${item.title || "Untitled image"}`
+    );
+
+    const image = document.createElement("img");
+    image.src = thumbnailUrl;
+    image.alt = item.title || "Search result image";
+    image.loading = "lazy";
+    image.decoding = "async";
+
+    image.addEventListener("error", () => {
+      image.alt = "Image preview unavailable";
+      image.classList.add("image-unavailable");
+    });
+
+    imageLink.appendChild(image);
+
+    const title = document.createElement("p");
+    title.className = "image-card-title";
+    title.textContent = item.title || "Untitled image";
+
+    card.append(imageLink, title);
+
+    if (item.license) {
+      const license = document.createElement("p");
+      license.className = "image-card-license";
+      license.textContent = `License: ${item.license}`;
+      card.appendChild(license);
+    }
+
+    const sourceLink = makeLink(originalPage, "View source ↗");
+    sourceLink.className = "image-source-link";
+    card.appendChild(sourceLink);
+
+    gallery.appendChild(card);
+    validCount++;
+  }
+
+  if (!validCount) {
+    showMessage(
+      "The image provider returned results, but no usable image links were found."
+    );
+    return;
+  }
+
+  resultsList.appendChild(gallery);
+}
+
+// ========================================
 // CATEGORY SEARCH DESTINATIONS
 // ========================================
 
@@ -130,13 +204,6 @@ function getCategoryDestination(query) {
   const encodedQuery = encodeURIComponent(query);
 
   const destinations = {
-    images: {
-      name: "Image search",
-      description:
-        "Explore pictures related to your search using Google Images.",
-      url: `https://www.google.com/search?tbm=isch&q=${encodedQuery}`
-    },
-
     news: {
       name: "News search",
       description:
@@ -197,7 +264,7 @@ const categoryDetails = {
 
   images: {
     placeholder: "What images do you want to find?",
-    hint: "Search for pictures and images."
+    hint: "Search for pictures and view them in a gallery."
   },
 
   news: {
@@ -231,7 +298,7 @@ function setCategory(category) {
 
   queryInput.placeholder = details.placeholder;
 
-  if (searchHint) {
+  if (searchHint && !isListening) {
     searchHint.textContent = details.hint;
   }
 
@@ -266,8 +333,47 @@ form.addEventListener("submit", async (event) => {
 
   showMessage("GOZIE SEARCH is preparing your results…");
 
-  // Image, news and video searches use their
-  // dedicated external search destinations.
+  // Real image search using your Cloudflare Worker.
+  if (currentCategory === "images") {
+    try {
+      const endpoint = new URL("/images", SEARCH_API);
+      endpoint.searchParams.set("q", query);
+
+      const response = await fetch(endpoint.toString(), {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+          `Image service returned error ${response.status}.`
+        );
+      }
+
+      const items = data.results || [];
+
+      resultStatus.textContent =
+        `${items.length} image${items.length === 1 ? "" : "s"} ` +
+        `found via ${data.source || "the image provider"}.`;
+
+      renderImageGallery(items);
+    } catch (error) {
+      resultStatus.textContent = "Image search unavailable";
+
+      showMessage(
+        `${error.message || "Could not load images."} ` +
+        "Check your connection and try again."
+      );
+    }
+
+    return;
+  }
+
+  // News and video searches use their external destinations.
   if (currentCategory !== "all") {
     showCategoryDestination(query);
     return;
