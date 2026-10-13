@@ -118,6 +118,171 @@ function renderResults(items) {
 }
 
 // ========================================
+// FULL-SIZE IMAGE VIEWER
+// ========================================
+
+let imageZoom = 1;
+let activeImage = null;
+
+function openImageViewer(imageUrl, title) {
+  const safeImageUrl = safeHttpUrl(imageUrl);
+  if (!safeImageUrl) return;
+
+  document.querySelector("#image-viewer")?.remove();
+
+  imageZoom = 1;
+
+  const viewer = document.createElement("div");
+  viewer.id = "image-viewer";
+  viewer.className = "image-viewer";
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "image-viewer-toolbar";
+
+  const heading = document.createElement("div");
+  heading.className = "image-viewer-heading";
+  heading.textContent = title || "Image preview";
+
+  const controls = document.createElement("div");
+  controls.className = "image-viewer-controls";
+
+  const zoomOut = document.createElement("button");
+  zoomOut.textContent = "−";
+  zoomOut.setAttribute("aria-label", "Zoom out");
+
+  const zoomLabel = document.createElement("span");
+  zoomLabel.className = "image-zoom-label";
+  zoomLabel.textContent = "100%";
+
+  const zoomIn = document.createElement("button");
+  zoomIn.textContent = "+";
+  zoomIn.setAttribute("aria-label", "Zoom in");
+
+  const reset = document.createElement("button");
+  reset.textContent = "Reset";
+  reset.setAttribute("aria-label", "Reset image zoom");
+
+  const close = document.createElement("button");
+  close.textContent = "✕";
+  close.setAttribute("aria-label", "Close image viewer");
+
+  controls.append(zoomOut, zoomLabel, zoomIn, reset, close);
+  toolbar.append(heading, controls);
+
+  const stage = document.createElement("div");
+  stage.className = "image-viewer-stage";
+
+  const image = document.createElement("img");
+  image.className = "image-viewer-image";
+  image.src = safeImageUrl;
+  image.alt = title || "Full-size image";
+  image.draggable = false;
+
+  stage.appendChild(image);
+  viewer.append(toolbar, stage);
+  document.body.appendChild(viewer);
+
+  document.body.style.overflow = "hidden";
+  activeImage = image;
+
+  let offsetX = 0;
+  let offsetY = 0;
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+
+  function updateImage() {
+    image.style.transform =
+      `translate(${offsetX}px, ${offsetY}px) scale(${imageZoom})`;
+
+    zoomLabel.textContent = `${Math.round(imageZoom * 100)}%`;
+
+    image.style.cursor = imageZoom > 1 ? "grab" : "default";
+  }
+
+  function zoomBy(amount) {
+    imageZoom = Math.max(
+      0.5,
+      Math.min(5, imageZoom + amount)
+    );
+    updateImage();
+  }
+
+  function resetImage() {
+    imageZoom = 1;
+    offsetX = 0;
+    offsetY = 0;
+    updateImage();
+  }
+
+  zoomIn.addEventListener("click", () => zoomBy(0.25));
+  zoomOut.addEventListener("click", () => zoomBy(-0.25));
+  reset.addEventListener("click", resetImage);
+
+  function closeViewer() {
+    viewer.remove();
+    document.body.style.overflow = "";
+    activeImage = null;
+    document.removeEventListener("keydown", handleKey);
+  }
+
+  function handleKey(event) {
+    if (event.key === "Escape") closeViewer();
+    if (event.key === "+" || event.key === "=") zoomBy(0.25);
+    if (event.key === "-") zoomBy(-0.25);
+  }
+
+  close.addEventListener("click", closeViewer);
+
+  viewer.addEventListener("click", (event) => {
+    if (event.target === viewer || event.target === stage) {
+      closeViewer();
+    }
+  });
+
+  image.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    zoomBy(event.deltaY < 0 ? 0.15 : -0.15);
+  }, { passive: false });
+
+  image.addEventListener("pointerdown", (event) => {
+    if (imageZoom <= 1) return;
+
+    dragging = true;
+    startX = event.clientX - offsetX;
+    startY = event.clientY - offsetY;
+
+    image.setPointerCapture(event.pointerId);
+    image.style.cursor = "grabbing";
+  });
+
+  image.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+
+    offsetX = event.clientX - startX;
+    offsetY = event.clientY - startY;
+    updateImage();
+    image.style.cursor = "grabbing";
+  });
+
+  function stopDragging() {
+    dragging = false;
+    image.style.cursor = imageZoom > 1 ? "grab" : "default";
+  }
+
+  image.addEventListener("pointerup", stopDragging);
+  image.addEventListener("pointercancel", stopDragging);
+
+  document.addEventListener("keydown", handleKey);
+
+  image.addEventListener("error", () => {
+    heading.textContent = "Could not load this image";
+  });
+
+  updateImage();
+}
+
+// ========================================
 // IMAGE GALLERY
 // ========================================
 
@@ -125,9 +290,7 @@ function renderImageGallery(items) {
   resultsList.replaceChildren();
 
   if (!Array.isArray(items) || items.length === 0) {
-    showMessage(
-      "No images were found. Try another search phrase."
-    );
+    showMessage("No images were found. Try another search.");
     return;
   }
 
@@ -138,65 +301,66 @@ function renderImageGallery(items) {
 
   for (const item of items) {
     const thumbnailUrl = safeHttpUrl(item.thumbnail);
-    const originalPage = safeHttpUrl(item.page || item.image);
+    const fullImageUrl = safeHttpUrl(item.image);
+    const sourcePage = safeHttpUrl(item.page || item.image);
 
-    if (!thumbnailUrl || !originalPage) continue;
+    if (!thumbnailUrl || !fullImageUrl || !sourcePage) {
+      continue;
+    }
 
     const card = document.createElement("article");
     card.className = "image-card";
 
-    const imageLink = makeLink(originalPage, "");
-    imageLink.className = "image-card-link";
-    imageLink.setAttribute(
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "image-preview-button";
+    previewButton.setAttribute(
       "aria-label",
-      `Open image: ${item.title || "Untitled image"}`
+      `View full-size image: ${item.title || "Image"}`
     );
 
     const image = document.createElement("img");
     image.src = thumbnailUrl;
-    image.alt = item.title || "Search result image";
+    image.alt = item.title || "Image search result";
     image.loading = "lazy";
     image.decoding = "async";
 
-    image.addEventListener("error", () => {
-      image.alt = "Image preview unavailable";
-      image.classList.add("image-unavailable");
-    });
+    previewButton.appendChild(image);
 
-    imageLink.appendChild(image);
+    previewButton.addEventListener("click", () => {
+      openImageViewer(
+        fullImageUrl,
+        item.title || "Image preview"
+      );
+    });
 
     const title = document.createElement("p");
     title.className = "image-card-title";
     title.textContent = item.title || "Untitled image";
 
-    card.append(imageLink, title);
+    const license = document.createElement("p");
+    license.className = "image-card-license";
+    license.textContent = item.license
+      ? `License: ${item.license}`
+      : "License information unavailable";
 
-    if (item.license) {
-      const license = document.createElement("p");
-      license.className = "image-card-license";
-      license.textContent = `License: ${item.license}`;
-      card.appendChild(license);
-    }
-
-    const sourceLink = makeLink(originalPage, "View source ↗");
+    const sourceLink = makeLink(sourcePage, "View source ↗");
     sourceLink.className = "image-source-link";
-    card.appendChild(sourceLink);
 
+    card.append(previewButton, title, license, sourceLink);
     gallery.appendChild(card);
     validCount++;
   }
 
   if (!validCount) {
-    showMessage(
-      "The image provider returned results, but no usable image links were found."
-    );
+    showMessage("No usable images were returned. Try another search.");
     return;
   }
 
   resultsList.appendChild(gallery);
 }
 
-// ========================================
+     ========================================
 // CATEGORY SEARCH DESTINATIONS
 // ========================================
 
