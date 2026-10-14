@@ -30,6 +30,8 @@ let isListening = false;
 // ========================================
 
 function showMessage(message) {
+  if (!resultsList) return;
+
   resultsList.replaceChildren();
 
   const card = document.createElement("div");
@@ -62,11 +64,31 @@ function makeLink(url, text) {
   return link;
 }
 
+async function fetchJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json"
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || `The service returned error ${response.status}.`
+    );
+  }
+
+  return data;
+}
+
 // ========================================
 // DISPLAY NORMAL WEB RESULTS
 // ========================================
 
 function renderResults(items) {
+  if (!resultsList) return;
+
   resultsList.replaceChildren();
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -122,7 +144,6 @@ function renderResults(items) {
 // ========================================
 
 let imageZoom = 1;
-let activeImage = null;
 
 function openImageViewer(imageUrl, title) {
   const safeImageUrl = safeHttpUrl(imageUrl);
@@ -131,6 +152,8 @@ function openImageViewer(imageUrl, title) {
   document.querySelector("#image-viewer")?.remove();
 
   imageZoom = 1;
+
+  const previousOverflow = document.body.style.overflow;
 
   const viewer = document.createElement("div");
   viewer.id = "image-viewer";
@@ -147,6 +170,7 @@ function openImageViewer(imageUrl, title) {
   controls.className = "image-viewer-controls";
 
   const zoomOut = document.createElement("button");
+  zoomOut.type = "button";
   zoomOut.textContent = "−";
   zoomOut.setAttribute("aria-label", "Zoom out");
 
@@ -155,14 +179,17 @@ function openImageViewer(imageUrl, title) {
   zoomLabel.textContent = "100%";
 
   const zoomIn = document.createElement("button");
+  zoomIn.type = "button";
   zoomIn.textContent = "+";
   zoomIn.setAttribute("aria-label", "Zoom in");
 
   const reset = document.createElement("button");
+  reset.type = "button";
   reset.textContent = "Reset";
   reset.setAttribute("aria-label", "Reset image zoom");
 
   const close = document.createElement("button");
+  close.type = "button";
   close.textContent = "✕";
   close.setAttribute("aria-label", "Close image viewer");
 
@@ -183,7 +210,6 @@ function openImageViewer(imageUrl, title) {
   document.body.appendChild(viewer);
 
   document.body.style.overflow = "hidden";
-  activeImage = image;
 
   let offsetX = 0;
   let offsetY = 0;
@@ -196,15 +222,11 @@ function openImageViewer(imageUrl, title) {
       `translate(${offsetX}px, ${offsetY}px) scale(${imageZoom})`;
 
     zoomLabel.textContent = `${Math.round(imageZoom * 100)}%`;
-
     image.style.cursor = imageZoom > 1 ? "grab" : "default";
   }
 
   function zoomBy(amount) {
-    imageZoom = Math.max(
-      0.5,
-      Math.min(5, imageZoom + amount)
-    );
+    imageZoom = Math.max(0.5, Math.min(5, imageZoom + amount));
     updateImage();
   }
 
@@ -215,14 +237,9 @@ function openImageViewer(imageUrl, title) {
     updateImage();
   }
 
-  zoomIn.addEventListener("click", () => zoomBy(0.25));
-  zoomOut.addEventListener("click", () => zoomBy(-0.25));
-  reset.addEventListener("click", resetImage);
-
   function closeViewer() {
     viewer.remove();
-    document.body.style.overflow = "";
-    activeImage = null;
+    document.body.style.overflow = previousOverflow;
     document.removeEventListener("keydown", handleKey);
   }
 
@@ -232,6 +249,9 @@ function openImageViewer(imageUrl, title) {
     if (event.key === "-") zoomBy(-0.25);
   }
 
+  zoomIn.addEventListener("click", () => zoomBy(0.25));
+  zoomOut.addEventListener("click", () => zoomBy(-0.25));
+  reset.addEventListener("click", resetImage);
   close.addEventListener("click", closeViewer);
 
   viewer.addEventListener("click", (event) => {
@@ -287,6 +307,8 @@ function openImageViewer(imageUrl, title) {
 // ========================================
 
 function renderImageGallery(items) {
+  if (!resultsList) return;
+
   resultsList.replaceChildren();
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -325,13 +347,15 @@ function renderImageGallery(items) {
     image.loading = "lazy";
     image.decoding = "async";
 
+    image.addEventListener("error", () => {
+      image.alt = "Image preview unavailable";
+      image.classList.add("image-unavailable");
+    });
+
     previewButton.appendChild(image);
 
     previewButton.addEventListener("click", () => {
-      openImageViewer(
-        fullImageUrl,
-        item.title || "Image preview"
-      );
+      openImageViewer(fullImageUrl, item.title || "Image preview");
     });
 
     const title = document.createElement("p");
@@ -360,7 +384,7 @@ function renderImageGallery(items) {
   resultsList.appendChild(gallery);
 }
 
-     ========================================
+// ========================================
 // CATEGORY SEARCH DESTINATIONS
 // ========================================
 
@@ -460,13 +484,13 @@ function setCategory(category) {
 
   const details = categoryDetails[category];
 
-  queryInput.placeholder = details.placeholder;
+  if (queryInput) {
+    queryInput.placeholder = details.placeholder;
+  }
 
   if (searchHint && !isListening) {
     searchHint.textContent = details.hint;
   }
-
-  queryInput.focus();
 }
 
 searchTabs.forEach((tab) => {
@@ -479,106 +503,101 @@ searchTabs.forEach((tab) => {
 // SEARCH SUBMISSION
 // ========================================
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+if (form && queryInput && resultsList) {
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-  const query = queryInput.value.trim();
+    const query = queryInput.value.trim();
 
-  if (!query) {
-    queryInput.focus();
-    return;
-  }
+    if (!query) {
+      queryInput.focus();
+      return;
+    }
 
-  hero.hidden = true;
-  resultsSection.hidden = false;
+    if (hero) hero.hidden = true;
+    if (resultsSection) resultsSection.hidden = false;
 
-  resultsTitle.textContent = query;
-  resultStatus.textContent = "Preparing your search…";
+    if (resultsTitle) resultsTitle.textContent = query;
 
-  showMessage("GOZIE SEARCH is preparing your results…");
+    if (resultStatus) {
+      resultStatus.textContent = "Preparing your search…";
+    }
 
-  // Real image search using your Cloudflare Worker.
-  if (currentCategory === "images") {
-    try {
-      const endpoint = new URL("/images", SEARCH_API);
-      endpoint.searchParams.set("q", query);
+    showMessage("GOZIE SEARCH is preparing your results…");
 
-      const response = await fetch(endpoint.toString(), {
-        headers: {
-          Accept: "application/json"
+    // IMAGE SEARCH
+    if (currentCategory === "images") {
+      try {
+        const endpoint = new URL("/images", SEARCH_API);
+        endpoint.searchParams.set("q", query);
+
+        const data = await fetchJson(endpoint.toString());
+        const items = Array.isArray(data.results) ? data.results : [];
+
+        if (resultStatus) {
+          resultStatus.textContent =
+            `${items.length} image${items.length === 1 ? "" : "s"} ` +
+            `found via ${data.source || "the image provider"}.`;
         }
-      });
 
-      const data = await response.json().catch(() => ({}));
+        renderImageGallery(items);
+      } catch (error) {
+        if (resultStatus) {
+          resultStatus.textContent = "Image search unavailable";
+        }
 
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-          `Image service returned error ${response.status}.`
+        showMessage(
+          `${error.message || "Could not load images."} ` +
+          "Check your connection and try again."
         );
       }
 
-      const items = data.results || [];
+      return;
+    }
 
-      resultStatus.textContent =
-        `${items.length} image${items.length === 1 ? "" : "s"} ` +
-        `found via ${data.source || "the image provider"}.`;
+    // NEWS AND VIDEO DESTINATIONS
+    if (currentCategory !== "all") {
+      showCategoryDestination(query);
+      return;
+    }
 
-      renderImageGallery(items);
+    // NORMAL WEB SEARCH
+    try {
+      const endpoint = new URL("/search", SEARCH_API);
+      endpoint.searchParams.set("q", query);
+
+      const data = await fetchJson(endpoint.toString());
+
+      const items = Array.isArray(data.results)
+        ? data.results
+        : Array.isArray(data.items)
+          ? data.items
+          : [];
+
+      if (resultStatus) {
+        resultStatus.textContent =
+          `${items.length} result${items.length === 1 ? "" : "s"} ` +
+          `returned by ${data.source || "the search provider"}.`;
+      }
+
+      renderResults(items);
     } catch (error) {
-      resultStatus.textContent = "Image search unavailable";
+      if (resultStatus) {
+        resultStatus.textContent = "Search unavailable";
+      }
 
       showMessage(
-        `${error.message || "Could not load images."} ` +
-        "Check your connection and try again."
+        `${error.message || "Could not reach GOZIE SEARCH."} ` +
+        "Please check your connection and try again."
       );
     }
-
-    return;
-  }
-
-  // News and video searches use their external destinations.
-  if (currentCategory !== "all") {
-    showCategoryDestination(query);
-    return;
-  }
-
-  // Normal web search uses your existing Worker.
-  try {
-    const endpoint = new URL("/search", SEARCH_API);
-    endpoint.searchParams.set("q", query);
-
-    const response = await fetch(endpoint.toString(), {
-      headers: {
-        Accept: "application/json"
-      }
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        `Search service returned error ${response.status}.`
-      );
-    }
-
-    const items = data.results || data.items || [];
-
-    resultStatus.textContent =
-      `${items.length} result${items.length === 1 ? "" : "s"} ` +
-      `returned by ${data.source || "the search provider"}.`;
-
-    renderResults(items);
-  } catch (error) {
-    resultStatus.textContent = "Search unavailable";
-
-    showMessage(
-      `${error.message || "Could not reach GOZIE SEARCH."} ` +
-      "Please check your connection and try again."
-    );
-  }
-});
+  });
+} else {
+  console.error(
+    "GOZIE SEARCH: Search form, query input, or results list is missing. " +
+    "Check the corresponding HTML element IDs."
+  );
+}
 
 // ========================================
 // QUICK-SEARCH BUTTONS
@@ -586,8 +605,17 @@ form.addEventListener("submit", async (event) => {
 
 document.querySelectorAll("[data-query]").forEach((button) => {
   button.addEventListener("click", () => {
+    if (!queryInput || !form) return;
+
     queryInput.value = button.dataset.query || "";
-    form.requestSubmit();
+
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    } else {
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true })
+      );
+    }
   });
 });
 
@@ -620,8 +648,7 @@ function setVoiceListening(listening) {
   if (searchHint && listening) {
     searchHint.textContent = "Listening… Speak your search now.";
   } else if (searchHint) {
-    searchHint.textContent =
-      categoryDetails[currentCategory].hint;
+    searchHint.textContent = categoryDetails[currentCategory].hint;
   }
 }
 
@@ -669,9 +696,19 @@ function startVoiceSearch() {
       const transcript =
         event.results[0][0].transcript.trim();
 
-      if (transcript) {
+      if (transcript && queryInput && form) {
         queryInput.value = transcript;
-        form.requestSubmit();
+
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(
+            new Event("submit", {
+              bubbles: true,
+              cancelable: true
+            })
+          );
+        }
       }
     };
 
@@ -779,6 +816,8 @@ const menuToggle = document.querySelector("#menu-toggle");
 
 if (menuToggle) {
   menuToggle.addEventListener("click", () => {
+    if (!queryInput) return;
+
     queryInput.focus();
 
     queryInput.scrollIntoView({
