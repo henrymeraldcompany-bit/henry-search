@@ -555,8 +555,31 @@ if (form && queryInput && resultsList) {
       return;
     }
 
-    // NEWS AND VIDEO DESTINATIONS
-    if (currentCategory !== "all") {
+    // NEWS SEARCH: render results inside GOZIE SEARCH.
+    if (currentCategory === "news") {
+      try {
+        const endpoint = new URL("/news", SEARCH_API);
+        endpoint.searchParams.set("q", query);
+        const data = await fetchJson(endpoint.toString());
+        const items = Array.isArray(data.results) ? data.results : [];
+
+        if (resultStatus) {
+          resultStatus.textContent =
+            `${items.length} news result${items.length === 1 ? "" : "s"} from ${data.source || "the news provider"}.`;
+        }
+
+        renderResults(items);
+      } catch (error) {
+        if (resultStatus) resultStatus.textContent = "News search unavailable";
+        showMessage(
+          `${error.message || "Could not load news."} Check your connection and try again.`
+        );
+      }
+      return;
+    }
+
+    // VIDEO SEARCH currently opens YouTube's search page.
+    if (currentCategory === "videos") {
       showCategoryDestination(query);
       return;
     }
