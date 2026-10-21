@@ -25,3 +25,4 @@ Deploy using the backend config file (run from the repository root):
     npx wrangler secret put YOUTUBE_API_KEY --config backend/wrangler.toml
 
 The current website still uses its existing SEARCH_API URL. Deploy and test this backend first, then wire its URL into the frontend for images and videos, or merge these route handlers into the current Worker while preserving the existing /search and /news routes. Do not blindly replace the current Worker.
+
