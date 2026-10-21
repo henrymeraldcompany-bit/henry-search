@@ -1,5 +1,5 @@
 name = "gozie-search-media"
-main = "backend/worker.js"
+main = "worker.js"
 compatibility_date = "2026-10-21"
 
 [[d1_databases]]
