@@ -1479,3 +1479,49 @@ input:focus-visible {
     font-size: 10px;
   }
 }
+
+
+/* Final compact layout: each filter label sits beside its dropdown. */
+.video-filter-bar {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 7px !important;
+}
+
+.video-filter {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  font-size: 10px !important;
+}
+
+.video-filter select {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  padding: 4px 3px !important;
+  font-size: 10px !important;
+}
+
+@media (max-width: 480px) {
+  .video-filter-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    flex-direction: initial !important;
+    align-items: start !important;
+    gap: 5px !important;
+  }
+  .video-filter {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .video-filter select {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 9px !important;
+  }
+}
