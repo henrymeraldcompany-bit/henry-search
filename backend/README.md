@@ -13,13 +13,15 @@ It provides /health, /images?q=..., /videos?q=..., and /index/status. Its schedu
 5. Optional: add YOUTUBE_API_KEY as a Worker secret; never put it in app.js or index.html.
 6. Test /health, /index/status, /images?q=cats, and /videos?q=science.
 
-Example commands from a trusted environment with Wrangler:
+Create the database from the Cloudflare dashboard or run this from the repository root. Then copy the returned database ID into backend/wrangler.toml:
 
     npx wrangler d1 create gozie-search-media
-    # Copy the returned ID into wrangler.toml
-    npx wrangler d1 execute gozie-search-media --remote --file=backend/schema.sql
-    npx wrangler deploy
+
+Deploy using the backend config file (run from the repository root):
+
+    npx wrangler d1 execute gozie-search-media --remote --file=backend/schema.sql --config backend/wrangler.toml
+    npx wrangler deploy --config backend/wrangler.toml
     # Optional server-side YouTube key:
-    npx wrangler secret put YOUTUBE_API_KEY
+    npx wrangler secret put YOUTUBE_API_KEY --config backend/wrangler.toml
 
 The current website still uses its existing SEARCH_API URL. Deploy and test this backend first, then wire its URL into the frontend for images and videos, or merge these route handlers into the current Worker while preserving the existing /search and /news routes. Do not blindly replace the current Worker.
