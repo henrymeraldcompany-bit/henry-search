@@ -4,34 +4,37 @@ A phone-friendly search website with category tabs for web search, images, news,
 
 ## Frontend files
 
-- `index.html` — page structure and accessible search controls.
-- `style.css` — dark/light themes and responsive layouts.
-- `app.js` — search requests, result rendering, image preview, voice search, and safe outbound links.
+- `index.html` — accessible page structure and search controls.
+- `style.css` — dark/light themes, responsive layout, video filters, and player styling.
+- `app.js` — search requests, relevance ordering, media rendering, image preview, voice search, and safe outbound links.
 
-## Search service
+## Existing search service
 
-The frontend uses the Cloudflare Worker API:
+The live frontend still points to the existing Cloudflare Worker:
 
 `https://henry-search-api.henrymeraldcompany.workers.dev`
 
 - `/search?q=...` — ordinary web results.
 - `/images?q=...` — image results.
 - `/news?q=...` — news results.
-- `/videos?q=...` — preferred video endpoint. The Video tab falls back to PeerTube's public search API if the Worker route is unavailable or returns no usable results.
+- `/videos?q=...` — preferred video endpoint; the frontend also keeps a public PeerTube fallback.
 
-## Video search behavior
+## Media improvements committed
 
-The Video tab displays video cards inside GOZIE SEARCH, including title, source/host, thumbnail when available, channel, duration, and description when returned by the provider. Links open in a new tab with `noopener noreferrer`; results and thumbnails are only accepted from HTTP(S) URLs. Missing thumbnails get a text fallback.
+- Image and video results are ordered by visible title/description matches where the providers return enough metadata; duplicates are removed where detectable.
+- Video filters include source, upload date and duration. Filters depend on metadata actually supplied by each provider.
+- The video tab provides in-page playback for sources which expose a permitted embed URL and keeps an original-source link.
+- If no supported provider can embed a video, the original link remains available.
 
-The no-key fallback uses PeerTube's public API at `https://peertube.tv/api/v1/search/videos`. Search coverage is limited to videos the instance can find; it is not a complete index of YouTube or the entire web. If no videos are returned, the interface offers an external YouTube search link. Availability and browser cross-origin access depend on the public instance.
+## New backend source package
+
+The `backend/` directory now contains a separate Cloudflare Worker, D1 schema, daily schedule configuration, setup notes, and a smoke-test checklist. It stores media metadata and original source links rather than copying media files. It searches Wikimedia Commons for images, PeerTube for open-source videos, and can use YouTube when a server-side API key is configured. A daily schedule refreshes the seed-query index at 08:00 Nigeria time.
+
+**The separate backend is not deployed yet.** The Cloudflare management connection was unavailable during this build, and the current frontend is still connected to the existing Worker. Do not replace that Worker blindly: first deploy and test the new backend, then connect it or merge its media routes while preserving working `/search` and `/news` routes.
 
 ## Security and maintenance
 
-- Do not put API secrets in frontend JavaScript.
-- Treat all provider titles and descriptions as untrusted text; render them as text, not HTML.
-- Respect provider terms, rate limits, and availability.
-- The frontend must keep usable error messages when external search services are unavailable.
-
-## Deployment note
-
-The frontend update requests `/videos` from the existing Worker first. The Worker route itself still needs to be added and deployed through Cloudflare management before the preferred backend path can be considered complete. Until then, the frontend's PeerTube fallback may provide results if the instance is reachable from the user's browser.
+- Never put API secrets in frontend JavaScript.
+- Treat titles and descriptions as untrusted text; render them as text, not HTML.
+- Respect provider terms, rate limits, licensing and embedding restrictions.
+- The daily index is a seed-query discovery index, not a crawler of every website or video.
