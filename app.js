@@ -385,6 +385,240 @@ function renderImageGallery(items) {
 }
 
 // ========================================
+ // VIDEO SEARCH RESULTS
+// ========================================
+
+const VIDEO_SEARCH_BASE = "https://peertube.tv";
+
+function resolveSafeHttpUrl(value, base) {
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  try {
+    const url = base ? new URL(value, base) : new URL(value);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatVideoDuration(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+
+  const whole = Math.floor(seconds);
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const remainder = whole % 60;
+
+  if (hours) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function normalizeVideoResult(item) {
+  if (!item || typeof item !== "object") return null;
+
+  let instanceBase = VIDEO_SEARCH_BASE;
+  if (typeof item.host === "string" && item.host.trim()) {
+    const hostValue = item.host.startsWith("http")
+      ? item.host
+      : `https://${item.host}`;
+    instanceBase = resolveSafeHttpUrl(hostValue, VIDEO_SEARCH_BASE) || VIDEO_SEARCH_BASE;
+  }
+
+  const rawUrl = item.url || item.watchUrl || item.originalUrl ||
+    item.embedPath ||
+    (item.shortUUID ? `/w/${item.shortUUID}` : "") ||
+    (item.uuid ? `/w/${item.uuid}` : "");
+
+  const url = resolveSafeHttpUrl(rawUrl, instanceBase);
+  if (!url) return null;
+
+  const rawThumbnail = item.thumbnailUrl || item.thumbnailPath ||
+    item.previewPath || item.thumbnail || item.preview || "";
+
+  const thumbnail = resolveSafeHttpUrl(rawThumbnail, instanceBase);
+
+  return {
+    url,
+    thumbnail,
+    title: typeof item.title === "string" && item.title.trim()
+      ? item.title.trim()
+      : typeof item.name === "string" && item.name.trim()
+        ? item.name.trim()
+        : "Untitled video",
+    description: typeof item.description === "string" ? item.description.trim() : "",
+    channel: item.channel?.displayName || item.account?.displayName ||
+      item.account?.name || "",
+    duration: formatVideoDuration(item.duration)
+  };
+}
+
+async function fetchVideoResults(query) {
+  let workerError = "";
+
+  // Prefer the GOZIE SEARCH Worker endpoint when it is available.
+  try {
+    const endpoint = new URL("/videos", SEARCH_API);
+    endpoint.searchParams.set("q", query);
+
+    const data = await fetchJson(endpoint.toString());
+    const items = Array.isArray(data.results)
+      ? data.results
+      : Array.isArray(data.items)
+        ? data.items
+        : [];
+
+    const normalized = items.map(normalizeVideoResult).filter(Boolean);
+    if (normalized.length) {
+      return {
+        items: normalized,
+        source: data.source || "GOZIE SEARCH video provider"
+      };
+    }
+    workerError = "The GOZIE video endpoint returned no usable results.";
+  } catch (error) {
+    workerError = error?.message || "The GOZIE video endpoint is unavailable.";
+  }
+
+  // No API key is needed for PeerTube's public video-search API.
+  // Its results cover videos known to this instance, not every video on the web.
+  const endpoint = new URL("/api/v1/search/videos", VIDEO_SEARCH_BASE);
+  endpoint.searchParams.set("search", query);
+  endpoint.searchParams.set("count", "24");
+  endpoint.searchParams.set("sort", "-publishedAt");
+
+  try {
+    const data = await fetchJson(endpoint.toString());
+    const items = Array.isArray(data.data)
+      ? data.data
+      : Array.isArray(data.results)
+        ? data.results
+        : [];
+
+    return {
+      items: items.map(normalizeVideoResult).filter(Boolean),
+      source: `PeerTube (${new URL(VIDEO_SEARCH_BASE).hostname})`
+    };
+  } catch (error) {
+    const detail = error?.message || "The public video provider could not be reached.";
+    throw new Error(`Video search is unavailable. ${detail} You can still try YouTube search below.`);
+  }
+}
+
+function renderVideoResults(items, query) {
+  if (!resultsList) return;
+
+  resultsList.replaceChildren();
+
+  if (!Array.isArray(items) || items.length === 0) {
+    showMessage("No matching videos were found in this provider. Try different words or use the YouTube search link below.");
+    appendVideoFallbackLink(query);
+    return;
+  }
+
+  const gallery = document.createElement("div");
+  gallery.className = "video-gallery";
+  let validCount = 0;
+
+  for (const item of items) {
+    const video = item?.url ? item : normalizeVideoResult(item);
+    if (!video?.url) continue;
+
+    const card = document.createElement("article");
+    card.className = "video-card";
+
+    if (video.thumbnail) {
+      const thumbnailLink = makeLink(video.url, "");
+      thumbnailLink.className = "video-thumb-link";
+      thumbnailLink.setAttribute("aria-label", `Open video: ${video.title}`);
+
+      const image = document.createElement("img");
+      image.src = video.thumbnail;
+      image.alt = `Thumbnail for ${video.title}`;
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.referrerPolicy = "no-referrer";
+      image.addEventListener("error", () => {
+        image.remove();
+        const fallback = document.createElement("span");
+        fallback.className = "video-thumb-placeholder";
+        fallback.textContent = "Video preview unavailable";
+        thumbnailLink.appendChild(fallback);
+      });
+
+      thumbnailLink.appendChild(image);
+      card.appendChild(thumbnailLink);
+    } else {
+      const placeholderLink = makeLink(video.url, "▶ Open video");
+      placeholderLink.className = "video-thumb-placeholder video-thumb-link";
+      card.appendChild(placeholderLink);
+    }
+
+    const title = makeLink(video.url, video.title);
+    title.className = "video-card-title";
+
+    const source = document.createElement("p");
+    source.className = "video-card-source";
+    const hostname = new URL(video.url).hostname;
+    source.textContent = video.channel
+      ? `${video.channel} · ${hostname}`
+      : hostname;
+
+    card.append(title, source);
+
+    if (video.duration) {
+      const duration = document.createElement("span");
+      duration.className = "video-card-duration";
+      duration.textContent = video.duration;
+      card.appendChild(duration);
+    }
+
+    if (video.description) {
+      const description = document.createElement("p");
+      description.className = "video-card-description";
+      description.textContent = video.description.replace(/\s+/g, " ").slice(0, 240);
+      card.appendChild(description);
+    }
+
+    gallery.appendChild(card);
+    validCount++;
+  }
+
+  if (!validCount) {
+    showMessage("The provider returned results, but none had a usable video link.");
+    appendVideoFallbackLink(query);
+    return;
+  }
+
+  resultsList.appendChild(gallery);
+  appendVideoFallbackLink(query);
+}
+
+function appendVideoFallbackLink(query) {
+  if (!resultsList || !query) return;
+
+  const fallback = document.createElement("p");
+  fallback.className = "video-search-fallback";
+
+  const label = document.createTextNode("Looking for more choices? ");
+  const link = makeLink(
+    `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+    "Search YouTube ↗"
+  );
+
+  fallback.append(label, link);
+  resultsList.appendChild(fallback);
+}
+
+function showVideoSearchError(query, message) {
+  showMessage(message || "Video search is temporarily unavailable. Please try again.");
+  appendVideoFallbackLink(query);
+}
+
+// ========================================
 // CATEGORY SEARCH DESTINATIONS
 // ========================================
 
@@ -578,9 +812,22 @@ if (form && queryInput && resultsList) {
       return;
     }
 
-    // VIDEO SEARCH currently opens YouTube's search page.
+    // VIDEO SEARCH: show real results inside GOZIE SEARCH.
     if (currentCategory === "videos") {
-      showCategoryDestination(query);
+      try {
+        const data = await fetchVideoResults(query);
+        if (resultStatus) {
+          resultStatus.textContent =
+            `${data.items.length} video${data.items.length === 1 ? "" : "s"} found via ${data.source}.`;
+        }
+        renderVideoResults(data.items, query);
+      } catch (error) {
+        if (resultStatus) resultStatus.textContent = "Video search unavailable";
+        showVideoSearchError(
+          query,
+          `${error?.message || "Could not load videos."} Check your connection and try again.`
+        );
+      }
       return;
     }
 
