@@ -306,9 +306,10 @@ function openImageViewer(imageUrl, title) {
 // IMAGE GALLERY
 // ========================================
 
-function renderImageGallery(items) {
+function renderImageGallery(items, query = "") {
   if (!resultsList) return;
 
+  items = rankMediaResults(items, query, ["title", "name", "alt"], ["description", "caption"], ["image", "url"]);
   resultsList.replaceChildren();
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -385,14 +386,18 @@ function renderImageGallery(items) {
 }
 
 // ========================================
- // VIDEO SEARCH RESULTS
+// VIDEO SEARCH, RELEVANCE, FILTERS AND INLINE PLAYBACK
 // ========================================
 
 const VIDEO_SEARCH_BASE = "https://peertube.tv";
+const MEDIA_STOP_WORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+  "how", "i", "in", "is", "it", "of", "on", "or", "the", "to", "with",
+  "what", "when", "where", "who", "why", "you", "your"
+]);
 
 function resolveSafeHttpUrl(value, base) {
   if (typeof value !== "string" || !value.trim()) return null;
-
   try {
     const url = base ? new URL(value, base) : new URL(value);
     return ["http:", "https:"].includes(url.protocol) ? url.href : null;
@@ -401,216 +406,469 @@ function resolveSafeHttpUrl(value, base) {
   }
 }
 
-function formatVideoDuration(value) {
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds < 0) return "";
+function normalizeMediaText(value) {
+  return String(value || "").toLowerCase().normalize("NFKC")
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
 
+function queryWords(query) {
+  return normalizeMediaText(query).split(/\s+/)
+    .filter((word) => word.length > 1 && !MEDIA_STOP_WORDS.has(word));
+}
+
+function mediaRelevanceScore(item, query, titleKeys, detailKeys) {
+  const normalizedQuery = normalizeMediaText(query);
+  const words = queryWords(query);
+  if (!words.length) return 0;
+
+  const title = normalizeMediaText(titleKeys.map((key) => item?.[key]).filter(Boolean).join(" "));
+  const details = normalizeMediaText(detailKeys.map((key) => {
+    const value = item?.[key];
+    if (typeof value === "string") return value;
+    if (value && typeof value === "object") {
+      return [value.displayName, value.name, value.username].filter(Boolean).join(" ");
+    }
+    return "";
+  }).filter(Boolean).join(" "));
+
+  let score = 0;
+  if (normalizedQuery && title.includes(normalizedQuery)) score += 12;
+
+  let titleHits = 0;
+  for (const word of words) {
+    if (title.includes(word)) {
+      score += 5;
+      titleHits++;
+    } else if (details.includes(word)) {
+      score += 1;
+    }
+  }
+
+  if (titleHits === words.length && words.length > 1) score += 4;
+  return score;
+}
+
+function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
+  if (!Array.isArray(items)) return [];
+  const ranked = [];
+  const seenUrls = new Set();
+  const seenTitles = new Set();
+
+  for (const [index, item] of items.entries()) {
+    if (!item || typeof item !== "object") continue;
+    const rawUrl = urlKeys.map((key) => item[key]).find((value) => typeof value === "string" && value);
+    let canonicalUrl = "";
+    if (rawUrl) {
+      const safeUrl = resolveSafeHttpUrl(rawUrl);
+      if (safeUrl) {
+        const parsed = new URL(safeUrl);
+        parsed.hash = "";
+        canonicalUrl = parsed.href.toLowerCase();
+      }
+    }
+
+    const title = normalizeMediaText(titleKeys.map((key) => item[key]).filter(Boolean).join(" "));
+    const host = canonicalUrl ? new URL(canonicalUrl).hostname : "";
+    const titleKey = title && host ? title + "|" + host : "";
+    if ((canonicalUrl && seenUrls.has(canonicalUrl)) || (titleKey && seenTitles.has(titleKey))) continue;
+    if (canonicalUrl) seenUrls.add(canonicalUrl);
+    if (titleKey) seenTitles.add(titleKey);
+
+    ranked.push({
+      item,
+      index,
+      score: mediaRelevanceScore(item, query, titleKeys, detailKeys)
+    });
+  }
+
+  const hasRelevantMatches = ranked.some((entry) => entry.score > 0);
+  if (hasRelevantMatches) {
+    ranked.sort((a, b) => b.score - a.score || a.index - b.index);
+  }
+
+  return ranked.map((entry) => entry.item);
+}
+
+function formatVideoDuration(value) {
+  let seconds = Number(value);
+  if (typeof value === "string" && !/^\d+(\.\d+)?$/.test(value.trim())) {
+    const parts = value.trim().split(":").map(Number);
+    if (parts.length >= 2 && parts.length <= 3 && parts.every(Number.isFinite)) {
+      seconds = parts.length === 3
+        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+        : parts[0] * 60 + parts[1];
+    }
+  }
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
   const whole = Math.floor(seconds);
   const hours = Math.floor(whole / 3600);
   const minutes = Math.floor((whole % 3600) / 60);
   const remainder = whole % 60;
-
-  if (hours) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-  }
-
+  if (hours) return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function parseDurationSeconds(value) {
+  if (Number.isFinite(Number(value)) && String(value).trim() !== "") return Math.max(0, Number(value));
+  if (typeof value !== "string") return null;
+  const parts = value.trim().split(":").map(Number);
+  if (parts.length < 2 || parts.length > 3 || !parts.every(Number.isFinite)) return null;
+  return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+}
+
+function getVideoHost(value) {
+  try { return new URL(value).hostname.replace(/^www\./i, "").toLowerCase(); }
+  catch { return ""; }
+}
+
+function getYouTubeVideoId(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (host === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] || "";
+    if (["youtube.com", "m.youtube.com", "youtube-nocookie.com"].includes(host)) {
+      if (url.pathname === "/watch") return url.searchParams.get("v") || "";
+      const match = url.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]+)/);
+      return match?.[1] || "";
+    }
+  } catch {}
+  return "";
 }
 
 function normalizeVideoResult(item) {
   if (!item || typeof item !== "object") return null;
 
   let instanceBase = VIDEO_SEARCH_BASE;
-  if (typeof item.host === "string" && item.host.trim()) {
-    const hostValue = item.host.startsWith("http")
-      ? item.host
-      : `https://${item.host}`;
-    instanceBase = resolveSafeHttpUrl(hostValue, VIDEO_SEARCH_BASE) || VIDEO_SEARCH_BASE;
+  const hostValue = typeof item.host === "string" ? item.host
+    : typeof item.instance === "string" ? item.instance : "";
+  if (hostValue.trim()) {
+    const normalizedHost = hostValue.startsWith("http") ? hostValue : `https://${hostValue}`;
+    instanceBase = resolveSafeHttpUrl(normalizedHost, VIDEO_SEARCH_BASE) || VIDEO_SEARCH_BASE;
   }
 
-  const rawUrl = item.url || item.watchUrl || item.originalUrl ||
-    item.embedPath ||
+  const rawUrl = item.url || item.watchUrl || item.watch_url || item.originalUrl ||
     (item.shortUUID ? `/w/${item.shortUUID}` : "") ||
-    (item.uuid ? `/w/${item.uuid}` : "");
-
+    (item.uuid ? `/videos/watch/${item.uuid}` : "") ||
+    item.embedPath || item.embedUrl || "";
   const url = resolveSafeHttpUrl(rawUrl, instanceBase);
   if (!url) return null;
 
-  const rawThumbnail = item.thumbnailUrl || item.thumbnailPath ||
-    item.previewPath || item.thumbnail || item.preview || "";
+  const rawEmbed = item.embedUrl || item.embedURL || item.embedPath || "";
+  let embedUrl = rawEmbed ? resolveSafeHttpUrl(rawEmbed, instanceBase) : null;
+  const youtubeId = getYouTubeVideoId(url);
+  if (!embedUrl && youtubeId) {
+    embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`;
+  }
 
+  const rawThumbnail = item.thumbnailUrl || item.thumbnailPath || item.previewPath ||
+    item.thumbnail || item.preview || item.thumbnail_url || "";
   const thumbnail = resolveSafeHttpUrl(rawThumbnail, instanceBase);
+  const rawDuration = item.durationSeconds ?? item.duration_seconds ?? item.duration;
+  const durationSeconds = parseDurationSeconds(rawDuration);
+  const published = item.publishedAt || item.published_at || item.createdAt ||
+    item.created_at || item.uploadedAt || item.uploaded_at || "";
+  const publishedMs = published ? Date.parse(published) : NaN;
+  const publishedAt = Number.isFinite(publishedMs) ? new Date(publishedMs).toISOString() : "";
 
   return {
     url,
+    embedUrl,
     thumbnail,
-    title: typeof item.title === "string" && item.title.trim()
-      ? item.title.trim()
-      : typeof item.name === "string" && item.name.trim()
-        ? item.name.trim()
-        : "Untitled video",
+    title: typeof item.title === "string" && item.title.trim() ? item.title.trim()
+      : typeof item.name === "string" && item.name.trim() ? item.name.trim() : "Untitled video",
     description: typeof item.description === "string" ? item.description.trim() : "",
     channel: item.channel?.displayName || item.account?.displayName ||
-      item.account?.name || "",
-    duration: formatVideoDuration(item.duration)
+      item.account?.name || item.channelName || item.uploader || "",
+    duration: formatVideoDuration(rawDuration),
+    durationSeconds,
+    publishedAt,
+    source: getVideoHost(url)
   };
 }
 
-async function fetchVideoResults(query) {
-  let workerError = "";
+function getPlayableEmbedUrl(video) {
+  const candidate = resolveSafeHttpUrl(video?.embedUrl);
+  if (!candidate) {
+    const youtubeId = getYouTubeVideoId(video?.url || "");
+    return youtubeId ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}` : null;
+  }
 
-  // Prefer the GOZIE SEARCH Worker endpoint when it is available.
+  try {
+    const embed = new URL(candidate);
+    const watch = new URL(video.url);
+    const host = embed.hostname.toLowerCase();
+    const isYouTubeEmbed = host === "youtube.com" || host === "www.youtube.com" ||
+      host === "youtube-nocookie.com" || host === "www.youtube-nocookie.com";
+    // Other platforms may only embed from the same origin as the result itself.
+    return isYouTubeEmbed || embed.origin === watch.origin ? embed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchVideoResults(query) {
+  // Try the GOZIE SEARCH Worker first. The fallback is deliberately retained so
+  // the tab remains useful while the Worker route is being built or deployed.
   try {
     const endpoint = new URL("/videos", SEARCH_API);
     endpoint.searchParams.set("q", query);
-
     const data = await fetchJson(endpoint.toString());
-    const items = Array.isArray(data.results)
-      ? data.results
-      : Array.isArray(data.items)
-        ? data.items
-        : [];
-
+    const items = Array.isArray(data.results) ? data.results
+      : Array.isArray(data.items) ? data.items : [];
     const normalized = items.map(normalizeVideoResult).filter(Boolean);
-    if (normalized.length) {
-      return {
-        items: normalized,
-        source: data.source || "GOZIE SEARCH video provider"
-      };
-    }
-    workerError = "The GOZIE video endpoint returned no usable results.";
+    if (normalized.length) return { items: normalized, source: data.source || "GOZIE SEARCH video provider" };
   } catch (error) {
-    workerError = error?.message || "The GOZIE video endpoint is unavailable.";
+    console.warn("GOZIE video endpoint unavailable; trying the public fallback.", error);
   }
 
-  // No API key is needed for PeerTube's public video-search API.
-  // Its results cover videos known to this instance, not every video on the web.
   const endpoint = new URL("/api/v1/search/videos", VIDEO_SEARCH_BASE);
   endpoint.searchParams.set("search", query);
   endpoint.searchParams.set("count", "24");
   endpoint.searchParams.set("sort", "-publishedAt");
 
-  try {
-    const data = await fetchJson(endpoint.toString());
-    const items = Array.isArray(data.data)
-      ? data.data
-      : Array.isArray(data.results)
-        ? data.results
-        : [];
-
-    return {
-      items: items.map(normalizeVideoResult).filter(Boolean),
-      source: `PeerTube (${new URL(VIDEO_SEARCH_BASE).hostname})`
-    };
-  } catch (error) {
-    const detail = error?.message || "The public video provider could not be reached.";
-    throw new Error(`Video search is unavailable. ${detail} You can still try YouTube search below.`);
-  }
-}
-
-function renderVideoResults(items, query) {
-  if (!resultsList) return;
-
-  resultsList.replaceChildren();
-
-  if (!Array.isArray(items) || items.length === 0) {
-    showMessage("No matching videos were found in this provider. Try different words or use the YouTube search link below.");
-    appendVideoFallbackLink(query);
-    return;
-  }
-
-  const gallery = document.createElement("div");
-  gallery.className = "video-gallery";
-  let validCount = 0;
-
-  for (const item of items) {
-    const video = item?.url ? item : normalizeVideoResult(item);
-    if (!video?.url) continue;
-
-    const card = document.createElement("article");
-    card.className = "video-card";
-
-    if (video.thumbnail) {
-      const thumbnailLink = makeLink(video.url, "");
-      thumbnailLink.className = "video-thumb-link";
-      thumbnailLink.setAttribute("aria-label", `Open video: ${video.title}`);
-
-      const image = document.createElement("img");
-      image.src = video.thumbnail;
-      image.alt = `Thumbnail for ${video.title}`;
-      image.loading = "lazy";
-      image.decoding = "async";
-      image.referrerPolicy = "no-referrer";
-      image.addEventListener("error", () => {
-        image.remove();
-        const fallback = document.createElement("span");
-        fallback.className = "video-thumb-placeholder";
-        fallback.textContent = "Video preview unavailable";
-        thumbnailLink.appendChild(fallback);
-      });
-
-      thumbnailLink.appendChild(image);
-      card.appendChild(thumbnailLink);
-    } else {
-      const placeholderLink = makeLink(video.url, "▶ Open video");
-      placeholderLink.className = "video-thumb-placeholder video-thumb-link";
-      card.appendChild(placeholderLink);
-    }
-
-    const title = makeLink(video.url, video.title);
-    title.className = "video-card-title";
-
-    const source = document.createElement("p");
-    source.className = "video-card-source";
-    const hostname = new URL(video.url).hostname;
-    source.textContent = video.channel
-      ? `${video.channel} · ${hostname}`
-      : hostname;
-
-    card.append(title, source);
-
-    if (video.duration) {
-      const duration = document.createElement("span");
-      duration.className = "video-card-duration";
-      duration.textContent = video.duration;
-      card.appendChild(duration);
-    }
-
-    if (video.description) {
-      const description = document.createElement("p");
-      description.className = "video-card-description";
-      description.textContent = video.description.replace(/\s+/g, " ").slice(0, 240);
-      card.appendChild(description);
-    }
-
-    gallery.appendChild(card);
-    validCount++;
-  }
-
-  if (!validCount) {
-    showMessage("The provider returned results, but none had a usable video link.");
-    appendVideoFallbackLink(query);
-    return;
-  }
-
-  resultsList.appendChild(gallery);
-  appendVideoFallbackLink(query);
+  const data = await fetchJson(endpoint.toString());
+  const items = Array.isArray(data.data) ? data.data : Array.isArray(data.results) ? data.results : [];
+  return {
+    items: items.map((item) => {
+      const normalized = normalizeVideoResult({ ...item, host: item.host || VIDEO_SEARCH_BASE });
+      return normalized;
+    }).filter(Boolean),
+    source: `PeerTube (${new URL(VIDEO_SEARCH_BASE).hostname})`
+  };
 }
 
 function appendVideoFallbackLink(query) {
   if (!resultsList || !query) return;
-
   const fallback = document.createElement("p");
   fallback.className = "video-search-fallback";
-
   const label = document.createTextNode("Looking for more choices? ");
   const link = makeLink(
     `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
     "Search YouTube ↗"
   );
-
   fallback.append(label, link);
   resultsList.appendChild(fallback);
+}
+
+function addFilterOption(select, value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  select.appendChild(option);
+}
+
+function createVideoPlayer(video) {
+  const embedUrl = getPlayableEmbedUrl(video);
+  if (!embedUrl) return null;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "video-player-wrap";
+  const frame = document.createElement("iframe");
+  frame.className = "video-player-frame";
+  frame.src = embedUrl;
+  frame.title = `Video player: ${video.title}`;
+  frame.loading = "lazy";
+  frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+  frame.allowFullscreen = true;
+  frame.referrerPolicy = "strict-origin-when-cross-origin";
+  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
+  wrapper.appendChild(frame);
+  return wrapper;
+}
+
+function renderVideoResults(items, query) {
+  if (!resultsList) return;
+  const rankedItems = rankMediaResults(items, query, ["title", "name"], ["description", "channel", "account"], ["url", "watchUrl", "originalUrl"]);
+  const videos = rankedItems.map((item) => item?.durationSeconds !== undefined && item?.source
+    ? item : normalizeVideoResult(item)).filter((item) => item?.url);
+
+  resultsList.replaceChildren();
+  if (!videos.length) {
+    showMessage("No matching videos were found in the available open-source index.");
+    appendVideoFallbackLink(query);
+    return;
+  }
+
+  const filterBar = document.createElement("div");
+  filterBar.className = "video-filter-bar";
+  filterBar.setAttribute("aria-label", "Filter video results");
+
+  const sourceLabel = document.createElement("label");
+  sourceLabel.className = "video-filter";
+  sourceLabel.appendChild(document.createTextNode("Source"));
+  const sourceSelect = document.createElement("select");
+  sourceSelect.setAttribute("aria-label", "Filter videos by source");
+  addFilterOption(sourceSelect, "all", "All sources");
+  [...new Set(videos.map((video) => video.source || getVideoHost(video.url)).filter(Boolean))]
+    .sort().forEach((source) => addFilterOption(sourceSelect, source, source));
+  sourceLabel.appendChild(sourceSelect);
+
+  const dateLabel = document.createElement("label");
+  dateLabel.className = "video-filter";
+  dateLabel.appendChild(document.createTextNode("Uploaded"));
+  const dateSelect = document.createElement("select");
+  dateSelect.setAttribute("aria-label", "Filter videos by upload date");
+  addFilterOption(dateSelect, "any", "Any time");
+  addFilterOption(dateSelect, "day", "Past 24 hours");
+  addFilterOption(dateSelect, "week", "Past week");
+  addFilterOption(dateSelect, "month", "Past month");
+  dateLabel.appendChild(dateSelect);
+
+  const durationLabel = document.createElement("label");
+  durationLabel.className = "video-filter";
+  durationLabel.appendChild(document.createTextNode("Duration"));
+  const durationSelect = document.createElement("select");
+  durationSelect.setAttribute("aria-label", "Filter videos by duration");
+  addFilterOption(durationSelect, "any", "Any length");
+  addFilterOption(durationSelect, "short", "Under 4 minutes");
+  addFilterOption(durationSelect, "medium", "4–20 minutes");
+  addFilterOption(durationSelect, "long", "Over 20 minutes");
+  durationLabel.appendChild(durationSelect);
+
+  filterBar.append(sourceLabel, dateLabel, durationLabel);
+  const gallery = document.createElement("div");
+  gallery.className = "video-gallery";
+  const filterStatus = document.createElement("p");
+  filterStatus.className = "video-filter-status";
+  filterStatus.setAttribute("aria-live", "polite");
+  resultsList.append(filterBar, filterStatus, gallery);
+
+  function applyFilters() {
+    const now = Date.now();
+    const sourceFilter = sourceSelect.value;
+    const dateFilter = dateSelect.value;
+    const durationFilter = durationSelect.value;
+    const filtered = videos.filter((video) => {
+      const host = video.source || getVideoHost(video.url);
+      if (sourceFilter !== "all" && host !== sourceFilter) return false;
+
+      if (dateFilter !== "any") {
+        const date = video.publishedAt ? Date.parse(video.publishedAt) : NaN;
+        if (!Number.isFinite(date)) return false;
+        const maxAge = dateFilter === "day" ? 86400000
+          : dateFilter === "week" ? 7 * 86400000 : 30 * 86400000;
+        if (date > now || now - date > maxAge) return false;
+      }
+
+      if (durationFilter !== "any") {
+        if (!Number.isFinite(video.durationSeconds)) return false;
+        if (durationFilter === "short" && video.durationSeconds >= 240) return false;
+        if (durationFilter === "medium" && (video.durationSeconds < 240 || video.durationSeconds > 1200)) return false;
+        if (durationFilter === "long" && video.durationSeconds <= 1200) return false;
+      }
+      return true;
+    });
+
+    gallery.replaceChildren();
+    if (!filtered.length) {
+      filterStatus.textContent = "No videos match all selected filters. Try relaxing one filter; some sources do not provide dates or durations.";
+      return;
+    }
+    filterStatus.textContent = `Showing ${filtered.length} of ${videos.length} videos. Results are ranked by title and description match where metadata is available.`;
+
+    for (const video of filtered) {
+      const card = document.createElement("article");
+      card.className = "video-card";
+
+      const thumbnailButton = document.createElement("button");
+      thumbnailButton.type = "button";
+      thumbnailButton.className = "video-thumb-link video-thumb-button";
+      thumbnailButton.setAttribute("aria-label", `Play video in GOZIE SEARCH: ${video.title}`);
+
+      if (video.thumbnail) {
+        const image = document.createElement("img");
+        image.src = video.thumbnail;
+        image.alt = `Thumbnail for ${video.title}`;
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.referrerPolicy = "no-referrer";
+        image.addEventListener("error", () => {
+          image.remove();
+          const fallback = document.createElement("span");
+          fallback.className = "video-thumb-placeholder";
+          fallback.textContent = "Video preview unavailable";
+          thumbnailButton.appendChild(fallback);
+        });
+        thumbnailButton.appendChild(image);
+      } else {
+        const placeholder = document.createElement("span");
+        placeholder.className = "video-thumb-placeholder";
+        placeholder.textContent = "▶ Play video";
+        thumbnailButton.appendChild(placeholder);
+      }
+
+      const playerTarget = document.createElement("div");
+      playerTarget.className = "video-player-target";
+      const playerButton = document.createElement("button");
+      playerButton.type = "button";
+      playerButton.className = "video-play-button";
+      playerButton.textContent = getPlayableEmbedUrl(video) ? "Play here" : "Playback unavailable here";
+      playerButton.disabled = !getPlayableEmbedUrl(video);
+      playerButton.addEventListener("click", () => {
+        const player = createVideoPlayer(video);
+        if (!player) return;
+        playerTarget.replaceChildren(player);
+        playerButton.textContent = "Player loaded";
+        playerButton.disabled = true;
+      });
+
+      const externalLink = makeLink(video.url, "Open original video ↗");
+      externalLink.className = "video-original-link";
+      thumbnailButton.addEventListener("click", () => {
+        const player = createVideoPlayer(video);
+        if (player) {
+          playerTarget.replaceChildren(player);
+          playerButton.textContent = "Player loaded";
+          playerButton.disabled = true;
+          playerTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } else {
+          window.open(video.url, "_blank", "noopener,noreferrer");
+        }
+      });
+
+      const title = makeLink(video.url, video.title);
+      title.className = "video-card-title";
+      const source = document.createElement("p");
+      source.className = "video-card-source";
+      source.textContent = video.channel
+        ? `${video.channel} · ${video.source || getVideoHost(video.url)}`
+        : (video.source || getVideoHost(video.url));
+
+      card.append(thumbnailButton, playerTarget, title, source);
+      const actions = document.createElement("div");
+      actions.className = "video-card-actions";
+      actions.append(playerButton, externalLink);
+      card.appendChild(actions);
+
+      if (video.duration) {
+        const duration = document.createElement("span");
+        duration.className = "video-card-duration";
+        duration.textContent = video.duration;
+        card.appendChild(duration);
+      }
+
+      if (video.publishedAt) {
+        const date = document.createElement("p");
+        date.className = "video-card-date";
+        date.textContent = `Uploaded ${new Date(video.publishedAt).toLocaleDateString()}`;
+        card.appendChild(date);
+      }
+
+      if (video.description) {
+        const description = document.createElement("p");
+        description.className = "video-card-description";
+        description.textContent = video.description.replace(/\s+/g, " ").slice(0, 240);
+        card.appendChild(description);
+      }
+      gallery.appendChild(card);
+    }
+  }
+
+  sourceSelect.addEventListener("change", applyFilters);
+  dateSelect.addEventListener("change", applyFilters);
+  durationSelect.addEventListener("change", applyFilters);
+  applyFilters();
+  appendVideoFallbackLink(query);
 }
 
 function showVideoSearchError(query, message) {
@@ -774,7 +1032,7 @@ if (form && queryInput && resultsList) {
             `found via ${data.source || "the image provider"}.`;
         }
 
-        renderImageGallery(items);
+        renderImageGallery(items, query);
       } catch (error) {
         if (resultStatus) {
           resultStatus.textContent = "Image search unavailable";
