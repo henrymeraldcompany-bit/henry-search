@@ -1,0 +1,12 @@
+name = "gozie-search-media"
+main = "backend/worker.js"
+compatibility_date = "2026-10-21"
+
+[[d1_databases]]
+binding = "MEDIA_DB"
+database_name = "gozie-search-media"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[triggers]
+# 07:00 UTC = 08:00 Nigeria time.
+crons = ["0 7 * * *"]
