@@ -86,13 +86,18 @@ async function peertube(q, count) {
   const data = await getJson(u.href);
   return (Array.isArray(data.data) ? data.data : Array.isArray(data.results) ? data.results : []).map(videoRow).filter(Boolean);
 }
+function isoDurationSeconds(value) {
+  const match = String(value || "").match(/^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/);
+  if (!match) return null;
+  return Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
+}
 async function youtube(q, key, count) {
   if (!key) return [];
   const u = new URL("https://www.googleapis.com/youtube/v3/search");
   [["part","snippet"],["type","video"],["maxResults",String(count || 10)],["order","relevance"],["q",q],["key",key]]
     .forEach(function (p) { u.searchParams.set(p[0], p[1]); });
   const data = await getJson(u.href);
-  return (data.items || []).map(function (v) {
+  const rows = (data.items || []).map(function (v) {
     const id = v && v.id && v.id.videoId; const s = (v && v.snippet) || {};
     if (!id) return null;
     const t = s.thumbnails || {};
@@ -104,6 +109,21 @@ async function youtube(q, key, count) {
       author:clean(s.channelTitle,200), license:"", published_at:s.publishedAt || "",
       duration_seconds:null, tags:"" };
   }).filter(Boolean);
+  if (!rows.length) return rows;
+  const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+  detailsUrl.searchParams.set("part", "contentDetails");
+  detailsUrl.searchParams.set("id", rows.map(function (row) { return row.source_id; }).join(","));
+  detailsUrl.searchParams.set("key", key);
+  try {
+    const details = await getJson(detailsUrl.href);
+    const durations = new Map((details.items || []).map(function (item) {
+      return [item.id, isoDurationSeconds(item.contentDetails && item.contentDetails.duration)];
+    }));
+    rows.forEach(function (row) { row.duration_seconds = durations.get(row.source_id) ?? null; });
+  } catch (error) {
+    console.warn("Could not read YouTube duration metadata:", error && error.message || error);
+  }
+  return rows;
 }
 async function save(env, rows) {
   if (!rows.length) return 0;
