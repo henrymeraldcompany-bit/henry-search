@@ -87,8 +87,8 @@ async function peertube(q, count) {
   return (Array.isArray(data.data) ? data.data : Array.isArray(data.results) ? data.results : []).map(videoRow).filter(Boolean);
 }
 function isoDurationSeconds(value) {
-  const match = String(value || "").match(/^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/);
-  if (!match) return null;
+  const match = String(value || "").match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!match || !match.slice(1).some(function (part) { return part !== undefined; })) return null;
   return Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
 }
 async function youtube(q, key, count) {
