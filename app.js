@@ -21,6 +21,10 @@ const searchTabs = document.querySelectorAll(".search-tab");
 const SEARCH_API =
   "https://henry-search-api.henrymeraldcompany.workers.dev";
 
+// Dedicated metadata-indexed media API. Keep SEARCH_API for normal web search and news.
+const MEDIA_API =
+  "https://gozie-search-media.henrymeraldcompany.workers.dev";
+
 let currentCategory = "all";
 let recognition = null;
 let isListening = false;
@@ -606,19 +610,49 @@ function getPlayableEmbedUrl(video) {
   }
 }
 
+async function fetchImageResults(query) {
+  let lastData = null;
+  let lastError = null;
+
+  // Prefer the dedicated media index; retain the existing Worker as a fallback.
+  for (const api of [MEDIA_API, SEARCH_API]) {
+    try {
+      const endpoint = new URL("/images", api);
+      endpoint.searchParams.set("q", query);
+      const data = await fetchJson(endpoint.toString());
+      const items = Array.isArray(data.results) ? data.results : [];
+      if (items.length) return { ...data, results: items };
+      lastData = { ...data, results: items };
+    } catch (error) {
+      lastError = error;
+      console.warn("GOZIE image endpoint unavailable; trying the next provider.", error);
+    }
+  }
+
+  if (lastData) return lastData;
+  throw lastError || new Error("Image search is temporarily unavailable.");
+}
+
 async function fetchVideoResults(query) {
-  // Try the GOZIE SEARCH Worker first. The fallback is deliberately retained so
-  // the tab remains useful while the Worker route is being built or deployed.
-  try {
-    const endpoint = new URL("/videos", SEARCH_API);
-    endpoint.searchParams.set("q", query);
-    const data = await fetchJson(endpoint.toString());
-    const items = Array.isArray(data.results) ? data.results
-      : Array.isArray(data.items) ? data.items : [];
-    const normalized = items.map(normalizeVideoResult).filter(Boolean);
-    if (normalized.length) return { items: normalized, source: data.source || "GOZIE SEARCH video provider" };
-  } catch (error) {
-    console.warn("GOZIE video endpoint unavailable; trying the public fallback.", error);
+  // Prefer the dedicated multi-source media Worker, then keep the original Worker,
+  // and finally use the direct PeerTube fallback if neither Worker returns matches.
+  for (const api of [MEDIA_API, SEARCH_API]) {
+    try {
+      const endpoint = new URL("/videos", api);
+      endpoint.searchParams.set("q", query);
+      const data = await fetchJson(endpoint.toString());
+      const items = Array.isArray(data.results) ? data.results
+        : Array.isArray(data.items) ? data.items : [];
+      const normalized = items.map(normalizeVideoResult).filter(Boolean);
+      if (normalized.length) {
+        return {
+          items: normalized,
+          source: data.source || `GOZIE SEARCH media provider (${new URL(api).hostname})`
+        };
+      }
+    } catch (error) {
+      console.warn("GOZIE video endpoint unavailable; trying the next provider.", error);
+    }
   }
 
   const endpoint = new URL("/api/v1/search/videos", VIDEO_SEARCH_BASE);
@@ -1020,10 +1054,7 @@ if (form && queryInput && resultsList) {
     // IMAGE SEARCH
     if (currentCategory === "images") {
       try {
-        const endpoint = new URL("/images", SEARCH_API);
-        endpoint.searchParams.set("q", query);
-
-        const data = await fetchJson(endpoint.toString());
+        const data = await fetchImageResults(query);
         const items = Array.isArray(data.results) ? data.results : [];
 
         if (resultStatus) {
