@@ -5,7 +5,7 @@ compatibility_date = "2026-10-21"
 [[d1_databases]]
 binding = "MEDIA_DB"
 database_name = "gozie-search-media"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "c5c6ef5d-25ce-444d-b5ca-c0efaa9b947f"
 
 [triggers]
 # 07:00 UTC = 08:00 Nigeria time.
