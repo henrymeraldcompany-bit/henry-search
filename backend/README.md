@@ -18,13 +18,13 @@ This is a small seed-query discovery index, not a crawler of the entire internet
 
 ## Maintenance and verification
 
-Run both regression suites with Node.js:
+Run all three regression suites with Node.js:
 
 ```sh
-node --test backend/duration.test.mjs backend/media-ranking.test.mjs
+node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs
 ```
 
-The parser supports YouTube ISO-8601 durations such as `PT4M`, `PT45S`, and `PT1H2M3S`; malformed or empty duration strings return `null`. Media ranking tests cover YouTube URL variants, tracking-parameter deduplication, cross-source duplicates, source diversity, and sparse-result fallback.
+GitHub Actions runs this command on relevant pushes and pull requests. The duration parser supports YouTube ISO-8601 durations such as `PT4M`, `PT45S`, and `PT1H2M3S`; malformed or empty values return `null`. Ranking tests cover YouTube URL variants, tracking-parameter deduplication, cross-source duplicates, source diversity, and sparse-result fallback. Frontend URL tests cover unsafe URL rejection and preserving case-sensitive paths. The CI result is not yet visible through the available status tools.
 
 ## Redeploy or reproduce setup
 
