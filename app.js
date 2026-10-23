@@ -452,6 +452,43 @@ function mediaRelevanceScore(item, query, titleKeys, detailKeys) {
   return score;
 }
 
+function canonicalizeMediaResultUrl(value) {
+  const safeUrl = resolveSafeHttpUrl(value);
+  if (!safeUrl) return "";
+  try {
+    const parsed = new URL(safeUrl);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    let videoId = "";
+    if (host === "youtu.be") {
+      videoId = parsed.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (["youtube.com", "m.youtube.com", "youtube-nocookie.com"].includes(host)) {
+      if (parsed.pathname === "/watch") videoId = parsed.searchParams.get("v") || "";
+      else {
+        const match = parsed.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]+)/);
+        videoId = match?.[1] || "";
+      }
+    }
+    if (videoId) {
+      const canonical = new URL("https://youtube.com/watch");
+      canonical.searchParams.set("v", videoId);
+      return canonical.href;
+    }
+
+    parsed.hostname = host;
+    parsed.hash = "";
+    for (const key of Array.from(parsed.searchParams.keys())) {
+      if (/^utm_/i.test(key) || ["fbclid", "gclid", "dclid", "si", "feature"].includes(key.toLowerCase())) {
+        parsed.searchParams.delete(key);
+      }
+    }
+    parsed.searchParams.sort();
+    if (parsed.pathname.length > 1) parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}
+
 function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
   if (!Array.isArray(items)) return [];
   const ranked = [];
@@ -461,16 +498,7 @@ function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
   for (const [index, item] of items.entries()) {
     if (!item || typeof item !== "object") continue;
     const rawUrl = urlKeys.map((key) => item[key]).find((value) => typeof value === "string" && value);
-    let canonicalUrl = "";
-    if (rawUrl) {
-      const safeUrl = resolveSafeHttpUrl(rawUrl);
-      if (safeUrl) {
-        const parsed = new URL(safeUrl);
-        parsed.hash = "";
-        canonicalUrl = parsed.href.toLowerCase();
-      }
-    }
-
+    const canonicalUrl = rawUrl ? canonicalizeMediaResultUrl(rawUrl) : "";
     const title = normalizeMediaText(titleKeys.map((key) => item[key]).filter(Boolean).join(" "));
     const host = canonicalUrl ? new URL(canonicalUrl).hostname : "";
     const titleKey = title && host ? title + "|" + host : "";
