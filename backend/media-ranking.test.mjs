@@ -15,11 +15,12 @@ function extract(name) {
 const helpers = [
   extract("safeUrl"),
   extract("terms"),
+  extract("fallbackQuery"),
   extract("canonicalMediaKey"),
   extract("rank"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalMediaKey, rank}; })()",
+  "(function(){ " + helpers + "; return {canonicalMediaKey, rank, fallbackQuery}; })()",
   { URL }
 );
 
@@ -66,4 +67,15 @@ test("limits one host during the first pass when alternatives exist", () => {
 test("fills the requested count when only one source is available", () => {
   const rows = Array.from({length:6},(_,i)=>({page_url:"https://only.example/"+i,title:"science result "+i}));
   assert.equal(api.rank(rows,"science",6).length,6);
+});
+
+test("builds a focused fallback query by removing common filler words", () => {
+  assert.equal(api.fallbackQuery("how to build a solar system model"), "build solar system model");
+  assert.equal(api.fallbackQuery("what is the history of Nigeria"), "history Nigeria");
+});
+
+test("does not repeat a query when no useful broadening is possible", () => {
+  assert.equal(api.fallbackQuery("Nigeria"), "");
+  assert.equal(api.fallbackQuery("science videos"), "");
+  assert.equal(api.fallbackQuery("   "), "");
 });
