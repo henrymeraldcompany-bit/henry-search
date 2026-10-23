@@ -153,7 +153,7 @@ function canonicalMediaKey(value) {
   if (!href) return "";
   try {
     const u = new URL(href);
-    let host = u.hostname.toLowerCase().replace(/^www\\./, "");
+    let host = u.hostname.toLowerCase().replace(/^www\./, "");
     let videoId = "";
     if (host === "youtu.be") videoId = u.pathname.split("/").filter(Boolean)[0] || "";
     if ((host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") &&
@@ -173,7 +173,7 @@ function canonicalMediaKey(value) {
       }
     }
     u.searchParams.sort();
-    if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\\/+$/, "");
+    if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\/+$/, "");
     return u.href;
   } catch (_) {
     return href;
@@ -191,7 +191,7 @@ function rank(rows,q,limit) {
     let score=title.indexOf(query)>=0 && query ? 12 : 0;
     ts.forEach(function(t){score+=title.indexOf(t)>=0?5:desc.indexOf(t)>=0?1:0;});
     let host="";
-    try { host=new URL(url).hostname.toLowerCase().replace(/^www\\./,""); } catch (_) {}
+    try { host=new URL(url).hostname.toLowerCase().replace(/^www\./,""); } catch (_) {}
     candidates.push({r:r,score:score,host:host});
   }
   candidates.sort(function(a,b){return b.score-a.score;});
