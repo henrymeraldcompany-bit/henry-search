@@ -28,9 +28,11 @@ The frontend source now tries the dedicated Media Worker first for image/video s
 
 The `backend/` directory contains the media Worker, D1 schema, schedule configuration, regression tests, and setup notes. The Worker stores metadata and original source links rather than re-hosting media files. D1 database `gozie-search-media` is configured as `MEDIA_DB`; the daily scheduled trigger is `0 7 * * *` (08:00 in Nigeria).
 
-At the latest check on 22 October 2026, Cloudflare confirmed the Worker deployment, its enabled `workers.dev` subdomain, the D1 schema, and the daily trigger. The database contained zero indexed media items and no completed index-run records yet, so the automatic index has not been verified to have run. The next scheduled run is expected at 08:00 Nigeria time on 23 October 2026.
+On 23 October 2026, Cloudflare confirmed a completed scheduled refresh: 192 rows processed, zero provider/database failures, and 191 unique stored items (96 images and 95 videos). The stored videos currently come from five PeerTube instance hosts; YouTube is not configured because the optional server-side `YOUTUBE_API_KEY` secret is absent. The daily trigger remains `0 7 * * *` (08:00 Nigeria time).
 
-Live HTTP smoke tests could not be completed from the management environment because it blocks outgoing requests to `workers.dev` hosts. Test the endpoints from a normal browser or another external client before treating live search and indexing as fully verified. YouTube results remain optional and require a server-side `YOUTUBE_API_KEY` Worker secret; never place secrets in frontend code.
+The latest Media Worker deployment on 23 October includes canonical URL deduplication (including YouTube watch/short/embed variants and common tracking parameters) and source diversity during ranking, with a fill pass when only a few sources are available. Five ranking regression checks pass in the execution harness; the 11 duration parser cases pass; frontend JavaScript syntax passes.
+
+Live HTTP smoke tests still could not be completed from the management environment because it blocks outgoing requests to `workers.dev` hosts with 403 responses. Deployment metadata and the successful D1 refresh are verified, but browser-visible route responses and the static website's publish status remain unverified. YouTube results remain optional and require a server-side `YOUTUBE_API_KEY` Worker secret; never place secrets in frontend code.
 
 ## Tests
 
