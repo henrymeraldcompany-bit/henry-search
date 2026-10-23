@@ -148,17 +148,72 @@ async function indexed(env, kind, q, limit) {
   ).bind(kind,...args,phrase,limit || 30).all();
   return data.results || [];
 }
-function rank(rows,q,limit) {
-  const ts=terms(q), seen=new Set(), result=[];
-  for (const r of rows) {
-    const url=safeUrl(r.page_url || r.url || r.page); if (!url || seen.has(url)) continue; seen.add(url);
-    const title=String(r.title || "").toLowerCase(), desc=String(r.description || "").toLowerCase();
-    let score=title.indexOf(q.toLowerCase())>=0?12:0;
-    ts.forEach(function(t){score+=title.indexOf(t)>=0?5:desc.indexOf(t)>=0?1:0;});
-    result.push({r:r,score:score});
+function canonicalMediaKey(value) {
+  const href = safeUrl(value);
+  if (!href) return "";
+  try {
+    const u = new URL(href);
+    let host = u.hostname.toLowerCase().replace(/^www\\./, "");
+    let videoId = "";
+    if (host === "youtu.be") videoId = u.pathname.split("/").filter(Boolean)[0] || "";
+    if ((host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") &&
+        (u.pathname === "/watch" || u.pathname.startsWith("/embed/") || u.pathname.startsWith("/shorts/"))) {
+      videoId = u.searchParams.get("v") || u.pathname.split("/").filter(Boolean).pop() || "";
+    }
+    if (videoId) {
+      const canonical = new URL("https://youtube.com/watch");
+      canonical.searchParams.set("v", videoId);
+      return canonical.href;
+    }
+    u.hostname = host;
+    u.hash = "";
+    for (const key of Array.from(u.searchParams.keys())) {
+      if (/^utm_/i.test(key) || ["fbclid", "gclid", "dclid", "si", "feature"].includes(key.toLowerCase())) {
+        u.searchParams.delete(key);
+      }
+    }
+    u.searchParams.sort();
+    if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\\/+$/, "");
+    return u.href;
+  } catch (_) {
+    return href;
   }
-  result.sort(function(a,b){return b.score-a.score;});
-  return result.slice(0,limit || 40).map(function(x){return x.r;});
+}
+function rank(rows,q,limit) {
+  const query=String(q || "").trim().toLowerCase();
+  const ts=terms(query), seen=new Set(), candidates=[];
+  for (const r of rows) {
+    const url=safeUrl(r.page_url || r.url || r.page);
+    const key=canonicalMediaKey(url);
+    if (!url || !key || seen.has(key)) continue;
+    seen.add(key);
+    const title=String(r.title || "").toLowerCase(), desc=String(r.description || "").toLowerCase();
+    let score=title.indexOf(query)>=0 && query ? 12 : 0;
+    ts.forEach(function(t){score+=title.indexOf(t)>=0?5:desc.indexOf(t)>=0?1:0;});
+    let host="";
+    try { host=new URL(url).hostname.toLowerCase().replace(/^www\\./,""); } catch (_) {}
+    candidates.push({r:r,score:score,host:host});
+  }
+  candidates.sort(function(a,b){return b.score-a.score;});
+  const target=Math.max(1,limit || 40);
+  // Give different source hosts a fair first pass, then fill remaining places
+  // with the closest matches if the query has only a few available sources.
+  const sourceCap=Math.max(3,Math.ceil(target/5));
+  const picked=[], counts=new Map(), selected=new Set();
+  for (const item of candidates) {
+    if (picked.length>=target) break;
+    const host=item.host || "unknown";
+    if ((counts.get(host)||0)>=sourceCap) continue;
+    picked.push(item); selected.add(item); counts.set(host,(counts.get(host)||0)+1);
+  }
+  if (picked.length<target) {
+    for (const item of candidates) {
+      if (picked.length>=target) break;
+      if (selected.has(item)) continue;
+      picked.push(item);
+    }
+  }
+  return picked.map(function(x){return x.r;});
 }
 function front(r) {
   if (r.kind==="image") return {title:r.title,description:r.description,page:r.page_url,image:r.media_url,thumbnail:r.thumbnail_url,license:r.license,source:r.source};
