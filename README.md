@@ -30,19 +30,19 @@ The `backend/` directory contains the media Worker, D1 schema, schedule configur
 
 On 23 October 2026, Cloudflare confirmed a completed scheduled refresh: 192 rows processed, zero provider/database failures, and 191 unique stored items (96 images and 95 videos). The stored videos currently come from five PeerTube instance hosts; YouTube is not configured because the optional server-side `YOUTUBE_API_KEY` secret is absent. The daily trigger remains `0 7 * * *` (08:00 Nigeria time).
 
-The latest Media Worker deployment on 23 October includes canonical URL deduplication (including YouTube watch/short/embed variants and common tracking parameters) and source diversity during ranking, with a fill pass when only a few sources are available. Five ranking regression checks pass in the execution harness; the 11 duration parser cases pass; frontend JavaScript syntax passes.
+The latest Media Worker deployment on 23 October includes canonical URL deduplication (including YouTube watch/short/embed variants and common tracking parameters) and source diversity during ranking, with a fill pass when only a few sources are available. Five backend ranking checks and four frontend URL-canonicalization checks pass in the execution harness; all 11 duration parser cases pass; frontend JavaScript syntax passes. The Node.js test suites are committed and wired into GitHub Actions, but the CI result itself is not yet visible through the available status tools.
 
 Live HTTP smoke tests still could not be completed from the management environment because it blocks outgoing requests to `workers.dev` hosts with 403 responses. Deployment metadata and the successful D1 refresh are verified, but browser-visible route responses and the static website's publish status remain unverified. YouTube results remain optional and require a server-side `YOUTUBE_API_KEY` Worker secret; never place secrets in frontend code.
 
 ## Tests
 
-Run the video-duration regression tests with Node.js:
+Run the duration, backend ranking, and frontend URL-canonicalization regression suites with Node.js:
 
 ```sh
-node --test backend/duration.test.mjs
+node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs
 ```
 
-The tests cover YouTube ISO-8601 durations (including hours, minutes, and seconds) and malformed values. Keep tests and provider fallback behavior when changing the media routes.
+GitHub Actions is configured to run the same command on relevant pushes and pull requests. The tests cover ISO-8601 durations, YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-source fallback, unsafe URL rejection, and case-sensitive paths. The latest workflow run has not yet been confirmed by the available status tools.
 
 ## Safety and maintenance
 
