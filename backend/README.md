@@ -9,22 +9,26 @@ This Cloudflare Worker stores media metadata and original source links rather th
 - Database: Cloudflare D1 database `gozie-search-media`, bound as `MEDIA_DB`
 - Scheduled discovery refresh: daily at `07:00 UTC` (`08:00 Africa/Lagos`)
 - Routes: `/health`, `/images?q=...`, `/videos?q=...`, and `/index/status`
-- The website's image and video searches now try this media Worker first, then retain existing fallbacks. Normal `/search` and `/news` remain on the original Worker.
-- YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in `app.js` or `index.html`.
+- The website tries this Media Worker first for image/video search and retains the original Worker and direct PeerTube fallbacks. Normal `/search` and `/news` remain on the original Worker.
+- YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in frontend code.
 
-The Worker and D1 schema were deployed/configured on 22 October 2026. Cloudflare confirmed successful upload, enabled the `workers.dev` subdomain, and confirmed the daily schedule. Live HTTP smoke tests still need to be completed from a normal browser or external client because this management environment blocks outbound requests to `workers.dev` hosts. Do not treat successful deployment metadata as proof that every route has been runtime-tested.
+Cloudflare confirmed the Media Worker deployment at 2026-10-23 08:37:15 UTC, with 100% of traffic assigned to that version. Its latest verified scheduled index run finished at 2026-10-23 07:01:08 UTC: 192 rows processed, zero recorded provider/database failures, and 191 unique stored records (96 images, 95 videos across five PeerTube hostnames). The D1 database and `0 7 * * *` schedule were verified through Cloudflare management APIs.
 
-This is a small seed-query discovery index, not a crawler of the entire internet. The scheduled job searches the topics in `worker.js` and stores metadata, original URLs, licenses where provided, and index timestamps. Live provider search remains available on each request.
+The 23 October deployment adds a bounded sparse-query fallback: if fewer than eight unique results are available, it retries once with a focused query after removing common filler words, then merges and re-ranks the results through the existing deduplicator. This only spends additional provider requests for sparse searches.
 
-## Maintenance and verification
+Live HTTP smoke tests remain unverified because this management environment blocks outgoing requests to `workers.dev` hosts. Deployment metadata and a successful scheduled index run are verified, but they do not prove that every browser-visible route works. Check the routes from a normal browser or another external client.
 
-Run all three regression suites with Node.js:
+This is a small seed-query discovery index, not a crawler of the entire internet. It stores metadata, original source URLs, licenses where provided, and index timestamps. It does not download or re-host media files.
+
+## Regression tests
+
+Run all three suites with Node.js:
 
 ```sh
 node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs
 ```
 
-GitHub Actions runs this command on relevant pushes and pull requests. The duration parser supports YouTube ISO-8601 durations such as `PT4M`, `PT45S`, and `PT1H2M3S`; malformed or empty values return `null`. Ranking tests cover YouTube URL variants, tracking-parameter deduplication, cross-source duplicates, source diversity, and sparse-result fallback. Frontend URL tests cover unsafe URL rejection and preserving case-sensitive paths. The CI result is not yet visible through the available status tools.
+The duration suite covers YouTube ISO-8601 durations and malformed values. Ranking tests cover canonical YouTube URLs, tracking-parameter deduplication, source diversity, sparse-source fill, and the new focused fallback-query helper. Frontend URL tests cover unsafe schemes and case-sensitive paths. Source-level checks in the latest run passed for Worker syntax, frontend syntax, five fallback-query cases, and eleven duration-parser cases. The full Node.js suite and GitHub Actions status still need confirmation through a compatible test runner/status check.
 
 ## Redeploy or reproduce setup
 
@@ -41,4 +45,4 @@ To enable YouTube results, configure the optional API key as a server-side Worke
 npx wrangler secret put YOUTUBE_API_KEY --config backend/wrangler.toml
 ```
 
-The secret value should be entered interactively and must not be committed to GitHub or included in frontend code. Free-tier quotas and provider terms still apply; the daily index covers only the configured seed queries and returned provider results.
+Enter the secret interactively. Never commit it or include it in frontend code. Free-tier quotas and provider terms apply; the daily index covers only configured seed queries and returned provider results.
