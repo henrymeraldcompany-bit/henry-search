@@ -27,4 +27,4 @@ jobs:
         with:
           node-version: 22
       - name: Run media regression tests
-        run: node --test backend/duration.test.mjs backend/media-ranking.test.mjs
+        run: node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs
