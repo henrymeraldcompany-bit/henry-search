@@ -18,13 +18,13 @@ This is a small seed-query discovery index, not a crawler of the entire internet
 
 ## Maintenance and verification
 
-Run the duration parser regression tests with Node.js:
+Run both regression suites with Node.js:
 
 ```sh
-node --test backend/duration.test.mjs
+node --test backend/duration.test.mjs backend/media-ranking.test.mjs
 ```
 
-The parser supports YouTube ISO-8601 durations such as `PT4M`, `PT45S`, and `PT1H2M3S`; malformed or empty duration strings return `null`.
+The parser supports YouTube ISO-8601 durations such as `PT4M`, `PT45S`, and `PT1H2M3S`; malformed or empty duration strings return `null`. Media ranking tests cover YouTube URL variants, tracking-parameter deduplication, cross-source duplicates, source diversity, and sparse-result fallback.
 
 ## Redeploy or reproduce setup
 
