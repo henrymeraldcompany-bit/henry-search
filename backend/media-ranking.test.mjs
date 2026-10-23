@@ -5,17 +5,23 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("./worker.js", import.meta.url), "utf8");
 function extract(name) {
-  const match = source.match(new RegExp("function " + name + "\\([^\\n]*\\) \\{[\\s\\S]*?\\n\\}"));
-  assert.ok(match, name + " must exist in worker.js");
-  return match[0];
+  const start = source.indexOf("function " + name + "(");
+  assert.notEqual(start, -1, name + " must exist in worker.js");
+  if (name === "terms") return source.slice(start, source.indexOf("\n", start));
+  const end = source.indexOf("\n}", start);
+  assert.notEqual(end, -1, "Could not find end of " + name);
+  return source.slice(start, end + 2);
 }
 const helpers = [
   extract("safeUrl"),
   extract("terms"),
   extract("canonicalMediaKey"),
   extract("rank"),
-].join("\\n");
-const api = vm.runInNewContext("(function(){ " + helpers + "; return {canonicalMediaKey, rank}; })()");
+].join("\n");
+const api = vm.runInNewContext(
+  "(function(){ " + helpers + "; return {canonicalMediaKey, rank}; })()",
+  { URL }
+);
 
 test("canonicalizes YouTube watch, short, and embed URLs to one item", () => {
   const keys = [
