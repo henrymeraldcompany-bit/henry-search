@@ -28,6 +28,12 @@ function safeUrl(value, base) {
   } catch (_) { return ""; }
 }
 function terms(q) { return String(q || "").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(function (x) { return x.length > 1; }).slice(0, 8); }
+function fallbackQuery(q) {
+  const stop = new Set(["a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","the","to","was","what","when","where","which","who","why","with"]);
+  const original = String(q || "").trim();
+  const focused = terms(original).filter(function (word) { return !stop.has(word); }).slice(0, 4).join(" ");
+  return focused && focused.toLowerCase() !== original.toLowerCase() ? focused : "";
+}
 async function getJson(url) {
   const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "GOZIE-SEARCH/1.0 metadata-index" } });
   if (!r.ok) throw new Error("Provider HTTP " + r.status);
@@ -225,12 +231,31 @@ async function search(request,env,kind) {
   const q=(new URL(request.url).searchParams.get("q")||"").trim().slice(0,180);
   if(!q)return reply({error:"Please provide a search query.",results:[]},400);
   const saved=await indexed(env,kind,q,30);
-  const live=kind==="image"
-    ? await provider(function(){return commons(q,16);})
-    : [].concat(await provider(function(){return peertube(q,15);}),await provider(function(){return youtube(q,env.YOUTUBE_API_KEY,10);}));
-  const results=rank(live.concat(saved),q,40).map(front);
+  const fetchLive=async function(query) {
+    if(kind==="image") return provider(function(){return commons(query,16);});
+    const providers=await Promise.all([
+      provider(function(){return peertube(query,15);}),
+      provider(function(){return youtube(query,env.YOUTUBE_API_KEY,10);})
+    ]);
+    return providers.flat();
+  };
+  let live=await fetchLive(q);
+  let results=rank(live.concat(saved),q,40);
+  let expandedQuery="";
+  // Only spend extra provider requests when the exact search is sparse.
+  // Keep the focused query short and merge through the same deduper/ranker.
+  if(results.length<8) {
+    expandedQuery=fallbackQuery(q);
+    if(expandedQuery) {
+      const expandedLive=await fetchLive(expandedQuery);
+      if(expandedLive.length) {
+        live=live.concat(expandedLive);
+        results=rank(live.concat(saved),q,40);
+      }
+    }
+  }
   const source=kind==="image"?"GOZIE metadata index + Wikimedia Commons":env.YOUTUBE_API_KEY?"GOZIE metadata index + PeerTube + YouTube":"GOZIE metadata index + PeerTube; YouTube requires an optional API key";
-  return reply({query:q,results:results,count:results.length,source:source});
+  return reply({query:q,results:results.map(front),count:results.length,source:source,expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
 async function refresh(env) {
   let saved=0, failures=[];
