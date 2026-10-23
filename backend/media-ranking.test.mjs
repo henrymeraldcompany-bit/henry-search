@@ -79,3 +79,4 @@ test("does not repeat a query when no useful broadening is possible", () => {
   assert.equal(api.fallbackQuery("science videos"), "");
   assert.equal(api.fallbackQuery("   "), "");
 });
+
