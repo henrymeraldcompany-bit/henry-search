@@ -58,3 +58,72 @@ test("duration filter boundaries are consistent", () => {
   assert.equal(match(1201, "long"), true);
   assert.equal(match(null, "long"), false);
 });
+
+function extractAsync(name) {
+  const start = source.indexOf("async function " + name + "(");
+  assert.notEqual(start, -1, name + " must exist in app.js");
+  const end = source.indexOf("\n}\n", start);
+  assert.notEqual(end, -1, "Could not find end of " + name);
+  return source.slice(start, end + 2);
+}
+
+function createMediaFetchers(fetchJson) {
+  const asyncHelpers = [
+    extractAsync("fetchImageResults"),
+    extractAsync("fetchVideoResults")
+  ].join("\n");
+  return vm.runInNewContext(
+    "(function(){ " + asyncHelpers + "; return {fetchImageResults, fetchVideoResults}; })()",
+    {
+      URL,
+      MEDIA_API: "https://media.example",
+      SEARCH_API: "https://legacy.example",
+      VIDEO_SEARCH_BASE: "https://peertube.tv",
+      fetchJson,
+      normalizeVideoResult: item => item && item.url ? item : null,
+      console: { warn() {} }
+    }
+  );
+}
+
+test("keeps a successful empty image response instead of falling back to unrelated legacy results", async () => {
+  const calls = [];
+  const fetchers = createMediaFetchers(async value => {
+    const host = new URL(value).hostname;
+    calls.push(host);
+    if (host === "media.example") return { results: [] };
+    return { results: [{ title: "unrelated legacy image", image: "https://images.example/a.jpg" }] };
+  });
+
+  const result = await fetchers.fetchImageResults("solar system");
+  assert.equal(result.results.length, 0);
+  assert.deepEqual(calls, ["media.example"]);
+});
+
+test("keeps a successful empty video response instead of asking weaker fallback sources", async () => {
+  const calls = [];
+  const fetchers = createMediaFetchers(async value => {
+    const url = new URL(value);
+    calls.push(url.hostname);
+    if (url.hostname === "media.example") return { results: [] };
+    throw new Error("A fallback should not be called after a successful empty response");
+  });
+
+  const result = await fetchers.fetchVideoResults("solar system");
+  assert.equal(result.items.length, 0);
+  assert.deepEqual(calls, ["media.example"]);
+});
+
+test("uses the legacy image endpoint only when the preferred media endpoint fails", async () => {
+  const calls = [];
+  const fetchers = createMediaFetchers(async value => {
+    const host = new URL(value).hostname;
+    calls.push(host);
+    if (host === "media.example") throw new Error("temporary outage");
+    return { results: [{ title: "legacy result", image: "https://images.example/a.jpg" }] };
+  });
+
+  const result = await fetchers.fetchImageResults("solar system");
+  assert.equal(result.results.length, 1);
+  assert.deepEqual(calls, ["media.example", "legacy.example"]);
+});
