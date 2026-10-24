@@ -35,7 +35,11 @@ function fallbackQuery(q) {
   return focused && focused.toLowerCase() !== original.toLowerCase() ? focused : "";
 }
 async function getJson(url) {
-  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "GOZIE-SEARCH/1.0 metadata-index" } });
+  // Bound provider latency so one slow external service cannot stall search or the daily index.
+  const r = await fetch(url, {
+    headers: { accept: "application/json", "user-agent": "GOZIE-SEARCH/1.0 metadata-index" },
+    signal: AbortSignal.timeout(8000)
+  });
   if (!r.ok) throw new Error("Provider HTTP " + r.status);
   return r.json();
 }
@@ -62,6 +66,34 @@ async function commons(q, count) {
    ["iiurlwidth","640"],["format","json"]].forEach(function (p) { u.searchParams.set(p[0], p[1]); });
   const data = await getJson(u.href);
   return Object.values((data.query && data.query.pages) || {}).map(imageRow).filter(Boolean);
+}
+
+function flickrRow(item) {
+  if (!item || !item.media || typeof item.media.m !== "string") return null;
+  const page = safeUrl(item.link);
+  const media = safeUrl(item.media.m);
+  if (!page || !media) return null;
+  const publishedMs = item.published ? Date.parse(item.published) : NaN;
+  return {
+    kind: "image", source: "Flickr public feed", source_id: page,
+    title: clean(item.title || "Untitled image", 250),
+    description: clean(item.description || "", 900),
+    page_url: page, media_url: media, thumbnail_url: media, embed_url: "",
+    author: clean(item.author || item.author_id || "", 200),
+    license: "License information unavailable",
+    published_at: Number.isFinite(publishedMs) ? new Date(publishedMs).toISOString() : "",
+    duration_seconds: null, tags: clean(item.tags || "", 400)
+  };
+}
+async function flickr(q, count) {
+  const tags = terms(q).slice(0, 5).join(",");
+  if (!tags) return [];
+  const u = new URL("https://www.flickr.com/services/feeds/photos_public.gne");
+  [["format","json"],["nojsoncallback","1"],["tags",tags],["tagmode","any"],["lang","en-us"]]
+    .forEach(function (p) { u.searchParams.set(p[0], p[1]); });
+  const data = await getJson(u.href);
+  const limit = Math.min(12, Math.max(1, Number(count) || 12));
+  return (Array.isArray(data.items) ? data.items : []).slice(0, limit).map(flickrRow).filter(Boolean);
 }
 function videoRow(v) {
   const baseText = v && v.host ? (String(v.host).startsWith("http") ? v.host : "https://" + v.host) : PEERTUBE;
@@ -232,7 +264,13 @@ async function search(request,env,kind) {
   if(!q)return reply({error:"Please provide a search query.",results:[]},400);
   const saved=await indexed(env,kind,q,30);
   const fetchLive=async function(query) {
-    if(kind==="image") return provider(function(){return commons(query,16);});
+    if(kind==="image") {
+      const providers=await Promise.all([
+        provider(function(){return commons(query,16);}),
+        provider(function(){return flickr(query,12);})
+      ]);
+      return providers.flat();
+    }
     const providers=await Promise.all([
       provider(function(){return peertube(query,15);}),
       provider(function(){return youtube(query,env.YOUTUBE_API_KEY,10);})
@@ -254,13 +292,16 @@ async function search(request,env,kind) {
       }
     }
   }
-  const source=kind==="image"?"GOZIE metadata index + Wikimedia Commons":env.YOUTUBE_API_KEY?"GOZIE metadata index + PeerTube + YouTube":"GOZIE metadata index + PeerTube; YouTube requires an optional API key";
+  const sourceNames=Array.from(new Set(results.map(function(r){return r.source;}).filter(Boolean))).slice(0,8);
+  const source=sourceNames.length ? sourceNames.join(" + ")
+    : kind==="image" ? "Wikimedia Commons + Flickr public feed"
+    : env.YOUTUBE_API_KEY ? "PeerTube + YouTube" : "PeerTube; YouTube requires an optional API key";
   return reply({query:q,results:results.map(front),count:results.length,source:source,expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
 async function refresh(env) {
   let saved=0, failures=[];
   for(const q of SEEDS) {
-    const calls=await Promise.allSettled([commons(q,12),peertube(q,12),youtube(q,env.YOUTUBE_API_KEY,8)]);
+    const calls=await Promise.allSettled([commons(q,12),flickr(q,12),peertube(q,12),youtube(q,env.YOUTUBE_API_KEY,8)]);
     for(const c of calls) {
       if(c.status==="rejected"){failures.push(clean(c.reason && c.reason.message || "provider failed",150));continue;}
       try{saved+=await save(env,c.value);}catch(e){failures.push(clean(e && e.message || "database failed",150));}
