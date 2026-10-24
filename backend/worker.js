@@ -219,20 +219,35 @@ function canonicalMediaKey(value) {
 }
 function rank(rows,q,limit) {
   const query=String(q || "").trim().toLowerCase();
-  const ts=terms(query), seen=new Set(), candidates=[];
+  const ts=terms(query);
+  // Ignore generic media/search words so they cannot make an unrelated item look relevant.
+  const stop=new Set(["a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","the","to","was","what","when","where","which","who","why","with","about","this","that","video","videos","image","images","photo","photos","picture","pictures","clip","clips","search","find"]);
+  const queryTerms=ts.filter(function(t){return !stop.has(t);});
+  if(!queryTerms.length)return [];
+  const seen=new Set(), candidates=[];
   for (const r of rows) {
     const url=safeUrl(r.page_url || r.url || r.page);
     const key=canonicalMediaKey(url);
     if (!url || !key || seen.has(key)) continue;
     seen.add(key);
-    const title=String(r.title || "").toLowerCase(), desc=String(r.description || "").toLowerCase();
-    let score=title.indexOf(query)>=0 && query ? 12 : 0;
-    ts.forEach(function(t){score+=title.indexOf(t)>=0?5:desc.indexOf(t)>=0?1:0;});
+    const title=String(r.title || "").toLowerCase();
+    const details=[r.description,r.tags,r.author].map(function(v){return String(v || "").toLowerCase();}).join(" ");
+    const exact=!!(query && title.indexOf(query)>=0);
+    let score=exact?12:0, matched=0, titleMatches=0;
+    queryTerms.forEach(function(t){
+      if(title.indexOf(t)>=0){score+=6;matched++;titleMatches++;}
+      else if(details.indexOf(t)>=0){score+=2;matched++;}
+    });
+    if(titleMatches===queryTerms.length && queryTerms.length>1)score+=4;
+    // Long queries need at least two meaningful terms to match. This prevents a
+    // generic word in a title from filling the gallery with unrelated media.
+    const minimumMatches=queryTerms.length>=3?2:1;
+    if(!exact && matched<minimumMatches)continue;
     let host="";
     try { host=new URL(url).hostname.toLowerCase().replace(/^www\./,""); } catch (_) {}
-    candidates.push({r:r,score:score,host:host});
+    candidates.push({r:r,score:score,host:host,matched:matched});
   }
-  candidates.sort(function(a,b){return b.score-a.score;});
+  candidates.sort(function(a,b){return b.score-a.score || b.matched-a.matched;});
   const target=Math.max(1,limit || 40);
   // Give different source hosts a fair first pass, then fill remaining places
   // with the closest matches if the query has only a few available sources.
