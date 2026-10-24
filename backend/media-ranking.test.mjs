@@ -18,9 +18,10 @@ const helpers = [
   extract("fallbackQuery"),
   extract("canonicalMediaKey"),
   extract("rank"),
+  extract("capFlickrResults"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalMediaKey, rank, fallbackQuery}; })()",
+  "(function(){ " + helpers + "; return {canonicalMediaKey, rank, fallbackQuery, capFlickrResults}; })()",
   { URL }
 );
 
@@ -80,3 +81,13 @@ test("does not repeat a query when no useful broadening is possible", () => {
   assert.equal(api.fallbackQuery("   "), "");
 });
 
+
+test("caps Flickr photo results below the provider page limit without dropping other sources", () => {
+  const rows = [
+    ...Array.from({length:25},(_,i)=>({source:"Flickr public feed",page_url:"https://www.flickr.com/photos/a/"+i,title:"science photo"})),
+    ...Array.from({length:4},(_,i)=>({source:"Wikimedia Commons",page_url:"https://commons.wikimedia.org/wiki/File:"+i,title:"science image"}))
+  ];
+  const results = api.capFlickrResults(rows,20);
+  assert.equal(results.filter(row=>row.source==="Flickr public feed").length,20);
+  assert.equal(results.filter(row=>row.source==="Wikimedia Commons").length,4);
+});
