@@ -4,9 +4,9 @@ A phone-friendly search website with category tabs for web search, images, news,
 
 ## Frontend files
 
-- `index.html` — accessible page structure and search controls.
+- `index.html` — accessible page structure, search controls, and provider notices.
 - `style.css` — dark/light themes, responsive layout, video filters, and player styling.
-- `app.js` — search requests, media rendering, image preview, voice search, safe outbound links, and provider fallbacks.
+- `app.js` — search requests, relevance ordering, media rendering, image preview, voice search, safe links, and provider fallbacks.
 
 ## Connected services
 
@@ -18,37 +18,44 @@ A phone-friendly search website with category tabs for web search, images, news,
 **Media Worker:** https://gozie-search-media.henrymeraldcompany.workers.dev
 
 - `/health` — service health.
-- `/images?q=...` — image results from the metadata index and Wikimedia Commons.
+- `/images?q=...` — indexed image metadata plus live Wikimedia Commons and Flickr public-feed results.
 - `/videos?q=...` — indexed results plus live PeerTube results and optional YouTube results.
 - `/index/status` — indexed item counts and the latest recorded daily run.
 
-The frontend source now tries the dedicated Media Worker first for image/video search, then retains the existing Worker and direct PeerTube fallback paths. Ordinary web search and news remain routed to the original Worker. In-page playback is attempted only when the result offers a permitted, valid embed URL; original source links remain available.
+The frontend tries the Media Worker first for image/video search, then retains the original Worker and direct PeerTube fallbacks. Ordinary web search and news remain routed to the original Worker. Video playback is attempted only for permitted embed URLs; original source links remain available.
+
+## Image providers and terms
+
+Image search uses Wikimedia Commons and the Flickr public photos feed. Results retain their original source page and image URL; GOZIE SEARCH does not download or re-host media files. Flickr results are capped at 20 per response, under Flickr's published 30-photo-per-page limit, and the interface includes the required non-endorsement notice. Flickr license metadata is not supplied by the public feed, so these results are labelled "License information unavailable"; users should check the original page and rights-holder terms before reuse.
+
+Provider requests have an 8-second timeout so a slow provider does not indefinitely hold a search or daily refresh. If one provider fails, the other provider's results remain usable.
 
 ## Media index and schedule
 
-The `backend/` directory contains the media Worker, D1 schema, schedule configuration, regression tests, and setup notes. The Worker stores metadata and original source links rather than re-hosting media files. D1 database `gozie-search-media` is configured as `MEDIA_DB`; the daily scheduled trigger is `0 7 * * *` (08:00 in Nigeria).
+The `backend/` directory contains the media Worker, D1 schema, schedule configuration, regression tests, and setup notes. The Worker stores metadata and original source links rather than re-hosting media. D1 database `gozie-search-media` is bound as `MEDIA_DB`; the scheduled trigger is `0 7 * * *` (08:00 in Nigeria).
 
-On 23 October 2026, Cloudflare confirmed a completed scheduled refresh: 192 rows processed, zero provider/database failures, and 191 unique stored items (96 images and 95 videos). The stored videos currently come from five PeerTube instance hosts; YouTube is not configured because the optional server-side `YOUTUBE_API_KEY` secret is absent. The daily trigger remains `0 7 * * *` (08:00 Nigeria time).
+Cloudflare verified a completed index run at 2026-10-24 07:01:07 UTC: 192 rows processed with zero recorded provider/database failures. Before the Flickr integration deployment later that morning, the database contained 100 images and 95 videos. The newly deployed Worker includes Flickr in live image search and the next scheduled index refresh; Flickr's live response and new indexed rows are not yet independently verified.
 
-The latest Media Worker deployment on 23 October (confirmed at 08:37:15 UTC, 100% traffic) includes canonical URL deduplication (including YouTube watch/short/embed variants and common tracking parameters), source diversity during ranking, and a bounded sparse-query fallback: when fewer than eight unique results are available, it retries once using a focused query with common filler words removed, then merges and deduplicates the results. Five fallback-query checks and eleven duration-parser checks passed in the execution harness; frontend and Worker JavaScript syntax checks passed. The existing URL canonicalization and source-ranking test files remain committed. The Node.js test suites are committed, but I could not locate a GitHub Actions workflow file or verify a CI run in this repository during this run; run the command above manually with Node.js.
+The Media Worker deployment containing the Flickr provider and provider timeouts was confirmed on 24 October 2026 at 07:47 UTC, with 100% traffic and the existing D1 binding preserved. The deployed Worker source was compared with the latest repository file and matched exactly.
 
-Live HTTP smoke tests still could not be completed from the management environment because it blocks outgoing requests to `workers.dev` hosts with 403 responses. The D1 refresh is verified: the latest run processed 192 rows with zero recorded failures and left 191 unique stored items (96 images and 95 videos). Browser-visible route responses and the static website's publish status remain unverified. YouTube results remain optional and require a server-side `YOUTUBE_API_KEY` Worker secret; never place secrets in frontend code.
+Live HTTP smoke tests remain unverified because this management environment blocks outgoing requests to `workers.dev` hosts and to `www.flickr.com`. Deployment metadata and the previous scheduled refresh are verified, but they do not prove that every browser-visible route or Flickr feed request succeeds. Test those routes from a normal browser or another permitted external client. The static website's latest publication status is also not confirmed.
+
+YouTube results remain optional and require the server-side `YOUTUBE_API_KEY` secret. Never put API secrets in frontend code.
 
 ## Tests
 
-Run the duration, backend ranking, and frontend URL-canonicalization regression suites with Node.js:
+Run the media regression suites with Node.js 22:
 
 ```sh
-node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs
+node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
 ```
 
-GitHub Actions is configured to run the same command on relevant pushes and pull requests. The tests cover ISO-8601 durations, YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-source fallback, unsafe URL rejection, and case-sensitive paths. The latest workflow run has not yet been confirmed by the available status tools.
+The suites cover ISO-8601 durations, YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr result caps, source/date/duration filters, unsafe URL rejection, and case-sensitive paths. GitHub Actions is configured to run these suites on relevant pushes and pull requests; a successful run for the latest changes has not yet been confirmed by the available status tools.
 
 ## Safety and maintenance
 
-- Inspect the latest repository and service configuration before changes; do not rebuild working features unnecessarily.
+- Inspect the latest repository and service configuration before changing code; do not rebuild working features unnecessarily.
 - Never put API secrets in `app.js` or `index.html`.
 - Render provider titles and descriptions as text, not HTML.
 - Respect provider terms, rate limits, licensing, and embedding restrictions.
-- The daily index is a seed-query discovery index, not a crawler of the entire internet.
-- The static frontend's publish status was not confirmed in this run; commits to GitHub are verified, but the hosting pipeline must be checked separately.
+- The daily index is a seed-query discovery index, not a crawler of every website or video.
