@@ -543,7 +543,12 @@ function formatVideoDuration(value) {
 function parseDurationSeconds(value) {
   if (Number.isFinite(Number(value)) && String(value).trim() !== "") return Math.max(0, Number(value));
   if (typeof value !== "string") return null;
-  const parts = value.trim().split(":").map(Number);
+  const normalized = value.trim();
+  const iso = normalized.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
+  if (iso && iso.slice(1).some((part) => part !== undefined)) {
+    return Number(iso[1] || 0) * 3600 + Number(iso[2] || 0) * 60 + Number(iso[3] || 0);
+  }
+  const parts = normalized.split(":").map(Number);
   if (parts.length < 2 || parts.length > 3 || !parts.every(Number.isFinite)) return null;
   return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
 }
@@ -551,6 +556,33 @@ function parseDurationSeconds(value) {
 function getVideoHost(value) {
   try { return new URL(value).hostname.replace(/^www\./i, "").toLowerCase(); }
   catch { return ""; }
+}
+
+function videoMatchesFilters(video, sourceFilter, dateFilter, durationFilter, now = Date.now()) {
+  const host = video.source || getVideoHost(video.url);
+  if (sourceFilter && sourceFilter !== "all" && host !== sourceFilter) return false;
+
+  if (dateFilter && dateFilter !== "any") {
+    const date = video.publishedAt ? Date.parse(video.publishedAt) : NaN;
+    const maxAgeByFilter = {
+      day: 86400000,
+      week: 7 * 86400000,
+      month: 30 * 86400000,
+      year: 365 * 86400000
+    };
+    const maxAge = maxAgeByFilter[dateFilter];
+    if (!maxAge || !Number.isFinite(date) || date > now || now - date > maxAge) return false;
+  }
+
+  if (durationFilter && durationFilter !== "any") {
+    if (!Number.isFinite(video.durationSeconds)) return false;
+    if (durationFilter === "short" && video.durationSeconds >= 240) return false;
+    if (durationFilter === "medium" && (video.durationSeconds < 240 || video.durationSeconds > 1200)) return false;
+    if (durationFilter === "long" && video.durationSeconds <= 1200) return false;
+    if (!["short", "medium", "long"].includes(durationFilter)) return false;
+  }
+
+  return true;
 }
 
 function getYouTubeVideoId(value) {
@@ -774,6 +806,7 @@ function renderVideoResults(items, query) {
   addFilterOption(dateSelect, "day", "Past 24 hours");
   addFilterOption(dateSelect, "week", "Past week");
   addFilterOption(dateSelect, "month", "Past month");
+  addFilterOption(dateSelect, "year", "Past year");
   dateLabel.appendChild(dateSelect);
 
   const durationLabel = document.createElement("label");
@@ -800,26 +833,9 @@ function renderVideoResults(items, query) {
     const sourceFilter = sourceSelect.value;
     const dateFilter = dateSelect.value;
     const durationFilter = durationSelect.value;
-    const filtered = videos.filter((video) => {
-      const host = video.source || getVideoHost(video.url);
-      if (sourceFilter !== "all" && host !== sourceFilter) return false;
-
-      if (dateFilter !== "any") {
-        const date = video.publishedAt ? Date.parse(video.publishedAt) : NaN;
-        if (!Number.isFinite(date)) return false;
-        const maxAge = dateFilter === "day" ? 86400000
-          : dateFilter === "week" ? 7 * 86400000 : 30 * 86400000;
-        if (date > now || now - date > maxAge) return false;
-      }
-
-      if (durationFilter !== "any") {
-        if (!Number.isFinite(video.durationSeconds)) return false;
-        if (durationFilter === "short" && video.durationSeconds >= 240) return false;
-        if (durationFilter === "medium" && (video.durationSeconds < 240 || video.durationSeconds > 1200)) return false;
-        if (durationFilter === "long" && video.durationSeconds <= 1200) return false;
-      }
-      return true;
-    });
+    const filtered = videos.filter((video) =>
+      videoMatchesFilters(video, sourceFilter, dateFilter, durationFilter, now)
+    );
 
     gallery.replaceChildren();
     if (!filtered.length) {
