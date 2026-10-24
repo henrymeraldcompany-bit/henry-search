@@ -86,7 +86,7 @@ function flickrRow(item) {
   };
 }
 async function flickr(q, count) {
-  const tags = terms(q).slice(0, 5).join(",");
+  const tags = (fallbackQuery(q) || String(q || "").trim()).split(/\s+/).filter(Boolean).slice(0, 5).join(",");
   if (!tags) return [];
   const u = new URL("https://www.flickr.com/services/feeds/photos_public.gne");
   [["format","json"],["nojsoncallback","1"],["tags",tags],["tagmode","any"],["lang","en-us"]]
