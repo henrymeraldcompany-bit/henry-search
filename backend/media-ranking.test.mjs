@@ -72,7 +72,7 @@ test("fills the requested count when only one source is available", () => {
 
 test("builds a focused fallback query by removing common filler words", () => {
   assert.equal(api.fallbackQuery("how to build a solar system model"), "build solar system model");
-  assert.equal(api.fallbackQuery("what is the history of Nigeria"), "history Nigeria");
+  assert.equal(api.fallbackQuery("what is the history of Nigeria"), "history nigeria");
 });
 
 test("does not repeat a query when no useful broadening is possible", () => {
