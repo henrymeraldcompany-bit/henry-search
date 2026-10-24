@@ -47,6 +47,7 @@ test("queries Flickr's public feed with bounded tag terms and maps original link
     extract("clean"),
     extract("safeUrl"),
     extract("terms"),
+    extract("fallbackQuery"),
     extract("flickrRow"),
     extractAsync("getJson"),
     extractAsync("flickr")
