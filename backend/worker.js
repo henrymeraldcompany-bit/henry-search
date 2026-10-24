@@ -258,6 +258,17 @@ function front(r) {
   let host="";try{host=new URL(r.page_url).hostname;}catch(_){}
   return {title:r.title,description:r.description,url:r.page_url,watchUrl:r.page_url,embedUrl:r.embed_url,thumbnailUrl:r.thumbnail_url,thumbnail:r.thumbnail_url,host:host,channel:r.author,duration:r.duration_seconds,publishedAt:r.published_at,source:r.source};
 }
+function capFlickrResults(rows, limit) {
+  const maximum = Math.max(0, Number.isFinite(Number(limit)) ? Number(limit) : 20);
+  let flickrCount = 0;
+  return rows.filter(function (row) {
+    if (row && row.source === "Flickr public feed") {
+      flickrCount++;
+      return flickrCount <= maximum;
+    }
+    return true;
+  });
+}
 async function provider(fn) { try { return await fn(); } catch(e) { console.warn("Provider error",e && e.message || e); return []; } }
 async function search(request,env,kind) {
   const q=(new URL(request.url).searchParams.get("q")||"").trim().slice(0,180);
@@ -278,17 +289,19 @@ async function search(request,env,kind) {
     return providers.flat();
   };
   let live=await fetchLive(q);
-  let results=rank(live.concat(saved),q,40);
+  let ranked=rank(live.concat(saved),q,40);
+  let results=capFlickrResults(ranked,20);
   let expandedQuery="";
   // Only spend extra provider requests when the exact search is sparse.
   // Keep the focused query short and merge through the same deduper/ranker.
-  if(results.length<8) {
+  if(ranked.length<8) {
     expandedQuery=fallbackQuery(q);
     if(expandedQuery) {
       const expandedLive=await fetchLive(expandedQuery);
       if(expandedLive.length) {
         live=live.concat(expandedLive);
-        results=rank(live.concat(saved),q,40);
+        ranked=rank(live.concat(saved),q,40);
+        results=capFlickrResults(ranked,20);
       }
     }
   }
