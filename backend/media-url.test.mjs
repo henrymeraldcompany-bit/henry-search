@@ -14,9 +14,11 @@ function extract(name) {
 const helpers = [
   extract("resolveSafeHttpUrl"),
   extract("canonicalizeMediaResultUrl"),
+  extract("getYouTubeVideoId"),
+  extract("getPlayableEmbedUrl"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl}; })()",
+  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl}; })()",
   { URL }
 );
 
@@ -45,5 +47,39 @@ test("preserves case-sensitive paths", () => {
   assert.notEqual(
     api.canonicalizeMediaResultUrl("https://example.org/Video/ABC"),
     api.canonicalizeMediaResultUrl("https://example.org/video/abc")
+  );
+});
+
+test("allows same-origin PeerTube embeds and matching YouTube embeds", () => {
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://videos.example/videos/watch/abc",
+      embedUrl: "https://videos.example/videos/embed/abc"
+    }),
+    "https://videos.example/videos/embed/abc"
+  );
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://www.youtube.com/watch?v=abc123",
+      embedUrl: "https://www.youtube-nocookie.com/embed/abc123"
+    }),
+    "https://www.youtube-nocookie.com/embed/abc123"
+  );
+});
+
+test("rejects mismatched and cross-origin embeds, using a safe YouTube fallback when possible", () => {
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://www.youtube.com/watch?v=abc123",
+      embedUrl: "https://www.youtube.com/embed/other456"
+    }),
+    "https://www.youtube-nocookie.com/embed/abc123"
+  );
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://videos.example/watch/abc",
+      embedUrl: "https://untrusted.example/embed/abc"
+    }),
+    null
   );
 });
