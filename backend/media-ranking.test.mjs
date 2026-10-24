@@ -99,7 +99,7 @@ test("filters unrelated media instead of filling sparse searches with zero-match
     {page_url:"https://example.org/solar-system", title:"Solar system explained", description:"A model of the planets"}
   ], "how to build a solar system model", 10);
   assert.deepEqual(
-    results.map(row => row.page_url),
+    Array.from(results, row => row.page_url),
     ["https://example.org/solar-model", "https://example.org/solar-system"]
   );
 });
@@ -109,5 +109,5 @@ test("does not treat generic media words as a relevance match", () => {
     {page_url:"https://example.org/cooking", title:"Cooking tutorial", description:"New videos every week"},
     {page_url:"https://example.org/science", title:"Science experiment for beginners", description:""}
   ], "science videos", 10);
-  assert.deepEqual(results.map(row => row.page_url), ["https://example.org/science"]);
+  assert.deepEqual(Array.from(results, row => row.page_url), ["https://example.org/science"]);
 });
