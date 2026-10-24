@@ -684,31 +684,34 @@ function getPlayableEmbedUrl(video) {
 }
 
 async function fetchImageResults(query) {
-  let lastData = null;
-  let lastError = null;
+  const endpoint = new URL("/images", MEDIA_API);
+  endpoint.searchParams.set("q", query);
 
-  // Prefer the dedicated media index; retain the existing Worker as a fallback.
-  for (const api of [MEDIA_API, SEARCH_API]) {
-    try {
-      const endpoint = new URL("/images", api);
-      endpoint.searchParams.set("q", query);
-      const data = await fetchJson(endpoint.toString());
-      const items = Array.isArray(data.results) ? data.results : [];
-      if (items.length) return { ...data, results: items };
-      lastData = { ...data, results: items };
-    } catch (error) {
-      lastError = error;
-      console.warn("GOZIE image endpoint unavailable; trying the next provider.", error);
-    }
+  try {
+    const data = await fetchJson(endpoint.toString());
+    // A successful empty response means the media search completed and found
+    // no relevant matches. Do not replace that with weaker legacy results.
+    return {
+      ...data,
+      results: Array.isArray(data.results) ? data.results : []
+    };
+  } catch (error) {
+    console.warn("GOZIE image endpoint unavailable; trying the legacy provider.", error);
   }
 
-  if (lastData) return lastData;
-  throw lastError || new Error("Image search is temporarily unavailable.");
+  const fallbackEndpoint = new URL("/images", SEARCH_API);
+  fallbackEndpoint.searchParams.set("q", query);
+  const fallbackData = await fetchJson(fallbackEndpoint.toString());
+  return {
+    ...fallbackData,
+    results: Array.isArray(fallbackData.results) ? fallbackData.results : []
+  };
 }
 
 async function fetchVideoResults(query) {
-  // Prefer the dedicated multi-source media Worker, then keep the original Worker,
-  // and finally use the direct PeerTube fallback if neither Worker returns matches.
+  // A successful response from the dedicated index is authoritative, including
+  // an empty result set. Use the legacy worker only when the preferred endpoint
+  // fails; use direct PeerTube only when both workers are unavailable.
   for (const api of [MEDIA_API, SEARCH_API]) {
     try {
       const endpoint = new URL("/videos", api);
@@ -716,13 +719,10 @@ async function fetchVideoResults(query) {
       const data = await fetchJson(endpoint.toString());
       const items = Array.isArray(data.results) ? data.results
         : Array.isArray(data.items) ? data.items : [];
-      const normalized = items.map(normalizeVideoResult).filter(Boolean);
-      if (normalized.length) {
-        return {
-          items: normalized,
-          source: data.source || `GOZIE SEARCH media provider (${new URL(api).hostname})`
-        };
-      }
+      return {
+        items: items.map(normalizeVideoResult).filter(Boolean),
+        source: data.source || `GOZIE SEARCH media provider (${new URL(api).hostname})`
+      };
     } catch (error) {
       console.warn("GOZIE video endpoint unavailable; trying the next provider.", error);
     }
