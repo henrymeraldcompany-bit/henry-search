@@ -651,22 +651,35 @@ function normalizeVideoResult(item) {
 }
 
 function getPlayableEmbedUrl(video) {
+  const youtubeId = getYouTubeVideoId(video?.url || "");
   const candidate = resolveSafeHttpUrl(video?.embedUrl);
   if (!candidate) {
-    const youtubeId = getYouTubeVideoId(video?.url || "");
     return youtubeId ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}` : null;
   }
 
   try {
     const embed = new URL(candidate);
     const watch = new URL(video.url);
-    const host = embed.hostname.toLowerCase();
-    const isYouTubeEmbed = host === "youtube.com" || host === "www.youtube.com" ||
-      host === "youtube-nocookie.com" || host === "www.youtube-nocookie.com";
-    // Other platforms may only embed from the same origin as the result itself.
-    return isYouTubeEmbed || embed.origin === watch.origin ? embed.href : null;
+    const embedHost = embed.hostname.toLowerCase();
+    const isYouTubeEmbedHost = [
+      "youtube.com", "www.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"
+    ].includes(embedHost);
+
+    // For YouTube, accept only the matching /embed/{id} path; otherwise
+    // generate the privacy-enhanced embed from the trusted watch URL's ID.
+    if (youtubeId) {
+      const embedId = embed.pathname.match(/^\/embed\/([\w-]+)\/?$/)?.[1] || "";
+      return isYouTubeEmbedHost && embedId === youtubeId
+        ? embed.href
+        : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`;
+    }
+
+    // Other platforms may only embed from the same origin as the source video.
+    return embed.origin === watch.origin ? embed.href : null;
   } catch {
-    return null;
+    return youtubeId
+      ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`
+      : null;
   }
 }
 
