@@ -1,6 +1,6 @@
 # GOZIE SEARCH media backend
 
-This Cloudflare Worker stores media metadata and original source links rather than re-hosting media files. It uses Wikimedia Commons for images and PeerTube for open video search, and optionally YouTube when a server-side `YOUTUBE_API_KEY` secret is configured.
+This Cloudflare Worker stores media metadata and original source links rather than re-hosting media files. It uses Wikimedia Commons and Flickr's public photo feed for image discovery, PeerTube for open video search, and optionally YouTube when a server-side `YOUTUBE_API_KEY` secret is configured.
 
 ## Current deployment status
 
@@ -10,25 +10,45 @@ This Cloudflare Worker stores media metadata and original source links rather th
 - Scheduled discovery refresh: daily at `07:00 UTC` (`08:00 Africa/Lagos`)
 - Routes: `/health`, `/images?q=...`, `/videos?q=...`, and `/index/status`
 - The website tries this Media Worker first for image/video search and retains the original Worker and direct PeerTube fallbacks. Normal `/search` and `/news` remain on the original Worker.
-- YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in frontend code.
+- YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in `app.js` or `index.html`.
 
-Cloudflare confirmed the Media Worker deployment at 2026-10-23 08:37:15 UTC, with 100% of traffic assigned to that version. Its latest verified scheduled index run finished at 2026-10-23 07:01:08 UTC: 192 rows processed, zero recorded provider/database failures, and 191 unique stored records (96 images, 95 videos across five PeerTube hostnames). The D1 database and `0 7 * * *` schedule were verified through Cloudflare management APIs.
+The latest Worker deployment was confirmed on 24 October 2026 at 07:47 UTC with 100% of traffic assigned to its version. The deployed source was compared with the latest `backend/worker.js` from GitHub and matched exactly. Cloudflare settings confirm the original `MEDIA_DB` binding and the daily `0 7 * * *` trigger are still present.
 
-The 23 October deployment adds a bounded sparse-query fallback: if fewer than eight unique results are available, it retries once with a focused query after removing common filler words, then merges and re-ranks the results through the existing deduplicator. This only spends additional provider requests for sparse searches.
+The latest recorded scheduled index run finished at 2026-10-24 07:01:07 UTC, before the Flickr provider was deployed: 192 rows processed, zero recorded provider/database failures, and 195 unique stored records (100 images and 95 videos). The next daily run should exercise the newly deployed Flickr index provider. No Flickr-derived rows have yet been verified in D1 after this deployment.
 
-Live HTTP smoke tests remain unverified because this management environment blocks outgoing requests to `workers.dev` hosts. Deployment metadata and a successful scheduled index run are verified, but they do not prove that every browser-visible route works. Check the routes from a normal browser or another external client.
+## Image discovery
 
-This is a small seed-query discovery index, not a crawler of the entire internet. It stores metadata, original source URLs, licenses where provided, and index timestamps. It does not download or re-host media files.
+- Wikimedia Commons is queried for up to 16 live results.
+- Flickr's public photos feed is queried with up to five focused tag terms and returns at most 12 live items per query.
+- The feed's original photo page and media URLs are stored; image bytes are not copied to GOZIE SEARCH.
+- The provider response is capped at 20 Flickr results per search response, below Flickr's documented 30-photo-per-page limit.
+- The public feed does not supply a reliable license field, so Flickr results use `License information unavailable`; the original page must be checked before reuse.
+- The frontend includes Flickr's non-endorsement notice.
+- External provider requests use an 8-second timeout. Provider failures are isolated so one unavailable image source does not discard the other source's results.
+
+The Flickr feed host was blocked by the management execution environment during live testing. This is not proof that Cloudflare's deployed Worker cannot reach it, but live Flickr search and the next scheduled index refresh still need verification.
+
+## Video discovery and ranking
+
+Video search merges indexed results with live PeerTube results and optional YouTube results. URL canonicalization removes common tracking parameters and collapses equivalent YouTube watch/short/embed links. Ranking prioritizes title matches, limits source-host dominance on the first pass, then fills remaining places with the closest available matches. If fewer than eight unique results are found, the Worker retries once with a focused query.
+
+The frontend supports source, upload-date, and duration filters, including a past-year option. ISO-8601 durations (for example, `PT4M` or `PT1H2M3S`) are normalized for duration filtering. In-page playback is used only when the source exposes a permitted embed URL; original source links remain available.
+
+## Index behavior and limits
+
+The daily refresh uses a small set of seed queries; it is a discovery index, not a crawler of the whole internet. It stores metadata, source links, licenses when supplied, and index timestamps. Old records older than 180 days are removed during refresh. The index does not store video or image files.
 
 ## Regression tests
 
-Run all three suites with Node.js:
+Run the five regression suites with Node.js 22:
 
 ```sh
-node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs
+node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
 ```
 
-The duration suite covers YouTube ISO-8601 durations and malformed values. Ranking tests cover canonical YouTube URLs, tracking-parameter deduplication, source diversity, sparse-source fill, and the new focused fallback-query helper. Frontend URL tests cover unsafe schemes and case-sensitive paths. Source-level checks in the latest run passed for Worker syntax, frontend syntax, five fallback-query cases, and eleven duration-parser cases. The full Node.js suite and GitHub Actions status still need confirmation through a compatible test runner/status check.
+They cover ISO-8601 duration parsing, YouTube URL canonicalization, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr response caps, and source/date/duration filtering. GitHub Actions is configured to run this command on relevant pushes and pull requests, but a passing run for the newest commit is not yet confirmed through the available status tools.
+
+Live HTTP smoke tests remain unverified because the management environment blocks outgoing requests to `workers.dev` and `www.flickr.com` hosts. Deployment metadata and the earlier scheduled index run are verified, but every browser-visible route and the Flickr provider still need a direct test from a normal browser or another permitted external client.
 
 ## Redeploy or reproduce setup
 
