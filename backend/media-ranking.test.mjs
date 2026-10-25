@@ -50,6 +50,15 @@ test("deduplicates equivalent URLs while ranking results", () => {
   assert.equal(results.length, 2);
 });
 
+test("keeps the most relevant duplicate when a weaker provider row appears first", () => {
+  const results = api.rank([
+    {page_url:"https://example.org/video?id=1", title:"Football highlights"},
+    {page_url:"https://www.example.org/video?id=1&utm_source=feed", title:"Science documentary about stars"}
+  ], "science", 10);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].title, "Science documentary about stars");
+});
+
 test("limits one host during the first pass when alternatives exist", () => {
   const rows = [];
   for (let i=0;i<8;i++) rows.push({page_url:"https://a.example/video/"+i,title:"science result "+i});
