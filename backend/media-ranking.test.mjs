@@ -129,3 +129,63 @@ test("does not treat generic media words as a relevance match", () => {
   ], "science videos", 10);
   assert.deepEqual(Array.from(results, row => row.page_url), ["https://example.org/science"]);
 });
+
+// Frontend ranking regression tests: the backend can be healthy while a legacy
+// provider still returns unrelated items, so verify the UI rejects zero-match rows.
+const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+function extractApp(name) {
+  const start = appSource.indexOf("function " + name + "(");
+  assert.notEqual(start, -1, name + " must exist in app.js");
+  const end = appSource.indexOf("\n}", start);
+  assert.notEqual(end, -1, "Could not find end of frontend " + name);
+  return appSource.slice(start, end + 2);
+}
+const stopWordsMatch = appSource.match(/const MEDIA_STOP_WORDS = new Set\(\[[\s\S]*?\]\);/);
+assert.ok(stopWordsMatch, "MEDIA_STOP_WORDS must exist in app.js");
+const frontendHelpers = [
+  stopWordsMatch[0],
+  extractApp("resolveSafeHttpUrl"),
+  extractApp("normalizeMediaText"),
+  extractApp("queryWords"),
+  extractApp("mediaRelevanceScore"),
+  extractApp("canonicalizeMediaResultUrl"),
+  extractApp("rankMediaResults")
+].join("\n");
+const frontendApi = vm.runInNewContext(
+  "(function(){ " + frontendHelpers + "; return {rankMediaResults}; })()",
+  { URL }
+);
+
+test("frontend does not show unrelated media when no candidate matches", () => {
+  const results = frontendApi.rankMediaResults([
+    {url:"https://example.org/football", title:"Football highlights", description:"League final"},
+    {url:"https://example.org/cooking", title:"Cooking tutorial", description:"New videos every week"}
+  ], "solar system", ["title"], ["description"], ["url"]);
+  assert.equal(results.length, 0);
+});
+
+test("frontend ignores generic media words while preserving topical matches", () => {
+  const results = frontendApi.rankMediaResults([
+    {url:"https://example.org/cooking", title:"Cooking tutorial", description:"New videos every week"},
+    {url:"https://example.org/science", title:"Science experiment for beginners", description:""}
+  ], "science videos", ["title"], ["description"], ["url"]);
+  assert.deepEqual(Array.from(results, row => row.url), ["https://example.org/science"]);
+});
+
+test("frontend returns no matches for queries made only of generic media words", () => {
+  const results = frontendApi.rankMediaResults([
+    {url:"https://example.org/one", title:"One video"},
+    {url:"https://example.org/two", title:"Another image"}
+  ], "videos images search", ["title"], [], ["url"]);
+  assert.equal(results.length, 0);
+});
+
+test("frontend keeps the strongest matching title when provider URLs duplicate", () => {
+  const results = frontendApi.rankMediaResults([
+    {url:"https://example.org/video?id=1", title:"Solar facts and footage"},
+    {url:"https://www.example.org/video?id=1&utm_source=feed", title:"Solar system explained for beginners"}
+  ], "solar system", ["title"], [], ["url"]);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].title, "Solar system explained for beginners");
+});
+
