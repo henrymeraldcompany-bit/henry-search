@@ -59,6 +59,15 @@ test("keeps the most relevant duplicate when a weaker provider row appears first
   assert.equal(results[0].title, "Science documentary about stars");
 });
 
+test("prefers the stronger exact-phrase variant among eligible duplicate URLs", () => {
+  const results = api.rank([
+    {page_url:"https://example.org/video?id=1", title:"Solar facts and footage"},
+    {page_url:"https://www.example.org/video?id=1&utm_source=feed", title:"Solar system explained for beginners"}
+  ], "solar system", 10);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].title, "Solar system explained for beginners");
+});
+
 test("limits one host during the first pass when alternatives exist", () => {
   const rows = [];
   for (let i=0;i<8;i++) rows.push({page_url:"https://a.example/video/"+i,title:"science result "+i});
