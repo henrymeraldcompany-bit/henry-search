@@ -224,12 +224,11 @@ function rank(rows,q,limit) {
   const stop=new Set(["a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","the","to","was","what","when","where","which","who","why","with","about","this","that","video","videos","image","images","photo","photos","picture","pictures","clip","clips","search","find"]);
   const queryTerms=ts.filter(function(t){return !stop.has(t);});
   if(!queryTerms.length)return [];
-  const seen=new Set(), candidates=[];
+  const candidates=[];
   for (const r of rows) {
     const url=safeUrl(r.page_url || r.url || r.page);
     const key=canonicalMediaKey(url);
-    if (!url || !key || seen.has(key)) continue;
-    seen.add(key);
+    if (!url || !key) continue;
     const title=String(r.title || "").toLowerCase();
     const details=[r.description,r.tags,r.author].map(function(v){return String(v || "").toLowerCase();}).join(" ");
     const exact=!!(query && title.indexOf(query)>=0);
@@ -245,22 +244,30 @@ function rank(rows,q,limit) {
     if(!exact && matched<minimumMatches)continue;
     let host="";
     try { host=new URL(url).hostname.toLowerCase().replace(/^www\./,""); } catch (_) {}
-    candidates.push({r:r,score:score,host:host,matched:matched});
+    candidates.push({r:r,score:score,host:host,matched:matched,titleMatches:titleMatches,key:key});
   }
-  candidates.sort(function(a,b){return b.score-a.score || b.matched-a.matched;});
+  // Rank before deduplication: a weak duplicate from one provider must not hide
+  // a better-titled version of the same media returned by another provider.
+  candidates.sort(function(a,b){return b.score-a.score || b.matched-a.matched || b.titleMatches-a.titleMatches;});
+  const uniqueCandidates=[], seenKeys=new Set();
+  for (const item of candidates) {
+    if (seenKeys.has(item.key)) continue;
+    seenKeys.add(item.key);
+    uniqueCandidates.push(item);
+  }
   const target=Math.max(1,limit || 40);
   // Give different source hosts a fair first pass, then fill remaining places
   // with the closest matches if the query has only a few available sources.
   const sourceCap=Math.max(3,Math.ceil(target/5));
   const picked=[], counts=new Map(), selected=new Set();
-  for (const item of candidates) {
+  for (const item of uniqueCandidates) {
     if (picked.length>=target) break;
     const host=item.host || "unknown";
     if ((counts.get(host)||0)>=sourceCap) continue;
     picked.push(item); selected.add(item); counts.set(host,(counts.get(host)||0)+1);
   }
   if (picked.length<target) {
-    for (const item of candidates) {
+    for (const item of uniqueCandidates) {
       if (picked.length>=target) break;
       if (selected.has(item)) continue;
       picked.push(item);
