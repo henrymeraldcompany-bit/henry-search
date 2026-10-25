@@ -12,13 +12,17 @@ function extract(name) {
   return source.slice(start, end + 2);
 }
 const helpers = [
+  extract("normalizeMediaText"),
+  extract("queryWords"),
+  extract("mediaRelevanceScore"),
+  extract("rankMediaResults"),
   extract("resolveSafeHttpUrl"),
   extract("canonicalizeMediaResultUrl"),
   extract("getYouTubeVideoId"),
   extract("getPlayableEmbedUrl"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl}; })()",
+  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults}; })()",
   { URL }
 );
 
@@ -36,6 +40,15 @@ test("removes common tracking parameters, fragments, and www aliases", () => {
     api.canonicalizeMediaResultUrl("https://www.example.org/media?id=7&utm_source=test#preview"),
     api.canonicalizeMediaResultUrl("https://example.org/media?id=7")
   );
+});
+
+test("keeps the best-matching frontend duplicate instead of the first URL variant", () => {
+  const results = api.rankMediaResults([
+    {url:"https://example.org/video?id=1", title:"Football highlights"},
+    {url:"https://www.example.org/video?id=1&utm_source=feed", title:"Science documentary about stars"}
+  ], "science", ["title"], ["description"], ["url"]);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].title, "Science documentary about stars");
 });
 
 test("rejects non-HTTP media links", () => {
