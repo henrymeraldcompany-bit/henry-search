@@ -12,9 +12,9 @@ This Cloudflare Worker stores media metadata and original source links rather th
 - The website tries this Media Worker first for image/video search and retains the original Worker and direct PeerTube fallbacks. Normal `/search` and `/news` remain on the original Worker.
 - YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in `app.js` or `index.html`.
 
-The latest Worker deployment was confirmed on 24 October 2026 at 07:47 UTC with 100% of traffic assigned to its version. The deployed source was compared with the latest `backend/worker.js` from GitHub and matched exactly. Cloudflare settings confirm the original `MEDIA_DB` binding and the daily `0 7 * * *` trigger are still present.
+The latest Worker deployment was confirmed on 25 October 2026 at 07:15:52 UTC with 100% of traffic assigned to its version. The deployed `worker.js` source was fetched through Cloudflare's API and compared byte-for-byte with the GitHub file; it matched exactly. Cloudflare settings confirm the `MEDIA_DB` binding, enabled `workers.dev` subdomain, and daily `0 7 * * *` trigger.
 
-The latest recorded scheduled index run finished at 2026-10-24 07:01:07 UTC, before the Flickr provider was deployed: 192 rows processed, zero recorded provider/database failures, and 195 unique stored records (100 images and 95 videos). The next daily run should exercise the newly deployed Flickr index provider. No Flickr-derived rows have yet been verified in D1 after this deployment.
+The latest recorded scheduled index run finished at 2026-10-25 07:01:07 UTC: 288 rows processed, zero recorded provider/database failures, 198 images (103 Wikimedia Commons and 95 Flickr public-feed records), and 98 videos across five PeerTube hosts. This run occurred before the newest ranking deployment but after Flickr indexing had been deployed, so it verifies that the Flickr index provider is producing stored rows.
 
 ## Image discovery
 
@@ -30,7 +30,7 @@ The Flickr feed host was blocked by the management execution environment during 
 
 ## Video discovery and ranking
 
-Video search merges indexed results with live PeerTube results and optional YouTube results. URL canonicalization removes common tracking parameters and collapses equivalent YouTube watch/short/embed links. Ranking prioritizes title matches, limits source-host dominance on the first pass, then fills remaining places with the closest available matches. If fewer than eight unique results are found, the Worker retries once with a focused query.
+Video search merges indexed results with live PeerTube results and optional YouTube results. URL canonicalization removes common tracking parameters and collapses equivalent YouTube watch/short/embed links. Ranking prioritizes title matches, sorts candidates before canonical URL deduplication so the strongest provider variant wins, limits source-host dominance on the first pass, then fills remaining places with the closest available matches. If fewer than eight unique results are found, the Worker retries once with a focused query.
 
 The frontend supports source, upload-date, and duration filters, including a past-year option. ISO-8601 durations (for example, `PT4M` or `PT1H2M3S`) are normalized for duration filtering. In-page playback is used only when the source exposes a permitted embed URL; original source links remain available.
 
