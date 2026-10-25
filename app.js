@@ -492,8 +492,6 @@ function canonicalizeMediaResultUrl(value) {
 function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
   if (!Array.isArray(items)) return [];
   const ranked = [];
-  const seenUrls = new Set();
-  const seenTitles = new Set();
 
   for (const [index, item] of items.entries()) {
     if (!item || typeof item !== "object") continue;
@@ -502,13 +500,12 @@ function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
     const title = normalizeMediaText(titleKeys.map((key) => item[key]).filter(Boolean).join(" "));
     const host = canonicalUrl ? new URL(canonicalUrl).hostname : "";
     const titleKey = title && host ? title + "|" + host : "";
-    if ((canonicalUrl && seenUrls.has(canonicalUrl)) || (titleKey && seenTitles.has(titleKey))) continue;
-    if (canonicalUrl) seenUrls.add(canonicalUrl);
-    if (titleKey) seenTitles.add(titleKey);
 
     ranked.push({
       item,
       index,
+      canonicalUrl,
+      titleKey,
       score: mediaRelevanceScore(item, query, titleKeys, detailKeys)
     });
   }
@@ -518,7 +515,19 @@ function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
     ranked.sort((a, b) => b.score - a.score || a.index - b.index);
   }
 
-  return ranked.map((entry) => entry.item);
+  // Deduplicate after relevance sorting so a low-quality duplicate encountered
+  // first cannot suppress a better matching result from another provider.
+  const seenUrls = new Set();
+  const seenTitles = new Set();
+  const unique = [];
+  for (const entry of ranked) {
+    if ((entry.canonicalUrl && seenUrls.has(entry.canonicalUrl)) ||
+        (entry.titleKey && seenTitles.has(entry.titleKey))) continue;
+    if (entry.canonicalUrl) seenUrls.add(entry.canonicalUrl);
+    if (entry.titleKey) seenTitles.add(entry.titleKey);
+    unique.push(entry.item);
+  }
+  return unique;
 }
 
 function formatVideoDuration(value) {
