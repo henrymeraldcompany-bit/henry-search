@@ -23,7 +23,14 @@ const helpers = [
 ].join("\n");
 const api = vm.runInNewContext(
   "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults}; })()",
-  { URL }
+  {
+    URL,
+    MEDIA_STOP_WORDS: new Set([
+      "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+      "how", "i", "in", "is", "it", "of", "on", "or", "the", "to", "with",
+      "what", "when", "where", "who", "why", "you", "your"
+    ])
+  }
 );
 
 test("deduplicates YouTube watch, short, and embed URLs", () => {
