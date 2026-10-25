@@ -22,7 +22,7 @@ A phone-friendly search website with category tabs for web search, images, news,
 - `/videos?q=...` — indexed results plus live PeerTube results and optional YouTube results.
 - `/index/status` — indexed item counts and the latest recorded daily run.
 
-The frontend tries the Media Worker first for image/video search, then retains the original Worker and direct PeerTube fallbacks. Ordinary web search and news remain routed to the original Worker. Video playback is attempted only for permitted embed URLs; original source links remain available.
+The frontend tries the Media Worker first for image/video search, then retains the original Worker and direct PeerTube fallbacks. Both backend and frontend now rank media variants before deduplicating canonical URLs, preserving the best-matching title when providers return different versions of the same item. Ordinary web search and news remain routed to the original Worker. Video playback is attempted only for permitted embed URLs; original source links remain available.
 
 ## Image providers and terms
 
@@ -34,11 +34,11 @@ Provider requests have an 8-second timeout so a slow provider does not indefinit
 
 The `backend/` directory contains the media Worker, D1 schema, schedule configuration, regression tests, and setup notes. The Worker stores metadata and original source links rather than re-hosting media. D1 database `gozie-search-media` is bound as `MEDIA_DB`; the scheduled trigger is `0 7 * * *` (08:00 in Nigeria).
 
-Cloudflare verified a completed index run at 2026-10-24 07:01:07 UTC: 192 rows processed with zero recorded provider/database failures. Before the Flickr integration deployment later that morning, the database contained 100 images and 95 videos. The newly deployed Worker includes Flickr in live image search and the next scheduled index refresh; Flickr's live response and new indexed rows are not yet independently verified.
+Cloudflare verified the daily index run at 2026-10-25 07:01:07 UTC: 288 rows processed with zero recorded provider/database failures. D1 then contained 198 images (103 from Wikimedia Commons and 95 from the Flickr public feed) and 98 videos across five PeerTube hosts. This confirms Flickr-derived records were stored by the scheduled index.
 
-The Media Worker deployment containing the Flickr provider and provider timeouts was confirmed on 24 October 2026 at 07:47 UTC, with 100% traffic and the existing D1 binding preserved. The deployed Worker source was compared with the latest repository file and matched exactly.
+The Media Worker was redeployed on 25 October 2026 at 07:15:52 UTC with relevance-aware deduplication: candidates are now scored and sorted before canonical duplicate URLs are removed, so a weak provider variant cannot hide a better match. Cloudflare's deployed source was fetched and compared byte-for-byte with `backend/worker.js`; the source matched exactly. The existing `MEDIA_DB` binding, enabled workers.dev subdomain, and daily `0 7 * * *` schedule remain configured.
 
-Live HTTP smoke tests remain unverified because this management environment blocks outgoing requests to `workers.dev` hosts and to `www.flickr.com`. Deployment metadata and the previous scheduled refresh are verified, but they do not prove that every browser-visible route or Flickr feed request succeeds. Test those routes from a normal browser or another permitted external client. The static website's latest publication status is also not confirmed.
+Live HTTP smoke tests remain unverified because this management environment blocks outgoing requests to `workers.dev` hosts. This does not prove that the Worker is failing; it prevents direct end-to-end verification from this environment. Test `/health`, `/index/status`, `/images?q=science`, and `/videos?q=science` from a normal browser or another permitted external client. The static website's latest publication status is also not confirmed.
 
 YouTube results remain optional and require the server-side `YOUTUBE_API_KEY` secret. Never put API secrets in frontend code.
 
