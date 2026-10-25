@@ -397,7 +397,9 @@ const VIDEO_SEARCH_BASE = "https://peertube.tv";
 const MEDIA_STOP_WORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
   "how", "i", "in", "is", "it", "of", "on", "or", "the", "to", "with",
-  "what", "when", "where", "who", "why", "you", "your"
+  "what", "when", "where", "who", "why", "you", "your",
+  "video", "videos", "image", "images", "photo", "photos", "picture",
+  "pictures", "clip", "clips", "search", "find"
 ]);
 
 function resolveSafeHttpUrl(value, base) {
@@ -510,10 +512,12 @@ function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
     });
   }
 
-  const hasRelevantMatches = ranked.some((entry) => entry.score > 0);
-  if (hasRelevantMatches) {
-    ranked.sort((a, b) => b.score - a.score || a.index - b.index);
-  }
+  // Do not let unrelated provider results fill the gallery when no candidate
+  // matches any meaningful query word. Generic words such as "videos" and
+  // "images" are removed by queryWords(), so "science videos" means science.
+  if (!ranked.some((entry) => entry.score > 0)) return [];
+
+  ranked.sort((a, b) => b.score - a.score || a.index - b.index);
 
   // Deduplicate after relevance sorting so a low-quality duplicate encountered
   // first cannot suppress a better matching result from another provider.
