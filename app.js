@@ -438,19 +438,28 @@ function mediaRelevanceScore(item, query, titleKeys, detailKeys) {
   }).filter(Boolean).join(" "));
 
   let score = 0;
-  if (normalizedQuery && title.includes(normalizedQuery)) score += 12;
+  const exactTitleMatch = Boolean(normalizedQuery && title.includes(normalizedQuery));
+  if (exactTitleMatch) score += 12;
 
   let titleHits = 0;
+  let matchedWords = 0;
   for (const word of words) {
     if (title.includes(word)) {
       score += 5;
       titleHits++;
+      matchedWords++;
     } else if (details.includes(word)) {
       score += 1;
+      matchedWords++;
     }
   }
 
   if (titleHits === words.length && words.length > 1) score += 4;
+
+  // Match the backend's threshold: a longer query needs two meaningful words
+  // unless the title contains the complete phrase.
+  const minimumMatches = words.length >= 3 ? 2 : 1;
+  if (!exactTitleMatch && matchedWords < minimumMatches) return 0;
   return score;
 }
 
@@ -512,19 +521,19 @@ function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
     });
   }
 
-  // Do not let unrelated provider results fill the gallery when no candidate
-  // matches any meaningful query word. Generic words such as "videos" and
-  // "images" are removed by queryWords(), so "science videos" means science.
-  if (!ranked.some((entry) => entry.score > 0)) return [];
+  // Do not let unrelated provider results fill the gallery. Keep only
+  // candidates that meet the meaningful-word threshold before sorting.
+  const relevant = ranked.filter((entry) => entry.score > 0);
+  if (!relevant.length) return [];
 
-  ranked.sort((a, b) => b.score - a.score || a.index - b.index);
+  relevant.sort((a, b) => b.score - a.score || a.index - b.index);
 
   // Deduplicate after relevance sorting so a low-quality duplicate encountered
   // first cannot suppress a better matching result from another provider.
   const seenUrls = new Set();
   const seenTitles = new Set();
   const unique = [];
-  for (const entry of ranked) {
+  for (const entry of relevant) {
     if ((entry.canonicalUrl && seenUrls.has(entry.canonicalUrl)) ||
         (entry.titleKey && seenTitles.has(entry.titleKey))) continue;
     if (entry.canonicalUrl) seenUrls.add(entry.canonicalUrl);
