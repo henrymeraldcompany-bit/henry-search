@@ -50,7 +50,7 @@ Run the media regression suites with Node.js 22:
 node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
 ```
 
-The suites cover ISO-8601 durations, PeerTube duration normalization (including missing and invalid metadata), YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr result caps, source/date/duration filters, unsafe URL rejection, and case-sensitive paths. The focused duration test ran locally in a temporary Node.js harness with 4 test cases passing; the complete repository suite and GitHub Actions result for the latest commit have not yet been independently confirmed.
+The suites cover ISO-8601 durations, PeerTube duration normalization (including missing and invalid metadata), YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr result caps, source/date/duration filters, unsafe URL rejection, and case-sensitive paths. The focused duration test ran locally in a temporary Node.js harness with 4 test cases passing; the complete repository suite and GitHub Actions result for the latest commit have not yet been independently confirmed. A separate `.github/workflows/media-live-smoke.yml` workflow checks `/health`, `/index/status`, `/images`, and `/videos` on manual dispatch, when the workflow file changes, and daily at 07:30 UTC (08:30 Nigeria), after the scheduled index refresh. Its first live-run result is not yet available through the connected status tools.
 
 ## Safety and maintenance
 
