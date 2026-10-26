@@ -1,0 +1,40 @@
+name: Media regression tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "app.js"
+      - ".github/workflows/media-tests.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "app.js"
+      - ".github/workflows/media-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run media regression suites
+        run: >-
+          node --test
+          backend/duration.test.mjs
+          backend/media-ranking.test.mjs
+          backend/media-url.test.mjs
+          backend/video-filters.test.mjs
+          backend/image-providers.test.mjs
