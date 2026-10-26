@@ -390,11 +390,24 @@ async function search(request,env,kind) {
     : env.YOUTUBE_API_KEY ? "PeerTube + YouTube" : "PeerTube; YouTube requires an optional API key";
   return reply({query:q,results:results.map(front),count:results.length,source:source,expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
+function shouldIndexYouTubeSeed(seedIndex, daySlot, hasKey) {
+  if (!hasKey || !Number.isInteger(seedIndex) || !Number.isInteger(daySlot) || !SEEDS.length) return false;
+  const slot = ((daySlot % SEEDS.length) + SEEDS.length) % SEEDS.length;
+  return seedIndex === slot;
+}
 async function refresh(env) {
   let saved=0, failures=[];
-  for(const q of SEEDS) {
-    const calls=await Promise.allSettled([commons(q,12),flickr(q,12),peertube(q,12),youtube(q,env.YOUTUBE_API_KEY,8)]);
-    for(const c of calls) {
+  const daySlot=Math.floor(Date.now()/86400000)%SEEDS.length;
+  for(let index=0;index<SEEDS.length;index++) {
+    const q=SEEDS[index];
+    const calls=[commons(q,12),flickr(q,12),peertube(q,12)];
+    // Keep daily external provider requests under the free-plan subrequest cap.
+    // One YouTube seed rotates per day; live searches can still query YouTube immediately.
+    if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY))) {
+      calls.push(youtube(q,env.YOUTUBE_API_KEY,8));
+    }
+    const settled=await Promise.allSettled(calls);
+    for(const c of settled) {
       if(c.status==="rejected"){failures.push(clean(c.reason && c.reason.message || "provider failed",150));continue;}
       try{saved+=await save(env,c.value);}catch(e){failures.push(clean(e && e.message || "database failed",150));}
     }
