@@ -12,18 +12,101 @@ function extract(name) {
   assert.notEqual(end, -1, "Could not find end of " + name);
   return source.slice(start, end + 2);
 }
+const peerTubeInstancesMatch = source.match(/const PEERTUBE_INSTANCES = \[[\s\S]*?\];/);
+assert.ok(peerTubeInstancesMatch, "PEERTUBE_INSTANCES must exist in worker.js");
+
+function extractAsync(signature) {
+  const start = source.indexOf(signature);
+  assert.notEqual(start, -1, signature + " must exist in worker.js");
+  const end = source.indexOf("\\n}", start);
+  assert.notEqual(end, -1, "Could not find end of " + signature);
+  return source.slice(start, end + 2);
+}
+
 const helpers = [
+  peerTubeInstancesMatch[0],
   extract("safeUrl"),
   extract("terms"),
   extract("fallbackQuery"),
   extract("canonicalMediaKey"),
   extract("rank"),
   extract("capFlickrResults"),
+  extract("peertubeSearchTargets"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalMediaKey, rank, fallbackQuery, capFlickrResults}; })()",
+  "(function(){ " + helpers + "; return {canonicalMediaKey, rank, fallbackQuery, capFlickrResults, peertubeSearchTargets}; })()",
   { URL }
 );
+
+const peertubeHarness = vm.runInNewContext(
+  "(function(){ const PEERTUBE = 'https://peertube.tv'; " +
+    [
+      peerTubeInstancesMatch[0],
+      extract("safeUrl"),
+      extract("clean"),
+      extract("normalizeNumericDuration"),
+      extract("videoRow"),
+      extract("peertubeSearchTargets"),
+      extractAsync("async function peertube(q, count) {")
+    ].join("\\n") +
+    "; return peertube; })()",
+  {
+    URL,
+    Date,
+    Number,
+    String,
+    Promise,
+    getJson: async (value) => {
+      const host = new URL(value).hostname;
+      if (host === "peer.tube") throw new Error("simulated provider outage");
+      if (host === "peertube.tv") {
+        return { data: [{
+          host: "peertube.tv",
+          url: "https://peertube.tv/videos/watch/a",
+          uuid: "a",
+          title: "Science documentary",
+          duration: 120
+        }] };
+      }
+      if (host === "spectra.video") {
+        return { data: [{
+          url: "/videos/watch/b",
+          uuid: "b",
+          title: "Science tutorial",
+          duration: 90
+        }] };
+      }
+      return { data: [] };
+    },
+    console: { warn() {} }
+  }
+);
+
+test("builds encoded search requests for three independent PeerTube instances", () => {
+  const targets = api.peertubeSearchTargets("solar system & stars", 99);
+  assert.equal(targets.length, 3);
+  assert.deepEqual(
+    Array.from(targets, (target) => new URL(target.url).hostname).sort(),
+    ["peer.tube", "peertube.tv", "spectra.video"]
+  );
+  for (const target of targets) {
+    const url = new URL(target.url);
+    assert.equal(url.searchParams.get("search"), "solar system & stars");
+    assert.equal(url.searchParams.get("count"), "20");
+    assert.equal(url.searchParams.get("sort"), "-match");
+  }
+  assert.deepEqual(Array.from(api.peertubeSearchTargets("   ", 10)), []);
+});
+
+test("keeps results from healthy PeerTube instances when one instance fails", async () => {
+  const results = await peertubeHarness("science", 5);
+  assert.equal(results.length, 2);
+  assert.deepEqual(
+    Array.from(results, (row) => new URL(row.page_url).hostname).sort(),
+    ["peertube.tv", "spectra.video"]
+  );
+  assert.equal(results.find((row) => row.source === "spectra.video").duration_seconds, 90);
+});
 
 test("canonicalizes YouTube watch, short, and embed URLs to one item", () => {
   const keys = [
