@@ -95,6 +95,16 @@ async function flickr(q, count) {
   const limit = Math.min(12, Math.max(1, Number(count) || 12));
   return (Array.isArray(data.items) ? data.items : []).slice(0, limit).map(flickrRow).filter(Boolean);
 }
+function normalizeNumericDuration(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+  const normalized = value.trim();
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const seconds = Number(normalized);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+}
 function videoRow(v) {
   const baseText = v && v.host ? (String(v.host).startsWith("http") ? v.host : "https://" + v.host) : PEERTUBE;
   const base = safeUrl(baseText, PEERTUBE) || PEERTUBE;
@@ -114,7 +124,7 @@ function videoRow(v) {
     page_url: page, media_url: page, thumbnail_url: thumb, embed_url: embed,
     author: clean((v && v.channel && v.channel.displayName) || (v && v.account && (v.account.displayName || v.account.name)) || "", 200),
     license: "", published_at: published,
-    duration_seconds: v && Number.isFinite(Number(v.duration)) && String(v.duration).trim() !== "" ? Number(v.duration) : null,
+    duration_seconds: normalizeNumericDuration(v && v.duration),
     tags: ""
   };
 }
