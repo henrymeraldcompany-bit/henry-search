@@ -436,6 +436,9 @@ function mediaRelevanceScore(item, query, titleKeys, detailKeys) {
     }
     return "";
   }).filter(Boolean).join(" "));
+  // Whole-word matching prevents short queries such as "art" matching "party".
+  const titleWords = new Set(title.split(/\s+/).filter(Boolean));
+  const detailWords = new Set(details.split(/\s+/).filter(Boolean));
 
   let score = 0;
   const exactTitleMatch = Boolean(normalizedQuery && title.includes(normalizedQuery));
@@ -444,11 +447,11 @@ function mediaRelevanceScore(item, query, titleKeys, detailKeys) {
   let titleHits = 0;
   let matchedWords = 0;
   for (const word of words) {
-    if (title.includes(word)) {
+    if (titleWords.has(word)) {
       score += 5;
       titleHits++;
       matchedWords++;
-    } else if (details.includes(word)) {
+    } else if (detailWords.has(word)) {
       score += 1;
       matchedWords++;
     }
