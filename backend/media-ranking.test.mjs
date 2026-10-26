@@ -12,6 +12,8 @@ function extract(name) {
   assert.notEqual(end, -1, "Could not find end of " + name);
   return source.slice(start, end + 2);
 }
+const seedsMatch = source.match(/const SEEDS = \[[^\]]*\];/);
+assert.ok(seedsMatch, "SEEDS must exist in worker.js");
 const peerTubeInstancesMatch = source.match(/const PEERTUBE_INSTANCES = \[[\s\S]*?\];/);
 assert.ok(peerTubeInstancesMatch, "PEERTUBE_INSTANCES must exist in worker.js");
 
@@ -24,6 +26,7 @@ function extractAsync(signature) {
 }
 
 const helpers = [
+  seedsMatch[0],
   peerTubeInstancesMatch[0],
   extract("safeUrl"),
   extract("terms"),
@@ -32,9 +35,10 @@ const helpers = [
   extract("rank"),
   extract("capFlickrResults"),
   extract("peertubeSearchTargets"),
+  extract("shouldIndexYouTubeSeed"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalMediaKey, rank, fallbackQuery, capFlickrResults, peertubeSearchTargets}; })()",
+  "(function(){ " + helpers + "; return {SEEDS, canonicalMediaKey, rank, fallbackQuery, capFlickrResults, peertubeSearchTargets, shouldIndexYouTubeSeed}; })()",
   { URL }
 );
 
@@ -81,6 +85,15 @@ const peertubeHarness = vm.runInNewContext(
     console: { warn() {} }
   }
 );
+
+test("rotates optional YouTube indexing across one seed per day", () => {
+  for (let daySlot = 0; daySlot < api.SEEDS.length; daySlot++) {
+    const selected = Array.from({length: api.SEEDS.length}, (_, index) => index)
+      .filter((index) => api.shouldIndexYouTubeSeed(index, daySlot, true));
+    assert.deepEqual(selected, [daySlot]);
+  }
+  assert.equal(api.shouldIndexYouTubeSeed(0, 0, false), false);
+});
 
 test("builds encoded search requests for three independent PeerTube instances", () => {
   const targets = api.peertubeSearchTargets("solar system & stars", 99);
