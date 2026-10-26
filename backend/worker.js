@@ -5,6 +5,13 @@
  */
 const SEEDS = ["science", "technology", "education", "nature", "history", "engineering", "Nigeria", "space"];
 const PEERTUBE = "https://peertube.tv";
+// Use several public PeerTube instances so search is not tied to one instance's
+// federation/search-index settings. Failed instances are isolated per request.
+const PEERTUBE_INSTANCES = [
+  PEERTUBE,
+  "https://peer.tube",
+  "https://spectra.video"
+];
 
 function reply(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: {
@@ -128,11 +135,45 @@ function videoRow(v) {
     tags: ""
   };
 }
+function peertubeSearchTargets(q, count) {
+  const search = String(q || "").trim();
+  if (!search) return [];
+  const requested = Number(count);
+  const limit = Number.isFinite(requested) && requested > 0
+    ? Math.min(20, Math.floor(requested))
+    : 15;
+  return PEERTUBE_INSTANCES.map(function (base) {
+    const url = new URL("/api/v1/search/videos", base);
+    url.searchParams.set("search", search);
+    url.searchParams.set("count", String(limit));
+    url.searchParams.set("sort", "-match");
+    return { base: base, url: url.href };
+  });
+}
 async function peertube(q, count) {
-  const u = new URL("/api/v1/search/videos", PEERTUBE);
-  u.searchParams.set("search", q); u.searchParams.set("count", String(count || 15)); u.searchParams.set("sort", "-match");
-  const data = await getJson(u.href);
-  return (Array.isArray(data.data) ? data.data : Array.isArray(data.results) ? data.results : []).map(videoRow).filter(Boolean);
+  const targets = peertubeSearchTargets(q, count);
+  const responses = await Promise.allSettled(targets.map(async function (target) {
+    const data = await getJson(target.url);
+    const items = Array.isArray(data.data) ? data.data
+      : Array.isArray(data.results) ? data.results : [];
+    return items.map(function (video) {
+      // Relative URLs from a queried instance must resolve against that instance.
+      const row = video && typeof video === "object"
+        ? Object.assign({}, video, { host: video.host || target.base })
+        : video;
+      return videoRow(row);
+    }).filter(Boolean);
+  }));
+  const rows = [];
+  responses.forEach(function (response, index) {
+    if (response.status === "fulfilled") {
+      rows.push.apply(rows, response.value);
+    } else {
+      console.warn("PeerTube instance search failed", targets[index].base,
+        response.reason && response.reason.message || response.reason);
+    }
+  });
+  return rows;
 }
 function isoDurationSeconds(value) {
   const match = String(value || "").match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
