@@ -1,0 +1,41 @@
+name: Media Worker live smoke test
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run after the daily D1 refresh (07:00 UTC / 08:00 Africa/Lagos).
+    - cron: "30 7 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MEDIA_API: https://gozie-search-media.henrymeraldcompany.workers.dev
+    steps:
+      - name: Check Worker health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 15 "$MEDIA_API/health" |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(d.status!=="ok")throw new Error("Health route did not report ok");console.log("Health route: ok")})'
+
+      - name: Check index status contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 15 "$MEDIA_API/index/status" |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(!Array.isArray(d.counts)||!("latestRun" in d))throw new Error("Index status response is missing expected fields");console.log("Index status contract: ok")})'
+
+      - name: Check image and video search routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in images videos; do
+            response="$(curl --fail --silent --show-error --retry 1 --retry-delay 2 --max-time 45 --get --data-urlencode "q=solar system" "$MEDIA_API/$kind")"
+            printf '%s' "$response" |
+              node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(typeof d.query!=="string"||!Array.isArray(d.results)||d.count!==d.results.length)throw new Error("Search response contract failed");console.log("Search route: "+d.query+" ("+d.count+" "+(d.kind||"media")+" results)")})'
+          done
