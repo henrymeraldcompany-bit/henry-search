@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/media-live-smoke.yml"
+      - "backend/worker.js"
+      - "backend/wrangler.toml"
   workflow_dispatch:
   schedule:
     # Run after the daily D1 refresh (07:00 UTC / 08:00 Africa/Lagos).
