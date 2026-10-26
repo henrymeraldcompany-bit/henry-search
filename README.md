@@ -22,7 +22,7 @@ A phone-friendly search website with category tabs for web search, images, news,
 - `/videos?q=...` — indexed results plus live PeerTube results and optional YouTube results.
 - `/index/status` — indexed item counts and the latest recorded daily run.
 
-The frontend tries the Media Worker first for image/video search, then retains the original Worker and direct PeerTube fallbacks. Both backend and frontend now rank media variants before deduplicating canonical URLs, preserving the best-matching title when providers return different versions of the same item. Ordinary web search and news remain routed to the original Worker. Video playback is attempted only for permitted embed URLs; original source links remain available.
+The frontend tries the Media Worker first for image/video search, then retains the original Worker and direct PeerTube fallback. Live video search now queries three public PeerTube instances in parallel (`peertube.tv`, `peer.tube`, and `spectra.video`) plus optional YouTube results; a failing instance does not discard results from healthy instances. Backend and frontend ranking use whole-word and phrase-boundary matches, then deduplicate canonical URLs so substring matches such as `art` inside `party` do not inflate relevance. Ordinary web search and news remain routed to the original Worker. Video playback is attempted only for permitted embed URLs; original source links remain available.
 
 ## Image providers and terms
 
