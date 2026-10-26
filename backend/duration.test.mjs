@@ -29,3 +29,68 @@ test("returns null for empty or malformed duration strings", () => {
     assert.equal(isoDurationSeconds(input), null, input);
   }
 });
+
+
+const numericDurationMatch = workerSource.match(
+  /function normalizeNumericDuration\\(value\\) \\{\\n[\\s\\S]*?\\n\\}/
+);
+assert.ok(numericDurationMatch, "normalizeNumericDuration must exist in worker.js");
+const normalizeNumericDuration = vm.runInNewContext(`(${numericDurationMatch[0]})`);
+
+test("normalizes only explicit, finite, non-negative numeric provider durations", () => {
+  const cases = [
+    [125, 125],
+    ["125", 125],
+    [" 125 ", 125],
+    [0, 0],
+    ["0", 0],
+    [null, null],
+    [undefined, null],
+    ["", null],
+    ["   ", null],
+    [false, null],
+    [true, null],
+    [-1, null],
+    ["-1", null],
+    [Infinity, null],
+    ["PT4M", null],
+    ["not a duration", null]
+  ];
+
+  for (const [input, expected] of cases) {
+    assert.equal(normalizeNumericDuration(input), expected, String(input));
+  }
+});
+
+const videoRowMatch = workerSource.match(/function videoRow\\(v\\) \\{\\n[\\s\\S]*?\\n\\}/);
+const safeUrlMatch = workerSource.match(/function safeUrl\\(value, base\\) \\{\\n[\\s\\S]*?\\n\\}/);
+const cleanMatch = workerSource.match(/function clean\\(value, max\\) \\{\\n[\\s\\S]*?\\n\\}/);
+assert.ok(videoRowMatch, "videoRow must exist in worker.js");
+assert.ok(safeUrlMatch, "safeUrl must exist in worker.js");
+assert.ok(cleanMatch, "clean must exist in worker.js");
+const videoRow = vm.runInNewContext(
+  "(function(){ const PEERTUBE = 'https://peertube.tv'; " +
+    [safeUrlMatch[0], cleanMatch[0], numericDurationMatch[0], videoRowMatch[0]].join("\\n") +
+    "; return videoRow; })()",
+  { URL, Date, Number, String }
+);
+
+test("PeerTube rows preserve missing durations as null instead of zero", () => {
+  const rowFor = duration => videoRow({
+    host: "videos.example",
+    uuid: "abc123",
+    url: "/videos/watch/abc123",
+    embedUrl: "/videos/embed/abc123",
+    thumbnailUrl: "/thumb.jpg",
+    title: "Example video",
+    duration
+  });
+
+  assert.equal(rowFor(null).duration_seconds, null);
+  assert.equal(rowFor(undefined).duration_seconds, null);
+  assert.equal(rowFor("").duration_seconds, null);
+  assert.equal(rowFor(false).duration_seconds, null);
+  assert.equal(rowFor("125").duration_seconds, 125);
+  assert.equal(rowFor(125).duration_seconds, 125);
+  assert.equal(rowFor(0).duration_seconds, 0);
+});
