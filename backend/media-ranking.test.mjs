@@ -205,6 +205,14 @@ test("filters unrelated media instead of filling sparse searches with zero-match
   );
 });
 
+test("does not match a query word that appears only inside a different word", () => {
+  const results = api.rank([
+    {page_url:"https://example.org/party", title:"Party tricks for beginners", description:""},
+    {page_url:"https://example.org/art", title:"Art history basics", description:""}
+  ], "art", 10);
+  assert.deepEqual(Array.from(results, row => row.page_url), ["https://example.org/art"]);
+});
+
 test("does not treat generic media words as a relevance match", () => {
   const results = api.rank([
     {page_url:"https://example.org/cooking", title:"Cooking tutorial", description:"New videos every week"},
@@ -253,6 +261,14 @@ test("frontend ignores generic media words while preserving topical matches", ()
     {url:"https://example.org/science", title:"Science experiment for beginners", description:""}
   ], "science videos", ["title"], ["description"], ["url"]);
   assert.deepEqual(Array.from(results, row => row.url), ["https://example.org/science"]);
+});
+
+test("frontend does not match short query words inside unrelated words", () => {
+  const results = frontendApi.rankMediaResults([
+    {url:"https://example.org/party", title:"Party tricks for beginners"},
+    {url:"https://example.org/art", title:"Art history basics"}
+  ], "art", ["title"], [], ["url"]);
+  assert.deepEqual(Array.from(results, row => row.url), ["https://example.org/art"]);
 });
 
 test("frontend returns no matches for queries made only of generic media words", () => {
