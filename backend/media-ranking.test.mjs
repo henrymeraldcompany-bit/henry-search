@@ -18,7 +18,7 @@ assert.ok(peerTubeInstancesMatch, "PEERTUBE_INSTANCES must exist in worker.js");
 function extractAsync(signature) {
   const start = source.indexOf(signature);
   assert.notEqual(start, -1, signature + " must exist in worker.js");
-  const end = source.indexOf("\\n}", start);
+  const end = source.indexOf("\n}", start);
   assert.notEqual(end, -1, "Could not find end of " + signature);
   return source.slice(start, end + 2);
 }
@@ -48,7 +48,7 @@ const peertubeHarness = vm.runInNewContext(
       extract("videoRow"),
       extract("peertubeSearchTargets"),
       extractAsync("async function peertube(q, count) {")
-    ].join("\\n") +
+    ].join("\n") +
     "; return peertube; })()",
   {
     URL,
