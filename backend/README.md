@@ -12,9 +12,9 @@ This Cloudflare Worker stores media metadata and original source links rather th
 - The website tries this Media Worker first for image/video search and retains the original Worker and direct PeerTube fallbacks. Normal `/search` and `/news` remain on the original Worker.
 - YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in `app.js` or `index.html`.
 
-The latest Worker deployment was confirmed on 25 October 2026 at 07:15:52 UTC with 100% of traffic assigned to its version. The deployed `worker.js` source was fetched through Cloudflare's API and compared byte-for-byte with the GitHub file; it matched exactly. Cloudflare settings confirm the `MEDIA_DB` binding, enabled `workers.dev` subdomain, and daily `0 7 * * *` trigger.
+The latest Worker deployment was confirmed on 26 October 2026 at 08:16:53 UTC (deployment `d1b515c5-31c6-423b-ad6b-ad8954dd1a5b`) with 100% of traffic assigned to its version. The deployed module was extracted from Cloudflare's multipart API response and compared byte-for-byte with the GitHub `backend/worker.js`; it matched exactly. Cloudflare settings confirm the `MEDIA_DB` binding, enabled `workers.dev` subdomain, and daily `0 7 * * *` trigger. The newest change rejects missing, blank, boolean, negative, non-finite, and non-numeric PeerTube duration metadata instead of accidentally recording it as zero seconds.
 
-The latest recorded scheduled index run finished at 2026-10-25 07:01:07 UTC: 288 rows processed, zero recorded provider/database failures, 198 images (103 Wikimedia Commons and 95 Flickr public-feed records), and 98 videos across five PeerTube hosts. This run occurred before the newest ranking deployment but after Flickr indexing had been deployed, so it verifies that the Flickr index provider is producing stored rows.
+The latest recorded scheduled index run finished at 2026-10-26 07:01:17 UTC: 288 rows processed, zero recorded provider/database failures, 272 images (103 Wikimedia Commons and 169 Flickr public-feed records), and 98 videos across five PeerTube hosts, for 370 stored media records. This run occurred before the 08:16 UTC duration-metadata deployment; it verifies the scheduled index and Flickr records, but not the new duration parser in a scheduled run.
 
 ## Image discovery
 
@@ -46,7 +46,7 @@ Run the five regression suites with Node.js 22:
 node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
 ```
 
-They cover ISO-8601 duration parsing, YouTube URL canonicalization, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr response caps, and source/date/duration filtering. GitHub Actions is configured to run this command on relevant pushes and pull requests, but a passing run for the newest commit is not yet confirmed through the available status tools.
+They cover ISO-8601 duration parsing, numeric PeerTube duration normalization (including missing and invalid values), YouTube URL canonicalization, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr response caps, and source/date/duration filtering. A focused local Node.js harness passed four duration test groups against the current helper bodies. The complete five-suite repository run and the GitHub Actions result for the newest commits are not independently confirmed yet.
 
 Live HTTP smoke tests remain unverified because the management environment blocks outgoing requests to `workers.dev` and `www.flickr.com` hosts. Deployment metadata and the earlier scheduled index run are verified, but every browser-visible route and the Flickr provider still need a direct test from a normal browser or another permitted external client.
 
