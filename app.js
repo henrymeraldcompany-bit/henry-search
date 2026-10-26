@@ -441,7 +441,7 @@ function mediaRelevanceScore(item, query, titleKeys, detailKeys) {
   const detailWords = new Set(details.split(/\s+/).filter(Boolean));
 
   let score = 0;
-  const exactTitleMatch = Boolean(normalizedQuery && title.includes(normalizedQuery));
+  const exactTitleMatch = Boolean(normalizedQuery && (` ${title} `).includes(` ${normalizedQuery} `));
   if (exactTitleMatch) score += 12;
 
   let titleHits = 0;
