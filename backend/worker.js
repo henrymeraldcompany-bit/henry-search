@@ -282,11 +282,14 @@ function rank(rows,q,limit) {
     if (!url || !key) continue;
     const title=String(r.title || "").toLowerCase();
     const details=[r.description,r.tags,r.author].map(function(v){return String(v || "").toLowerCase();}).join(" ");
+    // Compare whole tokens, not substrings: "art" must not match "party".
+    const titleWords=new Set(title.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean));
+    const detailWords=new Set(details.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean));
     const exact=!!(query && title.indexOf(query)>=0);
     let score=exact?12:0, matched=0, titleMatches=0;
     queryTerms.forEach(function(t){
-      if(title.indexOf(t)>=0){score+=6;matched++;titleMatches++;}
-      else if(details.indexOf(t)>=0){score+=2;matched++;}
+      if(titleWords.has(t)){score+=6;matched++;titleMatches++;}
+      else if(detailWords.has(t)){score+=2;matched++;}
     });
     if(titleMatches===queryTerms.length && queryTerms.length>1)score+=4;
     // Long queries need at least two meaningful terms to match. This prevents a
