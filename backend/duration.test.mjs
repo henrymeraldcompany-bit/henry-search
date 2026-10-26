@@ -31,11 +31,17 @@ test("returns null for empty or malformed duration strings", () => {
 });
 
 
-const numericDurationMatch = workerSource.match(
-  /function normalizeNumericDuration\(value\) \{\n[\s\S]*?\n\}/
-);
-assert.ok(numericDurationMatch, "normalizeNumericDuration must exist in worker.js");
-const normalizeNumericDuration = vm.runInNewContext(`(${numericDurationMatch[0]})`);
+
+function extractWorkerFunction(signature) {
+  const start = workerSource.indexOf(signature);
+  assert.notEqual(start, -1, signature + " must exist in worker.js");
+  const end = workerSource.indexOf(String.fromCharCode(10) + "}", start);
+  assert.notEqual(end, -1, "Could not find end of " + signature);
+  return workerSource.slice(start, end + 2);
+}
+
+const numericDurationSource = extractWorkerFunction("function normalizeNumericDuration(value) {");
+const normalizeNumericDuration = vm.runInNewContext("(" + numericDurationSource + ")");
 
 test("normalizes only explicit, finite, non-negative numeric provider durations", () => {
   const cases = [
@@ -62,15 +68,12 @@ test("normalizes only explicit, finite, non-negative numeric provider durations"
   }
 });
 
-const videoRowMatch = workerSource.match(/function videoRow\(v\) \{\n[\s\S]*?\n\}/);
-const safeUrlMatch = workerSource.match(/function safeUrl\(value, base\) \{\n[\s\S]*?\n\}/);
-const cleanMatch = workerSource.match(/function clean\(value, max\) \{\n[\s\S]*?\n\}/);
-assert.ok(videoRowMatch, "videoRow must exist in worker.js");
-assert.ok(safeUrlMatch, "safeUrl must exist in worker.js");
-assert.ok(cleanMatch, "clean must exist in worker.js");
+const videoRowSource = extractWorkerFunction("function videoRow(v) {");
+const safeUrlSource = extractWorkerFunction("function safeUrl(value, base) {");
+const cleanSource = extractWorkerFunction("function clean(value, max) {");
 const videoRow = vm.runInNewContext(
   "(function(){ const PEERTUBE = 'https://peertube.tv'; " +
-    [safeUrlMatch[0], cleanMatch[0], numericDurationMatch[0], videoRowMatch[0]].join("\n") +
+    [safeUrlSource, cleanSource, numericDurationSource, videoRowSource].join(String.fromCharCode(10)) +
     "; return videoRow; })()",
   { URL, Date, Number, String }
 );
