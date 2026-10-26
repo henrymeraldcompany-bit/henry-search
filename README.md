@@ -34,9 +34,9 @@ Provider requests have an 8-second timeout so a slow provider does not indefinit
 
 The `backend/` directory contains the media Worker, D1 schema, schedule configuration, regression tests, and setup notes. The Worker stores metadata and original source links rather than re-hosting media. D1 database `gozie-search-media` is bound as `MEDIA_DB`; the scheduled trigger is `0 7 * * *` (08:00 in Nigeria).
 
-Cloudflare verified the daily index run at 2026-10-25 07:01:07 UTC: 288 rows processed with zero recorded provider/database failures. D1 then contained 198 images (103 from Wikimedia Commons and 95 from the Flickr public feed) and 98 videos across five PeerTube hosts. This confirms Flickr-derived records were stored by the scheduled index.
+Cloudflare verified the daily index run at 2026-10-26 07:01:17 UTC: 288 rows processed with zero recorded provider/database failures. The latest D1 query returned 272 images (169 Flickr public-feed records and 103 Wikimedia Commons records) and 98 videos across five PeerTube hosts, 370 stored media records total. These counts describe indexed metadata, not the number of unique media files available across the internet.
 
-The Media Worker was redeployed on 25 October 2026 at 07:15:52 UTC with relevance-aware deduplication: candidates are now scored and sorted before canonical duplicate URLs are removed, so a weak provider variant cannot hide a better match. Cloudflare's deployed source was fetched and compared byte-for-byte with `backend/worker.js`; the source matched exactly. The existing `MEDIA_DB` binding, enabled workers.dev subdomain, and daily `0 7 * * *` schedule remain configured.
+The Media Worker was redeployed on 26 October 2026 at 08:16:53 UTC (deployment `d1b515c5-31c6-423b-ad6b-ad8954dd1a5b`) with a duration-metadata fix: missing, blank, boolean, negative, non-finite, or non-numeric PeerTube duration values now remain `null` instead of being accidentally converted to zero seconds. Numeric seconds remain accepted. Cloudflare's deployed module was extracted from the API's multipart response and compared byte-for-byte with `backend/worker.js`; the source matched exactly. The existing `MEDIA_DB` binding, enabled workers.dev subdomain, and daily `0 7 * * *` schedule remain configured.
 
 Live HTTP smoke tests remain unverified because this management environment blocks outgoing requests to `workers.dev` hosts. This does not prove that the Worker is failing; it prevents direct end-to-end verification from this environment. Test `/health`, `/index/status`, `/images?q=science`, and `/videos?q=science` from a normal browser or another permitted external client. The static website's latest publication status is also not confirmed.
 
@@ -50,7 +50,7 @@ Run the media regression suites with Node.js 22:
 node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
 ```
 
-The suites cover ISO-8601 durations, YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr result caps, source/date/duration filters, unsafe URL rejection, and case-sensitive paths. GitHub Actions is configured to run these suites on relevant pushes and pull requests; a successful run for the latest changes has not yet been confirmed by the available status tools.
+The suites cover ISO-8601 durations, PeerTube duration normalization (including missing and invalid metadata), YouTube URL variants, tracking-parameter deduplication, source diversity, sparse-query fallback, Flickr feed mapping and URL safety, Flickr result caps, source/date/duration filters, unsafe URL rejection, and case-sensitive paths. The focused duration test ran locally in a temporary Node.js harness with 4 test cases passing; the complete repository suite and GitHub Actions result for the latest commit have not yet been independently confirmed.
 
 ## Safety and maintenance
 
