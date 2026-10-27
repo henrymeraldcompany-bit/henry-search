@@ -252,18 +252,18 @@ function indexedQuery(kind, q, limit) {
   if (!w.length) return null;
 
   // Keep the broad substring prefilter so punctuation and provider metadata do
-  // not create false negatives, but rank its candidates using whole-word text.
-  // Otherwise common substrings (e.g. "art" in "party") can occupy the 100-row
-  // shortlist before the final JavaScript ranker has a chance to reject them.
+  // not create false negatives, but rank its capped candidate list by whole-word
+  // matches. This stops a short query like "art" being crowded out by "party".
   const conditions = w.map(function () {
     return "(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(tags) LIKE ?)";
   }).join(" OR ");
   const conditionArgs = [];
   const scoreArgs = [];
   w.forEach(function (word) {
-    const broadPattern = "%" + word.replace(/[%_]/g, "") + "%";
+    const cleanWord = word.replace(/[%_]/g, "");
+    const broadPattern = "%" + cleanWord + "%";
     conditionArgs.push(broadPattern, broadPattern, broadPattern);
-    const wholeWordPattern = "% " + word.replace(/[%_]/g, "") + " %";
+    const wholeWordPattern = "% " + cleanWord + " %";
     scoreArgs.push(wholeWordPattern, wholeWordPattern, wholeWordPattern);
   });
 
@@ -274,7 +274,7 @@ function indexedQuery(kind, q, limit) {
     return "(CASE WHEN title_words LIKE ? THEN 6 WHEN description_words LIKE ? THEN 2 WHEN tags_words LIKE ? THEN 1 ELSE 0 END)";
   }).join(" + ");
   const phraseText = String(q || "").toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+    .replace(/[^\\p{L}\\p{N}]+/gu, " ").trim().replace(/\\s+/g, " ");
   const phrase = phraseText ? "% " + phraseText + " %" : "%";
   const requestedLimit = Number(limit);
   const rowLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
@@ -285,10 +285,11 @@ function indexedQuery(kind, q, limit) {
     sql: "WITH normalized AS (SELECT *, " + titleWords + " AS title_words, " +
       descriptionWords + " AS description_words, " + tagsWords +
       " AS tags_words FROM media_items WHERE kind=?) " +
-      "SELECT * FROM normalized WHERE (" + conditions + ") " +
-      "ORDER BY CASE WHEN title_words LIKE ? THEN 0 ELSE 1 END, (" + score +
-      ") DESC, indexed_at DESC LIMIT ?",
-    params: [kind].concat(conditionArgs, [phrase], scoreArgs, [rowLimit])
+      "SELECT *, (" + score + ") AS relevance_score, " +
+      "CASE WHEN title_words LIKE ? THEN 0 ELSE 1 END AS phrase_rank " +
+      "FROM normalized WHERE (" + conditions + ") " +
+      "ORDER BY phrase_rank ASC, relevance_score DESC, indexed_at DESC LIMIT ?",
+    params: [kind].concat(scoreArgs, [phrase], conditionArgs, [rowLimit])
   };
 }
 async function indexed(env, kind, q, limit) {
