@@ -12,9 +12,9 @@ This Cloudflare Worker stores media metadata and original source links rather th
 - The website tries this Media Worker first for image/video search and retains the original Worker and direct PeerTube fallbacks. Normal `/search` and `/news` remain on the original Worker.
 - YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in `app.js` or `index.html`.
 
-The latest Worker deployment was confirmed on 27 October 2026 at 07:10:06 UTC (deployment version `31a3ff24-0c8b-406c-a58f-a1b198b2c44e`) with 100% of traffic assigned to its version. Cloudflare settings confirm the `MEDIA_DB` binding, enabled `workers.dev` subdomain, and daily `0 7 * * *` trigger. The new indexed-media query retrieves up to 100 candidates (hard cap 120), prioritizes exact title phrases, then weights title/description/tags matches at 6/2/1 before freshness; the final whole-word ranker and canonical URL deduper still decide which results are returned. The generated SQL query was executed against the live D1 database successfully. The downloaded Worker module matched the repository source length and checksum.
+The latest Worker deployment was confirmed on 27 October 2026 at 08:49:49 UTC (deployment `7b5d75c2-4bc6-4c89-a31e-f098b332d6e6`, version `1cdb92e5-9cce-45d6-af38-bdd73cf24733`) with 100% of traffic assigned to that version. Cloudflare confirms the `MEDIA_DB` binding and daily `0 7 * * *` trigger. Indexed-media lookup retrieves up to 100 candidates (hard cap 120), prioritizes exact title phrases, then a normalized whole-word score (title 6, description 2, tags 1), then freshness. The final whole-word ranker and canonical URL deduper still decide which results are returned. The generated SQL query was executed against the live D1 database successfully. The downloaded Worker module was compared with the repository source and matched exactly (26,079 characters).
 
-The latest recorded scheduled index run finished at 2026-10-27 07:01:15 UTC: 465 rows processed, zero recorded provider/database failures, and 630 stored records: 364 images (259 Flickr public-feed and 105 Wikimedia Commons) and 266 videos across multiple PeerTube hosts. This run occurred before the indexed-candidate ranking deployment at 07:10:06 UTC; it verifies scheduled indexing but not the new ranking change.
+The latest recorded scheduled index run finished at 2026-10-27 07:01:15 UTC: 465 rows processed, zero recorded provider/database failures, and 630 stored records: 364 images (259 Flickr public-feed and 105 Wikimedia Commons) and 266 videos across multiple PeerTube hosts. This index snapshot predates the 08:49:49 UTC ranking deployment; it verifies scheduled indexing but does not test the new ranking change.
 
 ## Image discovery
 
@@ -36,7 +36,7 @@ The frontend supports source, upload-date, and duration filters, including a pas
 
 ## Indexed candidate shortlist
 
-The D1 lookup considers up to 100 stored candidates per query (hard cap 120). SQL orders exact title-phrase matches first, then a weighted term score (title 6, description 2, tags 1), then `indexed_at` freshness. This shortlist is only a prefilter; the final whole-word ranker and canonical URL deduper still reject substring false positives and select the strongest matching duplicate. The new SQL query was tested read-only against the live D1 database.
+The D1 lookup considers up to 100 stored candidates per query (hard cap 120). The SQL prefilter remains broad enough to avoid missing punctuation variants, but it ranks candidates by exact normalized title phrase and whole-word matches (title 6, description 2, tags 1) before `indexed_at` freshness. This prevents substring-only candidates such as `art` inside `party` from crowding out better matches before the final JavaScript ranker. The final whole-word ranker and canonical URL deduper still reject false positives and select the strongest matching duplicate. The generated SQL was tested read-only against live D1.
 
 ## Index behavior and limits
 
