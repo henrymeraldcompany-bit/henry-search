@@ -73,5 +73,6 @@ test("normalizes punctuation to spaces for whole-word indexed matching", () => {
   assert.match(sql, /LOWER\(COALESCE\(title, ''\)\)/);
   assert.match(sql, /REPLACE\(/);
   assert.match(sql, /char\(10\)/);
+  assert.match(sql, /char\(63\)/);
   assert.throws(() => api.sqlWordText("untrusted_column"));
 });
