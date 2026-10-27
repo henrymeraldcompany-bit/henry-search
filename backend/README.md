@@ -12,9 +12,9 @@ This Cloudflare Worker stores media metadata and original source links rather th
 - The website tries this Media Worker first for image/video search and retains the original Worker and direct PeerTube fallbacks. Normal `/search` and `/news` remain on the original Worker.
 - YouTube results are optional and remain disabled until `YOUTUBE_API_KEY` is added as a Worker secret. Never put that key in `app.js` or `index.html`.
 
-The latest Worker deployment was confirmed on 26 October 2026 at 08:16:53 UTC (deployment `d1b515c5-31c6-423b-ad6b-ad8954dd1a5b`) with 100% of traffic assigned to its version. The deployed module was extracted from Cloudflare's multipart API response and compared byte-for-byte with the GitHub `backend/worker.js`; it matched exactly. Cloudflare settings confirm the `MEDIA_DB` binding, enabled `workers.dev` subdomain, and daily `0 7 * * *` trigger. The newest change rejects missing, blank, boolean, negative, non-finite, and non-numeric PeerTube duration metadata instead of accidentally recording it as zero seconds.
+The latest Worker deployment was confirmed on 27 October 2026 at 07:10:06 UTC (deployment version `31a3ff24-0c8b-406c-a58f-a1b198b2c44e`) with 100% of traffic assigned to its version. Cloudflare settings confirm the `MEDIA_DB` binding, enabled `workers.dev` subdomain, and daily `0 7 * * *` trigger. The new indexed-media query retrieves up to 100 candidates (hard cap 120), prioritizes exact title phrases, then weights title/description/tags matches at 6/2/1 before freshness; the final whole-word ranker and canonical URL deduper still decide which results are returned. The generated SQL query was executed against the live D1 database successfully.
 
-The latest recorded scheduled index run finished at 2026-10-26 07:01:17 UTC: 288 rows processed, zero recorded provider/database failures, 272 images (103 Wikimedia Commons and 169 Flickr public-feed records), and 98 videos across five PeerTube hosts, for 370 stored media records. This run occurred before the 08:16 UTC duration-metadata deployment; it verifies the scheduled index and Flickr records, but not the new duration parser in a scheduled run.
+The latest recorded scheduled index run finished at 2026-10-27 07:01:15 UTC: 465 rows processed, zero recorded provider/database failures, and 630 stored records: 364 images (259 Flickr public-feed and 105 Wikimedia Commons) and 266 videos across multiple PeerTube hosts. This run occurred before the indexed-candidate ranking deployment at 07:10:06 UTC; it verifies scheduled indexing but not the new ranking change.
 
 ## Image discovery
 
@@ -34,19 +34,23 @@ Video search merges indexed results with live searches against three public Peer
 
 The frontend supports source, upload-date, and duration filters, including a past-year option. ISO-8601 durations (for example, `PT4M` or `PT1H2M3S`) are normalized for duration filtering. In-page playback is used only when the source exposes a permitted embed URL; original source links remain available.
 
+## Indexed candidate shortlist
+
+The D1 lookup considers up to 100 stored candidates per query (hard cap 120). SQL orders exact title-phrase matches first, then a weighted term score (title 6, description 2, tags 1), then `indexed_at` freshness. This shortlist is only a prefilter; the final whole-word ranker and canonical URL deduper still reject substring false positives and select the strongest matching duplicate. The new SQL query was tested read-only against the live D1 database.
+
 ## Index behavior and limits
 
 The daily refresh uses eight seed queries; it is a discovery index, not a crawler of the whole internet. It stores metadata, source links, licenses when supplied, and index timestamps. Each seed is searched across Wikimedia Commons, Flickr, and all three configured PeerTube instances. To leave headroom under Cloudflare Workers Free's 50 external-subrequest-per-invocation limit, an optional YouTube API key adds one rotating seed per day (including its duration lookup); the rotation covers all eight seeds over eight days. Live video searches still query all three PeerTube instances and optional YouTube for each user query. Old records older than 180 days are removed during refresh. The index does not store video or image files.
 
 ## Regression tests
 
-Run the five regression suites with Node.js 22:
+Run the six regression suites with Node.js 22:
 
 ```sh
-node --test backend/duration.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
+node --test backend/duration.test.mjs backend/indexed-search.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs
 ```
 
-They cover ISO-8601 duration parsing, numeric PeerTube duration normalization (including missing and invalid values), YouTube URL canonicalization, tracking-parameter deduplication, source diversity, sparse-query fallback, multi-instance PeerTube request construction and failure isolation, daily YouTube-seed rotation, whole-word relevance, Flickr feed mapping and URL safety, Flickr response caps, and source/date/duration filtering. The repository includes `.github/workflows/media-tests.yml`, which runs all five suites on relevant pushes and pull requests. Six targeted source-extracted checks passed for syntax, three-instance request construction, provider-failure isolation, relative URL resolution, whole-word ranking in backend and frontend, and rotating YouTube indexing. The complete five-suite GitHub Actions result could not be retrieved through the connected status tools. The separate `.github/workflows/media-live-smoke.yml` workflow checks health, index status, and both media search routes on manual dispatch, daily at 07:30 UTC (08:30 Nigeria), and after backend Worker/config changes; its current run result is not confirmed.
+They cover ISO-8601 duration parsing, numeric PeerTube duration normalization (including missing and invalid values), YouTube URL canonicalization, tracking-parameter deduplication, source diversity, sparse-query fallback, multi-instance PeerTube request construction and failure isolation, daily YouTube-seed rotation, whole-word relevance, Flickr feed mapping and URL safety, Flickr response caps, and source/date/duration filtering. The repository includes `.github/workflows/backend-tests.yml`, which runs all six suites on relevant pushes and pull requests. Six targeted source-extracted checks passed for syntax, three-instance request construction, provider-failure isolation, relative URL resolution, whole-word ranking in backend and frontend, and rotating YouTube indexing. The indexed-search helper has five targeted checks covering SQL ordering, placeholder counts, candidate limits, empty queries, and wildcard removal. The generated SQL was executed against D1 successfully; the complete six-suite GitHub Actions result for the latest commit still needs confirmation. The separate `.github/workflows/media-live-smoke.yml` workflow checks health, index status, and both media search routes on manual dispatch, daily at 07:30 UTC (08:30 Nigeria), and after backend Worker/config changes; its current run result is not confirmed.
 
 Live HTTP smoke tests remain unverified because the management environment blocks outgoing requests to `workers.dev` and `www.flickr.com` hosts. Deployment metadata and the earlier scheduled index run are verified, but every browser-visible route and the Flickr provider still need a direct test from a normal browser or another permitted external client.
 
