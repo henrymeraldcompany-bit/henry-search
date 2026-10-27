@@ -27,9 +27,9 @@ test("ranks exact title phrases first, then weighted term matches, then freshnes
   const query = api.indexedQuery("video", "solar system", 100);
   assert.ok(query);
   assert.match(query.sql, /WITH normalized AS \(SELECT \*,/);
-  assert.match(query.sql, /ORDER BY CASE WHEN title_words LIKE \? THEN 0 ELSE 1 END/);
+  assert.match(query.sql, /CASE WHEN title_words LIKE \? THEN 0 ELSE 1 END AS phrase_rank FROM normalized WHERE/);
   assert.match(query.sql, /CASE WHEN title_words LIKE \? THEN 6 WHEN description_words LIKE \? THEN 2 WHEN tags_words LIKE \? THEN 1 ELSE 0 END/);
-  assert.match(query.sql, /DESC, indexed_at DESC LIMIT \?$/);
+  assert.match(query.sql, /ORDER BY phrase_rank ASC, relevance_score DESC, indexed_at DESC LIMIT \?$/);
   assert.equal(query.params[0], "video");
   assert.equal(query.params[7], "% solar system %");
   assert.equal(query.params.at(-1), 100);
