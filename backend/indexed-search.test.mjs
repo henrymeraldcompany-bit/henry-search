@@ -58,8 +58,8 @@ test("removes SQL wildcard characters from query patterns", () => {
 
 test("orders whole-word candidates ahead of substring-only false positives", () => {
   const query = api.indexedQuery("image", "art", 100);
-  assert.match(query.sql, /title_words LIKE \\? THEN 6 WHEN description_words LIKE \\? THEN 2 WHEN tags_words LIKE \\? THEN 1/);
-  assert.match(query.sql, /REPLACE\\(/);
+  assert.match(query.sql, /title_words LIKE \? THEN 6 WHEN description_words LIKE \? THEN 2 WHEN tags_words LIKE \? THEN 1/);
+  assert.match(query.sql, /REPLACE\(/);
   assert.deepEqual(
     [query.params[1], query.params[2], query.params[3], query.params[4]],
     ["%art%", "%art%", "%art%", "% art %"]
@@ -68,8 +68,8 @@ test("orders whole-word candidates ahead of substring-only false positives", () 
 
 test("normalizes punctuation to spaces for whole-word indexed matching", () => {
   const sql = api.sqlWordText("title");
-  assert.match(sql, /LOWER\\(COALESCE\\(title, ''\\)\\)/);
-  assert.match(sql, /REPLACE\\(/);
-  assert.match(sql, /char\\(10\\)/);
+  assert.match(sql, /LOWER\(COALESCE\(title, ''\)\)/);
+  assert.match(sql, /REPLACE\(/);
+  assert.match(sql, /char\(10\)/);
   assert.throws(() => api.sqlWordText("untrusted_column"));
 });
