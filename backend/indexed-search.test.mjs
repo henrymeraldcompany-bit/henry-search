@@ -7,6 +7,7 @@ const source = await readFile(new URL("./worker.js", import.meta.url), "utf8");
 function extract(name) {
   const start = source.indexOf("function " + name + "(");
   assert.notEqual(start, -1, name + " must exist in worker.js");
+  if (name === "terms") return source.slice(start, source.indexOf("\n", start));
   const end = source.indexOf("\n}", start);
   assert.notEqual(end, -1, "Could not find end of " + name);
   return source.slice(start, end + 2);
