@@ -27,6 +27,7 @@ function extractAsync(signature) {
 
 const helpers = [
   seedsMatch[0],
+  'const PEERTUBE = "https://peertube.tv";',
   peerTubeInstancesMatch[0],
   extract("safeUrl"),
   extract("terms"),
