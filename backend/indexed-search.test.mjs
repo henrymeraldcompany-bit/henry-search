@@ -53,9 +53,11 @@ test("caps candidate limits and defaults to a useful shortlist of 100", () => {
 
 test("removes SQL wildcard characters from query patterns", () => {
   const query = api.indexedQuery("image", "solar% system_", 100);
-  assert.equal(query.params[1], "%solar%");
-  assert.equal(query.params[4], "%system%");
+  assert.equal(query.params[1], "% solar %");
+  assert.equal(query.params[4], "% system %");
   assert.equal(query.params[7], "% solar system %");
+  assert.equal(query.params[8], "%solar%");
+  assert.equal(query.params[11], "%system%");
 });
 
 test("orders whole-word candidates ahead of substring-only false positives", () => {
@@ -64,8 +66,9 @@ test("orders whole-word candidates ahead of substring-only false positives", () 
   assert.match(query.sql, /REPLACE\(/);
   assert.deepEqual(
     [query.params[1], query.params[2], query.params[3], query.params[4]],
-    ["%art%", "%art%", "%art%", "% art %"]
+    ["% art %", "% art %", "% art %", "% art %"]
   );
+  assert.equal(query.params[5], "%art%");
 });
 
 test("normalizes punctuation to spaces for whole-word indexed matching", () => {
