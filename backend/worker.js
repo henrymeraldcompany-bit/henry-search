@@ -240,6 +240,7 @@ function sqlWordText(column) {
     if (separator === "\n") sqlSeparator = "char(10)";
     else if (separator === "\r") sqlSeparator = "char(13)";
     else if (separator === "\t") sqlSeparator = "char(9)";
+    else if (separator === "?") sqlSeparator = "char(63)";
     else sqlSeparator = "'" + separator.replace(/'/g, "''") + "'";
     expression = "REPLACE(" + expression + ", " + sqlSeparator + ", ' ')";
   });
