@@ -226,34 +226,70 @@ async function save(env, rows) {
   for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));
   return rows.length;
 }
+function sqlWordText(column) {
+  // Restrict the column name to a small internal allowlist before embedding it in SQL.
+  if (!["title", "description", "tags"].includes(column)) {
+    throw new Error("Unsupported indexed text column");
+  }
+  // Convert common punctuation and whitespace to spaces so "art" is a whole word
+  // in "art/painting" but not inside "party", "cartoon", or "heart".
+  const separators = [".", ",", ":", ";", "!", "?", "/", "\\", "-", "_", "(", ")", "[", "]", "{", "}", '"', "'", "<", ">", "|", "+", "=", "%", "&", "#", "@", "~", "*", "\n", "\r", "\t"];
+  let expression = "LOWER(COALESCE(" + column + ", ''))";
+  separators.forEach(function (separator) {
+    let sqlSeparator;
+    if (separator === "\n") sqlSeparator = "char(10)";
+    else if (separator === "\r") sqlSeparator = "char(13)";
+    else if (separator === "\t") sqlSeparator = "char(9)";
+    else if (separator === "?") sqlSeparator = "char(63)";
+    else sqlSeparator = "'" + separator.replace(/'/g, "''") + "'";
+    expression = "REPLACE(" + expression + ", " + sqlSeparator + ", ' ')";
+  });
+  return "(' ' || " + expression + " || ' ')";
+}
+
 function indexedQuery(kind, q, limit) {
   const w = terms(q);
   if (!w.length) return null;
 
+  // Keep the broad substring prefilter so punctuation and provider metadata do
+  // not create false negatives, but rank its capped candidate list by whole-word
+  // matches. This stops a short query like "art" being crowded out by "party".
   const conditions = w.map(function () {
     return "(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(tags) LIKE ?)";
   }).join(" OR ");
   const conditionArgs = [];
   const scoreArgs = [];
   w.forEach(function (word) {
-    const pattern = "%" + word.replace(/[%_]/g, "") + "%";
-    conditionArgs.push(pattern, pattern, pattern);
-    scoreArgs.push(pattern, pattern, pattern);
+    const cleanWord = word.replace(/[%_]/g, "");
+    const broadPattern = "%" + cleanWord + "%";
+    conditionArgs.push(broadPattern, broadPattern, broadPattern);
+    const wholeWordPattern = "% " + cleanWord + " %";
+    scoreArgs.push(wholeWordPattern, wholeWordPattern, wholeWordPattern);
   });
 
+  const titleWords = sqlWordText("title");
+  const descriptionWords = sqlWordText("description");
+  const tagsWords = sqlWordText("tags");
   const score = w.map(function () {
-    return "(CASE WHEN LOWER(title) LIKE ? THEN 6 WHEN LOWER(description) LIKE ? THEN 2 WHEN LOWER(tags) LIKE ? THEN 1 ELSE 0 END)";
+    return "(CASE WHEN title_words LIKE ? THEN 6 WHEN description_words LIKE ? THEN 2 WHEN tags_words LIKE ? THEN 1 ELSE 0 END)";
   }).join(" + ");
-  const phrase = "%" + String(q || "").toLowerCase().replace(/[%_]/g, "") + "%";
+  const phraseText = String(q || "").toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+  const phrase = phraseText ? "% " + phraseText + " %" : "%";
   const requestedLimit = Number(limit);
   const rowLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
     ? Math.min(120, Math.floor(requestedLimit))
     : 100;
 
   return {
-    sql: "SELECT * FROM media_items WHERE kind=? AND (" + conditions + ") " +
-      "ORDER BY CASE WHEN LOWER(title) LIKE ? THEN 0 ELSE 1 END, (" + score + ") DESC, indexed_at DESC LIMIT ?",
-    params: [kind].concat(conditionArgs, [phrase], scoreArgs, [rowLimit])
+    sql: "WITH normalized AS (SELECT *, " + titleWords + " AS title_words, " +
+      descriptionWords + " AS description_words, " + tagsWords +
+      " AS tags_words FROM media_items WHERE kind=?) " +
+      "SELECT *, (" + score + ") AS relevance_score, " +
+      "CASE WHEN title_words LIKE ? THEN 0 ELSE 1 END AS phrase_rank " +
+      "FROM normalized WHERE (" + conditions + ") " +
+      "ORDER BY phrase_rank ASC, relevance_score DESC, indexed_at DESC LIMIT ?",
+    params: [kind].concat(scoreArgs, [phrase], conditionArgs, [rowLimit])
   };
 }
 async function indexed(env, kind, q, limit) {
