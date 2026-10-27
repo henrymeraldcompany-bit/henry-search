@@ -274,7 +274,7 @@ function indexedQuery(kind, q, limit) {
     return "(CASE WHEN title_words LIKE ? THEN 6 WHEN description_words LIKE ? THEN 2 WHEN tags_words LIKE ? THEN 1 ELSE 0 END)";
   }).join(" + ");
   const phraseText = String(q || "").toLowerCase()
-    .replace(/[^\\p{L}\\p{N}]+/gu, " ").trim().replace(/\\s+/g, " ");
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
   const phrase = phraseText ? "% " + phraseText + " %" : "%";
   const requestedLimit = Number(limit);
   const rowLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
