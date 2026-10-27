@@ -37,7 +37,9 @@ test("ranks exact title phrases first, then weighted term matches, then freshnes
 
 test("binds one score triplet per term and keeps placeholders aligned", () => {
   const query = api.indexedQuery("image", "science nature history", 80);
-  const placeholders = (query.sql.match(/\?/g) || []).length;
+  // Ignore question marks inside SQL string literals (the punctuation normalizer includes "?").
+  const sqlWithoutLiterals = query.sql.replace(/'(?:''|[^'])*'/g, "''");
+  const placeholders = (sqlWithoutLiterals.match(/\?/g) || []).length;
   assert.equal(placeholders, query.params.length);
   assert.equal(query.params.length, 1 + 9 + 1 + 9 + 1);
   assert.equal(query.params.at(-1), 80);
