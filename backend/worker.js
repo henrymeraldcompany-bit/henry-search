@@ -226,15 +226,40 @@ async function save(env, rows) {
   for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));
   return rows.length;
 }
+function indexedQuery(kind, q, limit) {
+  const w = terms(q);
+  if (!w.length) return null;
+
+  const conditions = w.map(function () {
+    return "(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(tags) LIKE ?)";
+  }).join(" OR ");
+  const conditionArgs = [];
+  const scoreArgs = [];
+  w.forEach(function (word) {
+    const pattern = "%" + word.replace(/[%_]/g, "") + "%";
+    conditionArgs.push(pattern, pattern, pattern);
+    scoreArgs.push(pattern, pattern, pattern);
+  });
+
+  const score = w.map(function () {
+    return "(CASE WHEN LOWER(title) LIKE ? THEN 6 WHEN LOWER(description) LIKE ? THEN 2 WHEN LOWER(tags) LIKE ? THEN 1 ELSE 0 END)";
+  }).join(" + ");
+  const phrase = "%" + String(q || "").toLowerCase().replace(/[%_]/g, "") + "%";
+  const requestedLimit = Number(limit);
+  const rowLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
+    ? Math.min(120, Math.floor(requestedLimit))
+    : 100;
+
+  return {
+    sql: "SELECT * FROM media_items WHERE kind=? AND (" + conditions + ") " +
+      "ORDER BY CASE WHEN LOWER(title) LIKE ? THEN 0 ELSE 1 END, (" + score + ") DESC, indexed_at DESC LIMIT ?",
+    params: [kind].concat(conditionArgs, [phrase], scoreArgs, [rowLimit])
+  };
+}
 async function indexed(env, kind, q, limit) {
-  const w = terms(q); if (!w.length) return [];
-  const conditions = w.map(function () { return "(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(tags) LIKE ?)"; }).join(" OR ");
-  const args = [];
-  w.forEach(function (x) { const p = "%" + x.replace(/[%_]/g,"") + "%"; args.push(p,p,p); });
-  const phrase = "%" + q.toLowerCase().replace(/[%_]/g,"") + "%";
-  const data = await env.MEDIA_DB.prepare(
-    "SELECT * FROM media_items WHERE kind=? AND (" + conditions + ") ORDER BY CASE WHEN LOWER(title) LIKE ? THEN 0 ELSE 1 END,indexed_at DESC LIMIT ?"
-  ).bind(kind,...args,phrase,limit || 30).all();
+  const query = indexedQuery(kind, q, limit);
+  if (!query) return [];
+  const data = await env.MEDIA_DB.prepare(query.sql).bind(...query.params).all();
   return data.results || [];
 }
 function canonicalMediaKey(value) {
@@ -352,7 +377,7 @@ async function provider(fn) { try { return await fn(); } catch(e) { console.warn
 async function search(request,env,kind) {
   const q=(new URL(request.url).searchParams.get("q")||"").trim().slice(0,180);
   if(!q)return reply({error:"Please provide a search query.",results:[]},400);
-  const saved=await indexed(env,kind,q,30);
+  const saved=await indexed(env,kind,q,100);
   const fetchLive=async function(query) {
     if(kind==="image") {
       const providers=await Promise.all([
