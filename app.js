@@ -547,16 +547,10 @@ function rankMediaResults(items, query, titleKeys, detailKeys, urlKeys) {
 }
 
 function formatVideoDuration(value) {
-  let seconds = Number(value);
-  if (typeof value === "string" && !/^\d+(\.\d+)?$/.test(value.trim())) {
-    const parts = value.trim().split(":").map(Number);
-    if (parts.length >= 2 && parts.length <= 3 && parts.every(Number.isFinite)) {
-      seconds = parts.length === 3
-        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
-        : parts[0] * 60 + parts[1];
-    }
-  }
-  if (!Number.isFinite(seconds) || seconds < 0) return "";
+  // Reuse the strict parser so missing metadata is not displayed as 0:00,
+  // and ISO-8601 values are displayed consistently with duration filters.
+  const seconds = parseDurationSeconds(value);
+  if (seconds === null) return "";
   const whole = Math.floor(seconds);
   const hours = Math.floor(whole / 3600);
   const minutes = Math.floor((whole % 3600) / 60);
@@ -566,16 +560,31 @@ function formatVideoDuration(value) {
 }
 
 function parseDurationSeconds(value) {
-  if (Number.isFinite(Number(value)) && String(value).trim() !== "") return Math.max(0, Number(value));
+  // Unknown metadata must stay unknown: Number(null) and Number(false) are 0.
+  if (value == null || typeof value === "boolean") return null;
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0 ? value : null;
   if (typeof value !== "string") return null;
   const normalized = value.trim();
+  if (!normalized) return null;
+
+  if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+    const seconds = Number(normalized);
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+  }
+
   const iso = normalized.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
   if (iso && iso.slice(1).some((part) => part !== undefined)) {
     return Number(iso[1] || 0) * 3600 + Number(iso[2] || 0) * 60 + Number(iso[3] || 0);
   }
-  const parts = normalized.split(":").map(Number);
-  if (parts.length < 2 || parts.length > 3 || !parts.every(Number.isFinite)) return null;
-  return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+
+  const parts = normalized.split(":");
+  if (parts.length < 2 || parts.length > 3 ||
+      !parts.every((part) => /^\d+(?:\.\d+)?$/.test(part))) return null;
+  const numbers = parts.map(Number);
+  if (numbers.slice(1).some((part) => part >= 60)) return null;
+  return numbers.length === 3
+    ? numbers[0] * 3600 + numbers[1] * 60 + numbers[2]
+    : numbers[0] * 60 + numbers[1];
 }
 
 function getVideoHost(value) {
