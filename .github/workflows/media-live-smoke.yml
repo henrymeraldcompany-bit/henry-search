@@ -16,12 +16,12 @@ permissions:
   contents: read
 
 jobs:
-  smoke:
+  media:
+    name: Media Worker health, index, image and video routes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       MEDIA_API: https://gozie-search-media.henrymeraldcompany.workers.dev
-      SEARCH_API: https://henry-search-api.henrymeraldcompany.workers.dev
     steps:
       - name: Check Worker health
         shell: bash
@@ -42,10 +42,64 @@ jobs:
         run: |
           set -euo pipefail
           for kind in images videos; do
-            response="$(curl --fail --silent --show-error --retry 1 --retry-delay 2 --max-time 45 --get --data-urlencode "q=solar system" "$MEDIA_API/$kind")"
-            printf '%s' "$response" |
-              node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);const kind=process.argv[1];if(typeof d.query!=="string"||!Array.isArray(d.results)||d.count!==d.results.length)throw new Error("Search response contract failed");const safe=v=>{try{return ["http:","https:"].includes(new URL(v).protocol)}catch{return false}};for(const item of d.results){if(!item||typeof item.title!=="string"||!item.title.trim())throw new Error("Media result is missing a title");const urls=kind==="images"?[item.page,item.image,item.thumbnail]:[item.url];if(urls.some(v=>!safe(v)))throw new Error("Media result has an invalid source URL")}const hosts=new Set(d.results.map(item=>{try{return new URL(kind==="images"?item.page:item.url).hostname}catch{return ""}}).filter(Boolean));console.log("Search route: "+kind+"; "+d.count+" results across "+hosts.size+" source hosts")})' "$kind"
+            tmp="$(mktemp)"
+            status="$(curl --silent --show-error --output "$tmp" --write-out '%{http_code}' --retry 1 --retry-delay 2 --max-time 45 --get --data-urlencode "q=solar system" "$MEDIA_API/$kind")"
+            if [[ "$status" != "200" ]]; then
+              echo "Media route $kind returned HTTP $status"
+              cat "$tmp"
+              rm -f "$tmp"
+              exit 1
+            fi
+            node - "$kind" "$tmp" <<'NODE'
+          const fs = require("node:fs");
+          const kind = process.argv[2];
+          const d = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+          if (typeof d.query !== "string" || !Array.isArray(d.results) || d.count !== d.results.length) {
+            throw new Error("Search response contract failed for " + kind);
+          }
+          const safe = value => {
+            try { return ["http:", "https:"].includes(new URL(value).protocol); }
+            catch { return false; }
+          };
+          const hosts = new Set();
+          for (const item of d.results) {
+            if (!item || typeof item.title !== "string" || !item.title.trim()) {
+              throw new Error("Media result is missing a title");
+            }
+            const required = kind === "images"
+              ? [item.page, item.image, item.thumbnail]
+              : [item.url];
+            if (required.some(value => !safe(value))) {
+              throw new Error("Media result has an invalid required source URL");
+            }
+            const sourceUrl = new URL(kind === "images" ? item.page : item.url);
+            hosts.add(sourceUrl.hostname);
+            if (kind === "videos") {
+              for (const key of ["thumbnailUrl", "embedUrl"]) {
+                const value = item[key];
+                if (!value) continue; // These fields are optional for some providers.
+                if (!safe(value)) throw new Error("Video " + key + " is not a valid HTTP(S) URL");
+                const optionalUrl = new URL(value);
+                if (optionalUrl.hostname === sourceUrl.hostname &&
+                    optionalUrl.pathname === "/" && !optionalUrl.search && !optionalUrl.hash) {
+                  throw new Error("Video " + key + " incorrectly points to the source homepage");
+                }
+              }
+            }
+          }
+          console.log("Search route: " + kind + "; " + d.count +
+            " results across " + hosts.size + " source hosts");
+          NODE
+            rm -f "$tmp"
           done
+
+  legacy:
+    name: Original web-search and news API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SEARCH_API: https://henry-search-api.henrymeraldcompany.workers.dev
+    steps:
       - name: Check original web-search and news routes
         shell: bash
         run: |
