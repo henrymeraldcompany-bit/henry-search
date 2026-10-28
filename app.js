@@ -69,10 +69,13 @@ function makeLink(url, text) {
 }
 
 async function fetchJson(url) {
+  // Keep a slow provider from hanging the whole search on mobile connections.
+  // The caller can then move on to the next configured provider.
   const response = await fetch(url, {
     headers: {
       Accept: "application/json"
-    }
+    },
+    signal: AbortSignal.timeout(12000)
   });
 
   const data = await response.json().catch(() => ({}));
