@@ -13,12 +13,16 @@ function extract(name) {
 }
 const helpers = [
   extract("getVideoHost"),
+  extract("resolveSafeHttpUrl"),
+  extract("getYouTubeVideoId"),
   extract("parseDurationSeconds"),
+  extract("formatVideoDuration"),
+  extract("normalizeVideoResult"),
   extract("videoMatchesFilters")
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {parseDurationSeconds, videoMatchesFilters}; })()",
-  { URL, Date }
+  "(function(){ " + helpers + "; return {parseDurationSeconds, formatVideoDuration, normalizeVideoResult, videoMatchesFilters}; })()",
+  { URL, Date, VIDEO_SEARCH_BASE: "https://peertube.tv" }
 );
 
 test("parses numeric, clock-format, and ISO-8601 durations", () => {
@@ -30,6 +34,37 @@ test("parses numeric, clock-format, and ISO-8601 durations", () => {
   assert.equal(api.parseDurationSeconds("PT45S"), 45);
   assert.equal(api.parseDurationSeconds("PT"), null);
   assert.equal(api.parseDurationSeconds("nonsense"), null);
+});
+
+test("treats missing and invalid durations as unknown rather than zero", () => {
+  for (const value of [null, undefined, false, true, "", "   ", "nonsense", -1, NaN, Infinity]) {
+    assert.equal(api.parseDurationSeconds(value), null, String(value));
+  }
+  assert.equal(api.formatVideoDuration(null), "");
+  assert.equal(api.formatVideoDuration(undefined), "");
+  assert.equal(api.formatVideoDuration(""), "");
+  assert.equal(api.videoMatchesFilters(
+    { durationSeconds: api.parseDurationSeconds(null) }, "all", "any", "short", 1000
+  ), false);
+});
+
+test("normalizes unknown video duration metadata without displaying 0:00", () => {
+  const video = api.normalizeVideoResult({
+    url: "https://peer.tube/w/unknown-duration",
+    title: "Video without duration metadata",
+    duration: null
+  });
+  assert.ok(video);
+  assert.equal(video.durationSeconds, null);
+  assert.equal(video.duration, "");
+});
+
+test("formats numeric, clock, and ISO-8601 durations consistently", () => {
+  assert.equal(api.formatVideoDuration(125), "2:05");
+  assert.equal(api.formatVideoDuration("1:02:03"), "1:02:03");
+  assert.equal(api.formatVideoDuration("PT4M"), "4:00");
+  assert.equal(api.formatVideoDuration("PT1H2M3S"), "1:02:03");
+  assert.equal(api.formatVideoDuration("1:99"), "");
 });
 
 test("filters by source host", () => {
