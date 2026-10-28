@@ -101,7 +101,7 @@ test("PeerTube rows preserve missing durations as null instead of zero", () => {
 
 test("does not turn missing video URLs into the instance homepage", () => {
   const empty = safeUrlSource;
-  const safeUrl = vm.runInNewContext("(" + empty + ")");
+  const safeUrl = vm.runInNewContext("(" + empty + ")", { URL });
   assert.equal(safeUrl("", "https://videos.example"), "");
   assert.equal(safeUrl("   ", "https://videos.example"), "");
 
