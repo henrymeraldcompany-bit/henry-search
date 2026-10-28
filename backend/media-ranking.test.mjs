@@ -302,3 +302,47 @@ test("frontend keeps the strongest matching title when provider URLs duplicate",
   assert.equal(results[0].title, "Solar system explained for beginners");
 });
 
+
+
+// Provider-request resilience tests: each frontend request must have a finite
+// timeout so a slow provider can fall through to the next available service.
+const fetchJsonSource = extractApp("fetchJson");
+
+test("frontend provider requests include JSON headers and a 12-second timeout", async () => {
+  let requestedUrl = "";
+  let requestOptions;
+  const fetchJsonHarness = vm.runInNewContext(
+    "(" + fetchJsonSource + ")",
+    {
+      AbortSignal: { timeout: (ms) => ({ timeoutMs: ms }) },
+      fetch: async (url, options) => {
+        requestedUrl = url;
+        requestOptions = options;
+        return { ok: true, status: 200, json: async () => ({ results: [] }) };
+      }
+    }
+  );
+  const data = await fetchJsonHarness("https://example.org/videos?q=stars");
+  assert.equal(requestedUrl, "https://example.org/videos?q=stars");
+  assert.equal(requestOptions.headers.Accept, "application/json");
+  assert.equal(requestOptions.signal.timeoutMs, 12000);
+  assert.deepEqual(data, { results: [] });
+});
+
+test("frontend provider requests preserve useful HTTP error messages", async () => {
+  const fetchJsonHarness = vm.runInNewContext(
+    "(" + fetchJsonSource + ")",
+    {
+      AbortSignal: { timeout: (ms) => ({ timeoutMs: ms }) },
+      fetch: async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: "Provider temporarily unavailable" })
+      })
+    }
+  );
+  await assert.rejects(
+    () => fetchJsonHarness("https://example.org/videos"),
+    /Provider temporarily unavailable/
+  );
+});
