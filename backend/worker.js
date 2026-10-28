@@ -29,8 +29,12 @@ function clean(value, max) {
     .replace(/\s+/g, " ").trim().slice(0, max || 1000);
 }
 function safeUrl(value, base) {
+  // An empty optional URL must stay empty; new URL("", base) resolves to the
+  // base homepage, which can otherwise masquerade as a video or embed URL.
+  const raw = value == null ? "" : String(value).trim();
+  if (!raw) return "";
   try {
-    const u = base ? new URL(value, base) : new URL(value);
+    const u = base ? new URL(raw, base) : new URL(raw);
     return ["http:", "https:"].includes(u.protocol) ? u.href : "";
   } catch (_) { return ""; }
 }
