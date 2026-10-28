@@ -312,7 +312,7 @@ test("frontend provider requests include JSON headers and a 12-second timeout", 
   let requestedUrl = "";
   let requestOptions;
   const fetchJsonHarness = vm.runInNewContext(
-    "(" + fetchJsonSource + ")",
+    "(async " + fetchJsonSource + ")",
     {
       AbortSignal: { timeout: (ms) => ({ timeoutMs: ms }) },
       fetch: async (url, options) => {
@@ -331,7 +331,7 @@ test("frontend provider requests include JSON headers and a 12-second timeout", 
 
 test("frontend provider requests preserve useful HTTP error messages", async () => {
   const fetchJsonHarness = vm.runInNewContext(
-    "(" + fetchJsonSource + ")",
+    "(async " + fetchJsonSource + ")",
     {
       AbortSignal: { timeout: (ms) => ({ timeoutMs: ms }) },
       fetch: async () => ({
