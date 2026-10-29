@@ -910,7 +910,13 @@ function renderVideoResults(items, query) {
       const thumbnailButton = document.createElement("button");
       thumbnailButton.type = "button";
       thumbnailButton.className = "video-thumb-link video-thumb-button";
-      thumbnailButton.setAttribute("aria-label", `Play video in GOZIE SEARCH: ${video.title}`);
+      const playableEmbedUrl = getPlayableEmbedUrl(video);
+      thumbnailButton.setAttribute(
+        "aria-label",
+        playableEmbedUrl
+          ? `Play video in GOZIE SEARCH: ${video.title}`
+          : `Open original video: ${video.title}`
+      );
 
       if (video.thumbnail) {
         const image = document.createElement("img");
@@ -930,7 +936,7 @@ function renderVideoResults(items, query) {
       } else {
         const placeholder = document.createElement("span");
         placeholder.className = "video-thumb-placeholder";
-        placeholder.textContent = "▶ Play video";
+        placeholder.textContent = playableEmbedUrl ? "▶ Play video" : "↗ Open original video";
         thumbnailButton.appendChild(placeholder);
       }
 
