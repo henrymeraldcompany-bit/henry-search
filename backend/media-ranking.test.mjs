@@ -254,10 +254,12 @@ const frontendHelpers = [
   extractApp("queryWords"),
   extractApp("mediaRelevanceScore"),
   extractApp("canonicalizeMediaResultUrl"),
-  extractApp("rankMediaResults")
+  extractApp("rankMediaResults"),
+  extractApp("getYouTubeVideoId"),
+  extractApp("getPlayableEmbedUrl")
 ].join("\n");
 const frontendApi = vm.runInNewContext(
-  "(function(){ " + frontendHelpers + "; return {rankMediaResults}; })()",
+  "(function(){ " + frontendHelpers + "; return {rankMediaResults, getPlayableEmbedUrl}; })()",
   { URL }
 );
 
@@ -344,5 +346,55 @@ test("frontend provider requests preserve useful HTTP error messages", async () 
   await assert.rejects(
     () => fetchJsonHarness("https://example.org/videos"),
     /Provider temporarily unavailable/
+  );
+});
+
+
+// In-page playback must use a platform player URL, not an arbitrary same-origin
+// page or a provider-controlled cross-origin iframe.
+test("uses privacy-enhanced YouTube embeds derived from the trusted watch URL", () => {
+  assert.equal(
+    frontendApi.getPlayableEmbedUrl({
+      url: "https://youtu.be/abc123",
+      embedUrl: "https://attacker.example/embed/abc123"
+    }),
+    "https://www.youtube-nocookie.com/embed/abc123"
+  );
+});
+
+test("allows canonical same-origin PeerTube player routes", () => {
+  assert.equal(
+    frontendApi.getPlayableEmbedUrl({
+      url: "https://peertube.tv/videos/watch/abc123",
+      embedUrl: "https://peertube.tv/videos/embed/abc123"
+    }),
+    "https://peertube.tv/videos/embed/abc123"
+  );
+});
+
+test("rejects ordinary watch pages and cross-origin PeerTube embeds", () => {
+  assert.equal(
+    frontendApi.getPlayableEmbedUrl({
+      url: "https://peertube.tv/videos/watch/abc123",
+      embedUrl: "https://peertube.tv/videos/watch/abc123"
+    }),
+    null
+  );
+  assert.equal(
+    frontendApi.getPlayableEmbedUrl({
+      url: "https://peertube.tv/videos/watch/abc123",
+      embedUrl: "https://other.example/videos/embed/abc123"
+    }),
+    null
+  );
+});
+
+test("rejects PeerTube embed URLs containing credentials", () => {
+  assert.equal(
+    frontendApi.getPlayableEmbedUrl({
+      url: "https://peertube.tv/videos/watch/abc123",
+      embedUrl: "https://user:pass@peertube.tv/videos/embed/abc123"
+    }),
+    null
   );
 });
