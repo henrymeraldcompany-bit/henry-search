@@ -711,8 +711,17 @@ function getPlayableEmbedUrl(video) {
         : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`;
     }
 
-    // Other platforms may only embed from the same origin as the source video.
-    return embed.origin === watch.origin ? embed.href : null;
+    // PeerTube embeds must use the platform's dedicated player route.
+    // Same-origin alone is insufficient: embedding a normal watch/about page
+    // can duplicate the whole site inside the result card.
+    const isPeerTubePlayerPath =
+      /^\/videos\/embed\/[A-Za-z0-9_-]+\/?$/.test(embed.pathname);
+    if (embed.username || embed.password || watch.username || watch.password) {
+      return null;
+    }
+    return embed.origin === watch.origin && isPeerTubePlayerPath
+      ? embed.href
+      : null;
   } catch {
     return youtubeId
       ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`
