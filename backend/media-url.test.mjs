@@ -87,6 +87,39 @@ test("allows same-origin PeerTube embeds and matching YouTube embeds", () => {
   );
 });
 
+test("allows only the canonical same-origin PeerTube player path", () => {
+  const watch = "https://videos.example/videos/watch/abc";
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: watch,
+      embedUrl: "https://videos.example/videos/embed/abc"
+    }),
+    "https://videos.example/videos/embed/abc"
+  );
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: watch,
+      embedUrl: "https://videos.example/videos/embed/abc?start=30"
+    }),
+    "https://videos.example/videos/embed/abc?start=30"
+  );
+
+  for (const embedUrl of [
+    "https://videos.example/videos/watch/abc",
+    "https://videos.example/about",
+    "https://videos.example/videos/embed/",
+    "https://videos.example/videos/embed/abc/extra",
+    "https://videos.example.evil.test/videos/embed/abc",
+    "https://user:pass@videos.example/videos/embed/abc"
+  ]) {
+    assert.equal(
+      api.getPlayableEmbedUrl({ url: watch, embedUrl }),
+      null,
+      embedUrl
+    );
+  }
+});
+
 test("rejects mismatched and cross-origin embeds, using a safe YouTube fallback when possible", () => {
   assert.equal(
     api.getPlayableEmbedUrl({
