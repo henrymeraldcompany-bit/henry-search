@@ -48,7 +48,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -270,4 +270,30 @@ test("in-page reader returns a longer readable article excerpt with metadata", a
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test("ranks news articles by query relevance before quality and freshness", () => {
+ const now=Date.parse("2026-10-30T12:00:00Z");
+ const articles=[
+  {title:"General world update from today",url:"https://news.example/general",snippet:"A detailed report with enough background and context to be useful to readers following world events and current affairs.",source:"News Desk",published:"2026-10-30T11:30:00Z"},
+  {title:"Solar energy research reveals new battery breakthrough",url:"https://science.example/solar",snippet:"Researchers report a solar energy battery breakthrough with additional details, background, and context for readers.",source:"Science Journal",published:"2026-10-28T09:00:00Z"},
+  {title:"Solar energy policy and technology explained",url:"https://policy.example/solar",snippet:"Solar energy policy and technology coverage.",source:"Policy News",published:"2026-10-29T09:00:00Z"},
+  {title:"News",url:"https://junk.example/home",snippet:"",source:""}
+ ];
+ const ranked=rankArticles(articles,"solar energy",now);
+ assert.equal(ranked.length,3);
+ assert.equal(ranked[0].url,"https://science.example/solar");
+ assert.ok(ranked[0].relevanceScore>ranked[1].relevanceScore);
+ assert.ok(ranked.every(item=>Number.isFinite(item.qualityScore)));
+});
+test("article ranking removes invalid URLs, placeholder headlines and duplicate URLs", () => {
+ const ranked=rankArticles([
+  {title:"A meaningful article headline",url:"https://example.com/story?utm_source=one",snippet:"A useful article summary."},
+  {title:"A meaningful article headline",url:"https://example.com/story#top",snippet:"A much longer article summary that adds useful context for the same report."},
+  {title:"Breaking News",url:"https://example.com/breaking"},
+  {title:"No URL article title",url:"javascript:alert(1)"}
+ ],"article");
+ assert.equal(ranked.length,1);
+ assert.match(ranked[0].snippet,/much longer/);
 });

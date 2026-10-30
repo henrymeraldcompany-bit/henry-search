@@ -130,6 +130,52 @@ export function rankSearchResults(results, query) {
 }
 
 /**
+ * Remove weak news entries and order useful articles by query match, metadata
+ * completeness and freshness. Relevance remains the primary ranking signal.
+ */
+export function rankArticles(articles, query, now = Date.now()) {
+  const input = Array.isArray(articles) ? articles : [];
+  const unique = new Map();
+  for (const article of input) {
+    if (!article || typeof article !== "object") continue;
+    const title = String(article.title || "").replace(/\\s+/g, " ").trim();
+    const url = canonicalizeResultUrl(article.url);
+    if (!url || title.length < 8 || title.length > 250) continue;
+    if (/^(?:home|homepage|breaking news|latest news|news|article|untitled)$/i.test(title)) continue;
+    if (/^(.)\\1{7,}$/.test(title)) continue;
+    const key = url;
+    const current = unique.get(key);
+    const candidate = { ...article, title, canonicalUrl: url };
+    if (!current || String(candidate.snippet || "").length > String(current.snippet || "").length) unique.set(key, candidate);
+  }
+  const ranked = [...unique.values()].map((article, index) => {
+    const snippet = String(article.snippet || "").trim();
+    const source = String(article.source || "").trim();
+    const publishedAt = Date.parse(article.published || "");
+    const validDate = Number.isFinite(publishedAt) && publishedAt <= now;
+    const relevanceScore = scoreSearchResult(article, query);
+    let qualityScore = 0;
+    if (titleQuality(article.title)) qualityScore += 2;
+    if (snippet.length >= 80) qualityScore += 3;
+    else if (snippet.length >= 30) qualityScore += 1;
+    if (source) qualityScore += 2;
+    if (validDate) qualityScore += 1;
+    const ageHours = validDate ? Math.max(0, (now - publishedAt) / 3600000) : Infinity;
+    return { ...article, relevanceScore, qualityScore, _ageHours: ageHours, _index: index };
+  });
+  return ranked
+    .sort((a, b) => b.relevanceScore - a.relevanceScore ||
+      b.qualityScore - a.qualityScore ||
+      a._ageHours - b._ageHours || a._index - b._index)
+    .map(({ _ageHours, _index, ...article }) => article);
+}
+
+function titleQuality(title) {
+  const words = tokenize(title);
+  return words.length >= 3 && new Set(words).size >= Math.min(3, words.length);
+}
+
+/**
  * Interleave results by hostname so one website cannot occupy a long run.
  * Keeps every result and preserves each host's original relative order.
  */
