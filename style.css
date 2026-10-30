@@ -1524,3 +1524,37 @@ input:focus-visible {
     font-size: 9px !important;
   }
 }
+
+
+/* Public webpage extraction panel */
+.read-in-gozie-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--border, #345);
+  border-radius: 10px;
+  background: var(--surface, #14202b);
+  color: var(--text, #eaf0f6);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.read-in-gozie-button:disabled { opacity: .65; cursor: wait; }
+.gozie-extracted-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border, #345);
+  border-radius: 12px;
+  background: var(--surface, #101a24);
+  color: var(--text, #eaf0f6);
+  overflow-wrap: anywhere;
+}
+.gozie-extracted-panel[hidden] { display: none; }
+.gozie-extracted-panel h3 { margin: 0 0 8px; font-size: 16px; }
+.gozie-extracted-summary { font-weight: 600; margin: 0 0 10px; }
+.gozie-extracted-text { margin: 0 0 12px; line-height: 1.65; white-space: pre-line; }
+.gozie-extracted-source { display: inline-block; font-weight: 600; }
