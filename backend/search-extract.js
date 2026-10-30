@@ -115,7 +115,7 @@ export async function robotsAllows(url) {
     return robotsPathAllowed(await readTextLimited(response, 65536), url);
   } catch { return false; }
 }
-export async function extractPublicPage(input) {
+export async function retrievePublicPage(input) {
   let current = safePublicUrl(input);
   if (!current) return { status: 400, data: { error: "Enter a public HTTP or HTTPS webpage URL. Local/private literal IPs, credential-bearing URLs and non-standard ports are not supported." } };
   for (let hop = 0; hop <= 3; hop++) {
@@ -137,12 +137,20 @@ export async function extractPublicPage(input) {
     if (!response.ok) return { status: response.status === 429 ? 429 : 502, data: { error: "The source website returned HTTP " + response.status + "." } };
     const type = (response.headers.get("content-type") || "").toLowerCase();
     if (!type.includes("text/html") && !type.includes("application/xhtml+xml")) return { status: 415, data: { error: "This source is not an HTML webpage." } };
-    if (Number(response.headers.get("content-length") || 0) > 1048576) return { status: 413, data: { error: "This webpage exceeds the 1 MB extraction limit." } };
+    if (Number(response.headers.get("content-length") || 0) > 1048576) return { status: 413, data: { error: "This webpage exceeds the 1 MB retrieval limit." } };
     try {
-      const extracted = extractHtmlMetadata(await readTextLimited(response, 1048576), current.href);
-      if (!extracted.text && !extracted.description) return { status: 422, data: { error: "No readable page text was found." } };
-      return { status: 200, data: { source: current.hostname, url: current.href, ...extracted, extractedAt: new Date().toISOString(), method: "public-page-fetch" } };
+      const html = await readTextLimited(response, 1048576);
+      return { status: 200, data: { url: current.href, html, contentType: type } };
     } catch (error) { return { status: 413, data: { error: error.message || "Could not read this webpage." } }; }
   }
   return { status: 508, data: { error: "The source exceeded the redirect limit." } };
+}
+
+export async function extractPublicPage(input) {
+  const retrieved = await retrievePublicPage(input);
+  if (retrieved.status !== 200) return retrieved;
+  const { url, html } = retrieved.data;
+  const extracted = extractHtmlMetadata(html, url);
+  if (!extracted.text && !extracted.description) return { status: 422, data: { error: "No readable page text was found." } };
+  return { status: 200, data: { source: new URL(url).hostname, url, ...extracted, extractedAt: new Date().toISOString(), method: "public-page-fetch" } };
 }
