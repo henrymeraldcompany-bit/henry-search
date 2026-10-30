@@ -138,7 +138,7 @@ function renderResults(items) {
     const readButton = document.createElement("button");
     readButton.type = "button";
     readButton.className = "read-in-gozie-button";
-    readButton.textContent = "Read here in GOZIE";
+    readButton.textContent = "Preview in GOZIE";
     readButton.setAttribute("aria-expanded", "false");
 
     const extractedPanel = document.createElement("section");
@@ -180,7 +180,7 @@ function renderResults(items) {
         extractedPanel.textContent = error.message || "This page could not be retrieved. The website may block automated reading or be temporarily unavailable.";
       } finally {
         readButton.disabled = false;
-        readButton.textContent = "Read here in GOZIE";
+        readButton.textContent = "Preview in GOZIE";
       }
     });
 
