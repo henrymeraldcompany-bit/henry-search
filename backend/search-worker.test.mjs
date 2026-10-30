@@ -23,7 +23,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -151,4 +151,19 @@ test("provider results are interleaved across domains while retaining every resu
     ]
   }], "query");
   assert.deepEqual(result.results.map(item => item.title), ["A1", "B1", "A2", "A3"]);
+});
+
+test('filters web results by domain and publisher, including combined filters', () => {
+ const items=[{domain:'alpha.example',source:'Publisher A',sources:['Publisher A']},{domain:'beta.example',source:'Publisher B',sources:['Publisher B']},{domain:'alpha.example',source:'Publisher C',sources:['Publisher C']}];
+ assert.equal(filterSearchResults(items,{domain:'alpha.example'}).length,2);
+ assert.equal(filterSearchResults(items,{source:'Publisher B'})[0].domain,'beta.example');
+ assert.equal(filterSearchResults(items,{domain:'alpha.example',source:'Publisher C'}).length,1);
+});
+test('date filtering excludes unknown and future dates but any-time preserves all results', () => {
+ const now=Date.parse('2026-10-30T12:00:00Z');
+ const items=[{published:'2026-10-30T11:00:00Z'},{published:'2026-10-20T12:00:00Z'},{published:''},{published:'invalid'},{published:'2026-10-31T12:00:00Z'}];
+ assert.equal(filterSearchResults(items,{date:'day'},now).length,1);
+ assert.equal(filterSearchResults(items,{date:'month'},now).length,2);
+ assert.equal(filterSearchResults(items,{date:'any'},now).length,5);
+ assert.equal(filterSearchResults(items,{date:'invalid'},now).length,0);
 });

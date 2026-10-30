@@ -89,21 +89,47 @@ async function fetchJson(url, timeoutMs = 12000) {
   return data;
 }
 
+let currentWebResults = [];
+let currentWebFilters = { domain: 'all', source: 'all', date: 'any' };
+function applyWebResultFilters(items) {
+ const now=Date.now();
+ return items.filter(item=>{
+  let host=String(item.domain||''); if(!host){try{host=new URL(item.url||item.link).hostname;}catch{}}
+  host=host.toLowerCase().replace(/^www\\./i,'');
+  if(currentWebFilters.domain!=='all'&&host!==currentWebFilters.domain)return false;
+  const sources=Array.isArray(item.sources)?item.sources:[item.source];
+  if(currentWebFilters.source!=='all'&&!sources.some(v=>String(v||'').toLowerCase()===currentWebFilters.source))return false;
+  if(currentWebFilters.date!=='any'){const ages={day:86400000,week:604800000,month:2592000000,year:31536000000};const date=Date.parse(item.published||'');if(!ages[currentWebFilters.date]||!Number.isFinite(date)||date>now||now-date>ages[currentWebFilters.date])return false;}
+  return true;
+ });
+}
+function renderWebFilterBar(items) {
+ const bar=document.createElement('div');bar.className='web-filter-bar';bar.setAttribute('aria-label','Filter search results');
+ const domains=[...new Set(items.map(item=>{let h=item.domain||'';if(!h){try{h=new URL(item.url||item.link).hostname;}catch{}}return String(h).toLowerCase().replace(/^www\\./i,'');}).filter(Boolean))].sort();
+ const sources=[...new Set(items.flatMap(item=>Array.isArray(item.sources)?item.sources:[item.source]).filter(Boolean).map(v=>String(v).trim()))].sort();
+ const add=(caption,key,opts)=>{const label=document.createElement('label');label.className='web-filter';const span=document.createElement('span');span.textContent=caption;const select=document.createElement('select');select.setAttribute('aria-label',caption);for(const [value,name] of opts){const option=document.createElement('option');option.value=value;option.textContent=name;select.appendChild(option);}select.value=currentWebFilters[key];select.addEventListener('change',()=>{currentWebFilters[key]=select.value;renderResults(currentWebResults);});label.append(span,select);bar.appendChild(label);};
+ add('Website','domain',[['all','All websites'],...domains.map(v=>[v,v])]);
+ add('Source','source',[['all','All sources'],...sources.map(v=>[v.toLowerCase(),v])]);
+ add('Date','date',[['any','Any time'],['day','Past 24 hours'],['week','Past week'],['month','Past month'],['year','Past year']]);
+ const count=document.createElement('span');count.className='web-filter-count';count.textContent=applyWebResultFilters(items).length+' of '+items.length+' results';bar.appendChild(count);return bar;
+}
+
 // ========================================
 // DISPLAY NORMAL WEB RESULTS
 // ========================================
 
 function renderResults(items) {
   if (!resultsList) return;
-
+  if (Array.isArray(items) && items !== currentWebResults) { currentWebResults = items; currentWebFilters = { domain: 'all', source: 'all', date: 'any' }; }
+  const originalItems = Array.isArray(currentWebResults) ? currentWebResults : [];
+  const filteredItems = applyWebResultFilters(originalItems);
   resultsList.replaceChildren();
-
-  if (!Array.isArray(items) || items.length === 0) {
-    showMessage(
-      "No results were returned. Try another search. " +
-      "The search provider may not have information for every query."
-    );
-    return;
+  if (originalItems.length) resultsList.appendChild(renderWebFilterBar(originalItems));
+  items = filteredItems;
+  if (!items.length) {
+    const message=document.createElement('div');message.className='message-card';
+    message.textContent=originalItems.length?'No results match these filters. Change a filter or choose the default options.':'No results were returned. Try another search.';
+    resultsList.appendChild(message);return;
   }
 
   let validCount = 0;

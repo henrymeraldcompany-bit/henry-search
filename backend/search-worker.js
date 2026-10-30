@@ -1,5 +1,5 @@
 
-import { runSearchProviders } from "./search-providers.js";
+import { runSearchProviders, filterSearchResults } from "./search-providers.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
 async fetch(request, env = {}) {
@@ -95,8 +95,10 @@ async fetch(request, env = {}) {
     }
    }] : [])
   ];
-  const {results,providers:successfulProviders,failures,attempted} = await runSearchProviders(providers,q);
-  if (!results.length && successfulProviders.length === 0) {
+  const {results:allResults,providers:successfulProviders,failures,attempted} = await runSearchProviders(providers,q);
+  const filters = { domain: u.searchParams.get("domain") || "", source: u.searchParams.get("source") || "", date: u.searchParams.get("date") || "any" };
+  const results = filterSearchResults(allResults, filters);
+  if (!allResults.length && successfulProviders.length === 0) {
    return out({error:"Search providers are temporarily unavailable. Please try again.",diagnostic:failures},502);
   }
   return out({
@@ -105,6 +107,9 @@ async fetch(request, env = {}) {
    providers:successfulProviders,
    attemptedProviders:attempted,
    failedProviders:failures,
+   availableFilters: { domains: [...new Set(allResults.map(item => item.domain).filter(Boolean))].sort(), sources: [...new Set(allResults.flatMap(item => item.sources || [item.source]).filter(Boolean))].sort() },
+   appliedFilters: { domain: filters.domain || null, source: filters.source || null, date: filters.date },
+   totalResults: allResults.length,
    results
   });
  }catch(e){return out({error:route==="/news"?"News providers are temporarily unavailable. Please try again shortly.":route==="/images"?"Image service is temporarily unavailable. Please try again.":"Search providers are temporarily unavailable. Please try again."},502)}

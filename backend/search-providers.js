@@ -158,6 +158,24 @@ export function diversifySearchResults(results) {
   return diversified;
 }
 
+/** Filter normalized web results by domain, publisher and publication age. */
+export function filterSearchResults(results, filters = {}, now = Date.now()) {
+  const items = Array.isArray(results) ? results : [];
+  const domain = String(filters.domain || '').trim().toLowerCase().replace(/^www\\./i, '');
+  const source = String(filters.source || '').trim().toLowerCase();
+  const date = String(filters.date || 'any').toLowerCase();
+  const windows = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
+  const maxAge = date === 'any' ? null : windows[date];
+  if (date !== 'any' && !maxAge) return [];
+  return items.filter(item => {
+    const host = String(item?.domain || '').toLowerCase().replace(/^www\\./i, '');
+    if (domain && host !== domain) return false;
+    const sources = Array.isArray(item?.sources) ? item.sources : [item?.source];
+    if (source && !sources.some(value => String(value || '').toLowerCase() === source)) return false;
+    if (maxAge) { const published = Date.parse(item?.published || ''); if (!Number.isFinite(published) || published > now || now - published > maxAge) return false; }
+    return true;
+  });
+}
 /**
  * Query all configured providers concurrently. A failed provider does not discard
  * successful providers' results. The output intentionally preserves provider order;
