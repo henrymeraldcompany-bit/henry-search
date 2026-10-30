@@ -72,6 +72,20 @@ function mergeDuplicateResults(existing, incoming) {
   };
 }
 
+const EXPANSION_PREFIXES = /^(?:what is|what are|who is|who was|how does|how do|how can|tell me about|explain|define)\\s+/i;
+
+/** Build a small, conservative set of equivalent query phrasings. */
+export function expandSearchQueries(query) {
+  const original = String(query || "").trim().replace(/\\s+/g, " ");
+  if (!original) return [];
+  const variants = [original];
+  const cleaned = original.replace(/[?!.,;:]+$/g, "").trim();
+  if (cleaned && cleaned.toLowerCase() !== original.toLowerCase()) variants.push(cleaned);
+  const focused = cleaned.replace(EXPANSION_PREFIXES, "").trim();
+  if (focused && focused.length >= 2 && focused.toLowerCase() !== original.toLowerCase()) variants.push(focused);
+  return [...new Map(variants.map(value => [value.toLowerCase(), value])).values()].slice(0, 3);
+}
+
 const RANKING_STOP_WORDS = new Set(["a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","that","the","this","to","was","what","when","where","which","who","why","with"]);
 
 function tokenize(value) {
@@ -157,25 +171,33 @@ export async function runSearchProviders(providers, query) {
     typeof provider.search === "function"
   ) : [];
 
+  const expandedQueries = expandSearchQueries(query);
+  const requests = configured.flatMap(provider => expandedQueries.map(expandedQuery => ({
+    provider,
+    query: expandedQuery
+  })));
   const settled = await Promise.allSettled(
-    configured.map(provider => Promise.resolve().then(() => provider.search(query)))
+    requests.map(({ provider, query: expandedQuery }) =>
+      Promise.resolve().then(() => provider.search(expandedQuery))
+    )
   );
 
   const results = [];
   const resultIndexes = new Map();
-  const successfulProviders = [];
+  const successfulProviders = new Set();
   const failures = [];
 
   for (let index = 0; index < settled.length; index += 1) {
     const outcome = settled[index];
-    const providerName = configured[index].name.trim();
+    const { provider } = requests[index];
+    const providerName = provider.name.trim();
 
     if (outcome.status === "rejected") {
       failures.push({ provider: providerName, message: String(outcome.reason?.message || "Provider request failed").slice(0, 240) });
       continue;
     }
 
-    successfulProviders.push(providerName);
+    successfulProviders.add(providerName);
     const items = Array.isArray(outcome.value) ? outcome.value : [];
     for (const item of items) {
       const normalized = normalizeResult(item, providerName);
@@ -192,8 +214,9 @@ export async function runSearchProviders(providers, query) {
 
   return {
     results: diversifySearchResults(results),
-    providers: successfulProviders,
+    providers: [...successfulProviders],
     failures,
-    attempted: configured.length
+    attempted: requests.length,
+    expandedQueries
   };
 }
