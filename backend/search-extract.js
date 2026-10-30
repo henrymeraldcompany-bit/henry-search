@@ -74,32 +74,48 @@ function htmlAttribute(tagText, name) {
   return "";
 }
 export function extractHtmlMetadata(html, pageUrl) {
-  const meta = (key) => {
-    const tags = String(html).match(/<meta\b[^>]*>/gi) || [];
-    for (const tagText of tags) {
+  const source = String(html || "");
+  const meta = (...keys) => {
+    const tags = source.match(/<meta\\b[^>]*>/gi) || [];
+    for (const key of keys) for (const tagText of tags) {
       if (htmlAttribute(tagText, "name").toLowerCase() === key.toLowerCase() ||
-          htmlAttribute(tagText, "property").toLowerCase() === key.toLowerCase()) return htmlAttribute(tagText, "content");
+          htmlAttribute(tagText, "property").toLowerCase() === key.toLowerCase()) {
+        const value = htmlAttribute(tagText, "content").trim();
+        if (value) return value;
+      }
     }
     return "";
   };
-  const titleMatch = String(html).match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
-  const title = decodeHtml((titleMatch?.[1] || meta("og:title")).replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 300);
-  const description = (meta("description") || meta("og:description") || meta("twitter:description")).slice(0, 300);
-  const published = meta("article:published_time") || meta("date") || meta("pubdate") || "";
-  const imageCandidate = meta("og:image") || meta("twitter:image") || "";
+  const clean = (value, limit = 300) => decodeHtml(String(value || "").replace(/<[^>]*>/g, " "))
+    .replace(/\\s+/g, " ").trim().slice(0, limit);
+  const titleMatch = source.match(/<title\\b[^>]*>([\\s\\S]*?)<\\/title>/i);
+  const title = clean(titleMatch?.[1] || meta("og:title", "twitter:title"), 300);
+  const description = clean(meta("description", "og:description", "twitter:description"), 500);
+  const author = clean(meta("author", "article:author", "parsely-author", "byl"), 200);
+  const siteName = clean(meta("og:site_name", "application-name"), 160);
+  const type = clean(meta("og:type", "twitter:card"), 80);
+  const keywords = clean(meta("keywords", "news_keywords"), 500)
+    .split(/[,;]+/).map(item => item.trim()).filter(Boolean).slice(0, 20);
+  const published = clean(meta("article:published_time", "datePublished", "date", "pubdate"), 80);
+  const modified = clean(meta("article:modified_time", "og:updated_time", "dateModified", "last-modified"), 80);
+  const htmlTag = source.match(/<html\\b[^>]*>/i)?.[0] || "";
+  const language = clean(htmlAttribute(htmlTag, "lang") || meta("og:locale"), 35);
+  const imageCandidate = meta("og:image", "twitter:image", "twitter:image:src");
   const imageUrl = imageCandidate ? safePublicUrl(imageCandidate, pageUrl) : null;
-  const linkTags = String(html).match(/<link\b[^>]*>/gi) || [];
-  const canonicalTag = linkTags.find(tag => htmlAttribute(tag, "rel").toLowerCase().split(/\s+/).includes("canonical")) || "";
-  const canonicalCandidate = htmlAttribute(canonicalTag, "href");
+  const linkTags = source.match(/<link\\b[^>]*>/gi) || [];
+  const findLink = rel => linkTags.find(tag => htmlAttribute(tag, "rel").toLowerCase().split(/\\s+/).includes(rel)) || "";
+  const canonicalCandidate = htmlAttribute(findLink("canonical"), "href");
   const canonicalUrl = canonicalCandidate ? safePublicUrl(canonicalCandidate, pageUrl) : null;
-  const readableText = extractReadableText(html, 800);
+  const iconCandidate = htmlAttribute(findLink("icon") || findLink("shortcut"), "href");
+  const iconUrl = iconCandidate ? safePublicUrl(iconCandidate, pageUrl) : null;
   return {
     title: title || new URL(pageUrl).hostname,
-    description: decodeHtml(description).replace(/\s+/g, " ").trim(),
-    text: readableText,
+    description,
+    text: extractReadableText(source, 800),
     canonical: canonicalUrl && canonicalUrl.hostname === new URL(pageUrl).hostname ? canonicalUrl.href : pageUrl,
     image: imageUrl ? imageUrl.href : "",
-    published: published.slice(0, 80)
+    icon: iconUrl ? iconUrl.href : "",
+    author, siteName, type, language, keywords, published, modified
   };
 }
 export async function readTextLimited(response, maxBytes) {
