@@ -24,16 +24,19 @@ const helpers = [
   extract("getYouTubeVideoId"),
   embedHostDeclaration[0],
   extract("getPlayableEmbedUrl"),
+  extract("stopActiveVideoPlayer"),
+  extract("toggleActiveVideoPlayer"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS}; })()",
+  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS, stopActiveVideoPlayer, toggleActiveVideoPlayer}; })()",
   {
     URL,
     MEDIA_STOP_WORDS: new Set([
       "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
       "how", "i", "in", "is", "it", "of", "on", "or", "the", "to", "with",
       "what", "when", "where", "who", "why", "you", "your"
-    ])
+    ]),
+    createVideoPlayer: (video) => video?.unplayable ? null : ({ video })
   }
 );
 
@@ -182,4 +185,81 @@ test("keeps the PeerTube embed allowlist aligned with the backend search instanc
     ...Array.from(instances[1].matchAll(/"https:\/\/([^"]+)"/g), match => match[1])
   ].sort();
   assert.deepEqual([...api.PEERTUBE_EMBED_HOSTS].sort(), configuredHosts);
+});
+
+
+test("keeps only one inline player active and lets the current player stop", () => {
+  const makeTarget = () => ({
+    children: [],
+    replaceChildren(...children) { this.children = children; }
+  });
+  const makeButton = () => ({
+    textContent: "Play here",
+    disabled: false,
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; }
+  });
+  const state = { target: null, button: null };
+  const firstTarget = makeTarget();
+  const firstButton = makeButton();
+  const secondTarget = makeTarget();
+  const secondButton = makeButton();
+
+  assert.equal(api.toggleActiveVideoPlayer({ title: "First video" }, firstTarget, firstButton, state), true);
+  assert.equal(firstTarget.children.length, 1);
+  assert.equal(firstButton.textContent, "Stop playback");
+  assert.equal(firstButton.attributes["aria-pressed"], "true");
+
+  assert.equal(api.toggleActiveVideoPlayer({ title: "Second video" }, secondTarget, secondButton, state), true);
+  assert.equal(firstTarget.children.length, 0);
+  assert.equal(firstButton.textContent, "Play here");
+  assert.equal(firstButton.attributes["aria-pressed"], "false");
+  assert.equal(secondTarget.children.length, 1);
+  assert.equal(secondButton.textContent, "Stop playback");
+
+  assert.equal(api.toggleActiveVideoPlayer({ title: "Second video" }, secondTarget, secondButton, state), false);
+  assert.equal(secondTarget.children.length, 0);
+  assert.equal(secondButton.textContent, "Play here");
+  assert.equal(secondButton.attributes["aria-pressed"], "false");
+  assert.equal(state.target, null);
+  assert.equal(state.button, null);
+});
+
+test("stopping filters removes the active iframe and resets its control", () => {
+  const target = { children: [], replaceChildren(...children) { this.children = children; } };
+  const button = {
+    textContent: "Play here",
+    disabled: false,
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; }
+  };
+  const state = { target: null, button: null };
+  assert.equal(api.toggleActiveVideoPlayer({ title: "Video" }, target, button, state), true);
+  assert.equal(api.stopActiveVideoPlayer(state), true);
+  assert.equal(target.children.length, 0);
+  assert.equal(button.textContent, "Play here");
+  assert.equal(button.attributes["aria-pressed"], "false");
+  assert.equal(api.stopActiveVideoPlayer(state), false);
+});
+
+test("an unavailable player does not interrupt the currently active player", () => {
+  const activeTarget = { children: [], replaceChildren(...children) { this.children = children; } };
+  const activeButton = {
+    textContent: "Play here",
+    disabled: false,
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; }
+  };
+  const unavailableTarget = { children: [], replaceChildren(...children) { this.children = children; } };
+  const unavailableButton = {
+    textContent: "Playback unavailable here",
+    disabled: true,
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; }
+  };
+  const state = { target: null, button: null };
+  assert.equal(api.toggleActiveVideoPlayer({ title: "Active" }, activeTarget, activeButton, state), true);
+  assert.equal(api.toggleActiveVideoPlayer({ title: "Unavailable", unplayable: true }, unavailableTarget, unavailableButton, state), false);
+  assert.equal(state.target, activeTarget);
+  assert.equal(activeTarget.children.length, 1);
 });
