@@ -182,6 +182,8 @@ export async function extractPublicPage(input) {
   if (retrieved.status !== 200) return retrieved;
   const { url, html } = retrieved.data;
   const extracted = extractHtmlMetadata(html, url);
+  // Give the in-page reader a longer article excerpt than the compact metadata preview.
+  extracted.text = extractReadableText(html, 12000);
   if (!extracted.text && !extracted.description) return { status: 422, data: { error: "No readable page text was found." } };
   return { status: 200, data: { source: new URL(url).hostname, url, ...extracted, extractedAt: new Date().toISOString(), method: "public-page-fetch" } };
 }

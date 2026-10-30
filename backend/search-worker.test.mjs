@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, extractReadableText, retrievePublicPage } from "./search-extract.js";
+import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, extractReadableText, retrievePublicPage, extractPublicPage } from "./search-extract.js";
 
 test("rejects local, private literal, credential and non-standard-port targets", () => {
   for (const value of ["http://localhost/page","http://127.0.0.1/","http://192.168.1.2/","http://service.local/","https://user:pass@example.com/","https://example.com:8443/"]) assert.equal(safePublicUrl(value), null);
@@ -247,4 +247,27 @@ test("limits extracted text and safely handles invalid numeric HTML entities", (
   const text = extractReadableText('<article><p>Alpha &#x110000; Beta &#99999999; Gamma</p></article>', 12);
   assert.ok(text.length <= 12);
   assert.match(extractReadableText('<p>Safe &#x110000; text</p>'), /Safe/);
+});
+
+
+test("in-page reader returns a longer readable article excerpt with metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  const longParagraph = "A useful article sentence. ".repeat(250);
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
+    return new Response('<html lang="en"><head><title>Reader Article</title><meta name="author" content="Test Author"><meta property="og:site_name" content="Example Journal"><meta name="description" content="Reader summary"></head><body><nav>Do not include navigation</nav><article><h1>Reader Article</h1><p>' + longParagraph + '</p></article><footer>Do not include footer</footer></body></html>', { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+  };
+  try {
+    const result = await extractPublicPage("https://example.com/reader-story");
+    assert.equal(result.status, 200);
+    assert.equal(result.data.title, "Reader Article");
+    assert.equal(result.data.author, "Test Author");
+    assert.equal(result.data.siteName, "Example Journal");
+    assert.ok(result.data.text.length > 800);
+    assert.ok(result.data.text.length <= 12000);
+    assert.doesNotMatch(result.data.text, /Do not include navigation|Do not include footer/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

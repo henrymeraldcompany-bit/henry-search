@@ -197,7 +197,7 @@ function renderResults(items) {
     const readButton = document.createElement("button");
     readButton.type = "button";
     readButton.className = "read-in-gozie-button";
-    readButton.textContent = "Preview in GOZIE";
+    readButton.textContent = "Read in GOZIE";
     readButton.setAttribute("aria-expanded", "false");
 
     const extractedPanel = document.createElement("section");
@@ -221,17 +221,37 @@ function renderResults(items) {
         const endpoint = SEARCH_API + "/extract?url=" + encodeURIComponent(url);
         const data = await fetchJson(endpoint, 22000);
         extractedPanel.replaceChildren();
+        const toolbar = document.createElement("div");
+        toolbar.className = "gozie-reader-toolbar";
+        const readerLabel = document.createElement("span");
+        readerLabel.className = "gozie-reader-label";
+        readerLabel.textContent = "GOZIE READER";
+        const closeReader = document.createElement("button");
+        closeReader.type = "button";
+        closeReader.className = "gozie-reader-close";
+        closeReader.textContent = "Close reader";
+        closeReader.addEventListener("click", () => {
+          extractedPanel.hidden = true;
+          readButton.setAttribute("aria-expanded", "false");
+        });
+        toolbar.append(readerLabel, closeReader);
         const heading = document.createElement("h3");
+        heading.className = "gozie-reader-title";
         heading.textContent = data.title || item.title || "Extracted webpage";
+        const metadata = document.createElement("p");
+        metadata.className = "gozie-reader-metadata";
+        const details = [data.siteName, data.author ? "By " + data.author : "", data.published ? "Published " + data.published : ""].filter(Boolean);
+        metadata.textContent = details.join(" · ") || new URL(data.url || url).hostname;
         const summary = document.createElement("p");
         summary.className = "gozie-extracted-summary";
         summary.textContent = data.description || "";
-        const body = document.createElement("p");
+        const body = document.createElement("article");
         body.className = "gozie-extracted-text";
         body.textContent = data.text || "No readable text was returned.";
         const source = makeLink(data.url || url, "Open original source");
         source.className = "gozie-extracted-source";
-        extractedPanel.append(heading);
+        extractedPanel.append(toolbar, heading);
+        if (details.length) extractedPanel.appendChild(metadata);
         if (data.description) extractedPanel.appendChild(summary);
         extractedPanel.append(body, source);
         extractedPanel.dataset.loaded = "true";
@@ -239,7 +259,7 @@ function renderResults(items) {
         extractedPanel.textContent = error.message || "This page could not be retrieved. The website may block automated reading or be temporarily unavailable.";
       } finally {
         readButton.disabled = false;
-        readButton.textContent = "Preview in GOZIE";
+        readButton.textContent = "Read in GOZIE";
       }
     });
 
