@@ -23,7 +23,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -66,7 +66,7 @@ test("queries providers independently and preserves results when one provider fa
   assert.equal(result.failures[0].provider, "Unavailable");
   assert.equal(result.results.length, 3);
   assert.deepEqual(result.results.map(item => item.title), [
-    "First result", "Duplicate", "Second result"
+    "First result", "Second result", "Duplicate"
   ]);
   assert.equal(result.results[0].provider, "Provider A");
 });
@@ -122,4 +122,33 @@ test("merges duplicate canonical URLs while retaining the richer result metadata
   assert.equal(result.results[0].published, "2026-10-30");
   assert.deepEqual(result.results[0].sources, ["Publisher A", "Publisher B"]);
   assert.deepEqual(result.results[0].providers, ["Provider A", "Provider B"]);
+});
+
+
+test("diversifies domains without dropping results or changing within-domain order", () => {
+  const input = [
+    { title: "A1", domain: "alpha.example" },
+    { title: "A2", domain: "alpha.example" },
+    { title: "A3", domain: "alpha.example" },
+    { title: "B1", domain: "beta.example" },
+    { title: "C1", domain: "charlie.example" },
+    { title: "B2", domain: "beta.example" }
+  ];
+  const output = diversifySearchResults(input);
+  assert.deepEqual(output.map(item => item.title), ["A1", "B1", "C1", "A2", "B2", "A3"]);
+  assert.equal(output.length, input.length);
+  assert.deepEqual(output.filter(item => item.domain === "alpha.example").map(item => item.title), ["A1", "A2", "A3"]);
+});
+
+test("provider results are interleaved across domains while retaining every result", async () => {
+  const result = await runSearchProviders([{
+    name: "Provider A",
+    search: async () => [
+      { title: "A1", url: "https://alpha.example/1" },
+      { title: "A2", url: "https://alpha.example/2" },
+      { title: "A3", url: "https://alpha.example/3" },
+      { title: "B1", url: "https://beta.example/1" }
+    ]
+  }], "query");
+  assert.deepEqual(result.results.map(item => item.title), ["A1", "B1", "A2", "A3"]);
 });

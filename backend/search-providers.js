@@ -115,6 +115,36 @@ export function rankSearchResults(results, query) {
 }
 
 /**
+ * Interleave results by hostname so one website cannot occupy a long run.
+ * Keeps every result and preserves each host's original relative order.
+ */
+export function diversifySearchResults(results) {
+  if (!Array.isArray(results) || results.length < 2) return Array.isArray(results) ? results : [];
+  const buckets = new Map();
+  for (const result of results) {
+    let domain = typeof result?.domain === "string" ? result.domain.toLowerCase() : "";
+    if (!domain) {
+      try { domain = new URL(result?.canonicalUrl || result?.url).hostname.toLowerCase(); }
+      catch { domain = "__unknown__"; }
+    }
+    if (!buckets.has(domain)) buckets.set(domain, []);
+    buckets.get(domain).push(result);
+  }
+  const diversified = [];
+  let remaining = true;
+  while (remaining) {
+    remaining = false;
+    for (const bucket of buckets.values()) {
+      if (bucket.length) {
+        diversified.push(bucket.shift());
+        remaining = true;
+      }
+    }
+  }
+  return diversified;
+}
+
+/**
  * Query all configured providers concurrently. A failed provider does not discard
  * successful providers' results. The output intentionally preserves provider order;
  * relevance ranking and pagination are separate later stages.
@@ -161,7 +191,7 @@ export async function runSearchProviders(providers, query) {
   }
 
   return {
-    results,
+    results: diversifySearchResults(results),
     providers: successfulProviders,
     failures,
     attempted: configured.length
