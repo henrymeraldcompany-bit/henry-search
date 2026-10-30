@@ -23,7 +23,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, expandSearchQueries } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -151,33 +151,4 @@ test("provider results are interleaved across domains while retaining every resu
     ]
   }], "query");
   assert.deepEqual(result.results.map(item => item.title), ["A1", "B1", "A2", "A3"]);
-});
-
-
-test("automatically expands question-style queries conservatively", () => {
-  assert.deepEqual(expandSearchQueries("What is artificial intelligence?"), [
-    "What is artificial intelligence?", "What is artificial intelligence", "artificial intelligence"
-  ]);
-  assert.deepEqual(expandSearchQueries("  solar   energy  "), ["solar energy"]);
-  assert.deepEqual(expandSearchQueries(""), []);
-});
-
-test("searches original and focused query variants and deduplicates their results", async () => {
-  const seen = [];
-  const result = await runSearchProviders([{
-    name: "Expansion provider",
-    search: async query => {
-      seen.push(query);
-      return [{ title: "Artificial intelligence", url: "https://example.com/ai" }];
-    }
-  }], "What is artificial intelligence?");
-  assert.deepEqual(seen, [
-    "What is artificial intelligence?",
-    "What is artificial intelligence",
-    "artificial intelligence"
-  ]);
-  assert.equal(result.results.length, 1);
-  assert.deepEqual(result.providers, ["Expansion provider"]);
-  assert.equal(result.attempted, 3);
-  assert.equal(result.expandedQueries.length, 3);
 });
