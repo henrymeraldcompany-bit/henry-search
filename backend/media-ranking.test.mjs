@@ -247,6 +247,8 @@ function extractApp(name) {
 }
 const stopWordsMatch = appSource.match(/const MEDIA_STOP_WORDS = new Set\(\[[\s\S]*?\]\);/);
 assert.ok(stopWordsMatch, "MEDIA_STOP_WORDS must exist in app.js");
+const peerTubeEmbedHostsMatch = appSource.match(/const PEERTUBE_EMBED_HOSTS = new Set\(\[[\s\S]*?\]\);/);
+assert.ok(peerTubeEmbedHostsMatch, "PEERTUBE_EMBED_HOSTS must exist in app.js");
 const frontendHelpers = [
   stopWordsMatch[0],
   extractApp("resolveSafeHttpUrl"),
@@ -256,6 +258,7 @@ const frontendHelpers = [
   extractApp("canonicalizeMediaResultUrl"),
   extractApp("rankMediaResults"),
   extractApp("getYouTubeVideoId"),
+  peerTubeEmbedHostsMatch[0],
   extractApp("getPlayableEmbedUrl")
 ].join("\n");
 const frontendApi = vm.runInNewContext(

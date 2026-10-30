@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/media-live-smoke.yml"
+      - "app.js"
+      - "index.html"
+      - "style.css"
       - "backend/worker.js"
       - "backend/wrangler.toml"
   workflow_dispatch:
@@ -83,6 +86,38 @@ jobs:
                 if (optionalUrl.hostname === sourceUrl.hostname &&
                     optionalUrl.pathname === "/" && !optionalUrl.search && !optionalUrl.hash) {
                   throw new Error("Video " + key + " incorrectly points to the source homepage");
+                }
+              }
+
+              // Match the frontend's player policy: HTTPS canonical PeerTube
+              // embeds may be same-origin or use one of the configured instances.
+              if (item.embedUrl) {
+                const player = new URL(item.embedUrl);
+                const playerHost = player.hostname.toLowerCase().replace(/^www\./, "");
+                const youtubeWatchHost = sourceUrl.hostname.toLowerCase().replace(/^www\./, "");
+                const isYouTube = ["youtube.com", "m.youtube.com", "youtu.be"].includes(youtubeWatchHost);
+                if (player.protocol !== "https:" || player.port || player.username || player.password) {
+                  throw new Error("Video player URL must use HTTPS without credentials or a custom port");
+                }
+
+                if (isYouTube) {
+                  const watchId = youtubeWatchHost === "youtu.be"
+                    ? sourceUrl.pathname.split("/").filter(Boolean)[0]
+                    : sourceUrl.pathname === "/watch"
+                      ? sourceUrl.searchParams.get("v")
+                      : sourceUrl.pathname.match(/^\/(?:shorts|live|embed)\/([\w-]+)/)?.[1];
+                  const playerId = player.pathname.match(/^\/embed\/([\w-]+)\/?$/)?.[1];
+                  if (!["youtube.com", "youtube-nocookie.com"].includes(playerHost) ||
+                      !watchId || playerId !== watchId) {
+                    throw new Error("YouTube player does not match its source video");
+                  }
+                } else {
+                  const trustedPeerTubeHosts = new Set(["peertube.tv", "peer.tube", "spectra.video"]);
+                  const canonicalPlayer = /^\/videos\/embed\/[A-Za-z0-9_-]+\/?$/.test(player.pathname);
+                  const allowedOrigin = player.origin === sourceUrl.origin || trustedPeerTubeHosts.has(playerHost);
+                  if (!canonicalPlayer || !allowedOrigin) {
+                    throw new Error("PeerTube player is not on the source origin or a configured instance");
+                  }
                 }
               }
             }
