@@ -18,6 +18,31 @@ test("extracts readable metadata, article text and safe media references", () =>
   assert.match(result.text, /Useful article text & facts/); assert.doesNotMatch(result.text, /secret|Footer noise|Menu/);
   assert.equal(result.canonical, "https://example.com/story"); assert.equal(result.image, "https://example.com/cover.jpg");
 });
+test("extracts extended webpage metadata with safe relative icon and language", () => {
+  const html = '<html lang="en-NG"><head><meta name="author" content="Ada Writer"><meta property="og:site_name" content="Example News"><meta property="og:type" content="article"><meta name="keywords" content="science, technology; research"><meta property="article:published_time" content="2026-10-29T10:00:00Z"><meta property="article:modified_time" content="2026-10-30T08:00:00Z"><meta name="twitter:title" content="Social title"><link rel="icon" href="/favicon.ico"></head><body><p>Article body</p></body></html>';
+  const result = extractHtmlMetadata(html, "https://example.com/story");
+  assert.equal(result.title, "Social title");
+  assert.equal(result.author, "Ada Writer");
+  assert.equal(result.siteName, "Example News");
+  assert.equal(result.type, "article");
+  assert.equal(result.language, "en-NG");
+  assert.deepEqual(result.keywords, ["science", "technology", "research"]);
+  assert.equal(result.published, "2026-10-29T10:00:00Z");
+  assert.equal(result.modified, "2026-10-30T08:00:00Z");
+  assert.equal(result.icon, "https://example.com/favicon.ico");
+  assert.match(result.text, /Article body/);
+});
+
+test("uses safe metadata fallbacks and bounds metadata values", () => {
+  const long = "x".repeat(700);
+  const result = extractHtmlMetadata('<meta name="description" content="' + long + '"><meta name="author" content="Writer"><link rel="icon" href="javascript:alert(1)">', "https://example.com/page");
+  assert.equal(result.title, "example.com");
+  assert.equal(result.description.length, 500);
+  assert.equal(result.author, "Writer");
+  assert.equal(result.icon, "");
+  assert.deepEqual(result.keywords, []);
+});
+
 test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   const result = extractHtmlMetadata('<title>Safe</title><meta property="og:image" content="javascript:alert(1)"><link rel="canonical" href="https://attacker.example/">', "https://example.com/a");
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
