@@ -117,6 +117,31 @@ function openverseRow(item) {
     published_at: "", duration_seconds: null, tags: ""
   };
 }
+function googleImageRow(item) {
+  if (!item || typeof item !== "object") return null;
+  const page = safeUrl(item.image && item.image.contextLink);
+  const media = safeUrl(item.link);
+  const thumb = safeUrl(item.image && item.image.thumbnailLink);
+  if (!page || !media || !thumb) return null;
+  return { kind:"image", source:"Google Images", provider:"Google Programmable Search",
+    source_id:media, title:clean(item.title || "Untitled image",250), description:clean(item.snippet || "",900),
+    page_url:page, media_url:media, thumbnail_url:thumb, embed_url:"", author:"",
+    license:"License details not supplied by Google", license_url:"", attribution:"",
+    published_at:"", duration_seconds:null, tags:"" };
+}
+async function googleImages(q, env, count) {
+  const key=String(env && env.GOOGLE_CSE_API_KEY || "").trim();
+  const cx=String(env && env.GOOGLE_CSE_ID || "").trim();
+  if(!key || !cx) return [];
+  const query=String(q || "").trim().slice(0,180);
+  if(!query) return [];
+  const u=new URL("https://www.googleapis.com/customsearch/v1");
+  [["key",key],["cx",cx],["q",query],["searchType","image"],["safe","active"],
+   ["num",String(Math.min(10,Math.max(1,Number(count)||10)))],
+   ["rights","cc_publicdomain,cc_attribute,cc_sharealike"]].forEach(function(p){u.searchParams.set(p[0],p[1]);});
+  const data=await getJson(u.href);
+  return (Array.isArray(data.items)?data.items:[]).map(googleImageRow).filter(Boolean);
+}
 async function openverse(q, count) {
   const query = String(q || "").trim().slice(0, 180);
   if (!query) return [];
@@ -397,11 +422,11 @@ function rank(rows,q,limit) {
     if(!exact && matched<minimumMatches)continue;
     let host="";
     try { host=new URL(url).hostname.toLowerCase().replace(/^www\./,""); } catch (_) {}
-    candidates.push({r:r,score:score,host:host,matched:matched,titleMatches:titleMatches,key:key});
+    candidates.push({r:r,score:score,googlePriority:r.source==="Google Images"?1:0,host:host,matched:matched,titleMatches:titleMatches,key:key});
   }
   // Rank before deduplication: a weak duplicate from one provider must not hide
   // a better-titled version of the same media returned by another provider.
-  candidates.sort(function(a,b){return b.score-a.score || b.matched-a.matched || b.titleMatches-a.titleMatches;});
+  candidates.sort(function(a,b){return b.score-a.score || b.googlePriority-a.googlePriority || b.matched-a.matched || b.titleMatches-a.titleMatches;});
   const uniqueCandidates=[], seenKeys=new Set();
   for (const item of candidates) {
     if (seenKeys.has(item.key)) continue;
@@ -451,11 +476,13 @@ async function search(request,env,kind) {
   const saved=await indexed(env,kind,q,100);
   const fetchLive=async function(query) {
     if(kind==="image") {
-      const outcome=await runImageProviders([
+      const imageProviders=[
         {name:"Wikimedia Commons",search:function(searchQuery){return commons(searchQuery,16);}},
         {name:"Openverse",search:function(searchQuery){return openverse(searchQuery,12);}},
         {name:"Flickr public feed",search:function(searchQuery){return flickr(searchQuery,12);}}
-      ],query);
+      ];
+      if(env.GOOGLE_CSE_API_KEY && env.GOOGLE_CSE_ID) imageProviders.unshift({name:"Google Images",search:function(searchQuery){return googleImages(searchQuery,env,10);}});
+      const outcome=await runImageProviders(imageProviders,query);
       return outcome;
     }
     const providers=await Promise.all([

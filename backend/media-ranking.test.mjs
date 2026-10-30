@@ -402,3 +402,11 @@ test("rejects PeerTube embed URLs containing credentials", () => {
     null
   );
 });
+test("prioritizes Google Images when relevance scores are tied", () => {
+  const results = api.rank([
+    {source:"Openverse",page_url:"https://openverse.example/solar",title:"Solar system image"},
+    {source:"Google Images",page_url:"https://google-result.example/solar",title:"Solar system image"}
+  ], "solar system", 10);
+  assert.equal(results[0].source, "Google Images");
+  assert.equal(results[1].source, "Openverse");
+});
