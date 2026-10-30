@@ -1,3 +1,5 @@
+import { runImageProviders } from "./image-search.js";
+
 /**
  * GOZIE SEARCH Media Worker
  * Indexes metadata and original URLs only; does not re-host media files.
@@ -420,11 +422,11 @@ async function search(request,env,kind) {
   const saved=await indexed(env,kind,q,100);
   const fetchLive=async function(query) {
     if(kind==="image") {
-      const providers=await Promise.all([
-        provider(function(){return commons(query,16);}),
-        provider(function(){return flickr(query,12);})
-      ]);
-      return providers.flat();
+      const outcome=await runImageProviders([
+        {name:"Wikimedia Commons",search:function(searchQuery){return commons(searchQuery,16);}},
+        {name:"Flickr public feed",search:function(searchQuery){return flickr(searchQuery,12);}}
+      ],query);
+      return outcome;
     }
     const providers=await Promise.all([
       provider(function(){return peertube(query,15);}),
@@ -432,7 +434,9 @@ async function search(request,env,kind) {
     ]);
     return providers.flat();
   };
-  let live=await fetchLive(q);
+  let imageProviderState={providers:[],failures:[],attempted:0};
+  let liveResult=await fetchLive(q);
+  if(kind==="image"){imageProviderState=liveResult;live=liveResult.results;}else{live=liveResult;}
   let ranked=rank(live.concat(saved),q,40);
   let results=capFlickrResults(ranked,20);
   let expandedQuery="";
@@ -442,8 +446,8 @@ async function search(request,env,kind) {
     expandedQuery=fallbackQuery(q);
     if(expandedQuery) {
       const expandedLive=await fetchLive(expandedQuery);
-      if(expandedLive.length) {
-        live=live.concat(expandedLive);
+      if((kind==="image"?expandedLive.results.length:expandedLive.length)) {
+        if(kind==="image"){imageProviderState.providers=Array.from(new Set(imageProviderState.providers.concat(expandedLive.providers)));imageProviderState.failures=imageProviderState.failures.concat(expandedLive.failures);imageProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}else{live=live.concat(expandedLive);}
         ranked=rank(live.concat(saved),q,40);
         results=capFlickrResults(ranked,20);
       }
@@ -453,7 +457,11 @@ async function search(request,env,kind) {
   const source=sourceNames.length ? sourceNames.join(" + ")
     : kind==="image" ? "Wikimedia Commons + Flickr public feed"
     : env.YOUTUBE_API_KEY ? "PeerTube + YouTube" : "PeerTube; YouTube requires an optional API key";
-  return reply({query:q,results:results.map(front),count:results.length,source:source,expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
+  return reply({query:q,results:results.map(front),count:results.length,source:source,
+    providers:kind==="image"?imageProviderState.providers:undefined,
+    failedProviders:kind==="image"?imageProviderState.failures:undefined,
+    attemptedProviders:kind==="image"?imageProviderState.attempted:undefined,
+    expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
 function shouldIndexYouTubeSeed(seedIndex, daySlot, hasKey) {
   if (!hasKey || !Number.isInteger(seedIndex) || !Number.isInteger(daySlot) || !SEEDS.length) return false;
