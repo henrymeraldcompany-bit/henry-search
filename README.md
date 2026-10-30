@@ -44,6 +44,12 @@ The management browser cannot directly open the `workers.dev` or GitHub Pages UR
 
 YouTube results remain optional and require the server-side `YOUTUBE_API_KEY` secret. Never put API secrets in frontend code.
 
+## Public webpage retrieval
+
+The main search Worker source is mirrored in `backend/search-worker.js` and exposes `GET /extract?url=<public-page-url>`. It fetches public HTML pages directly, checks the site's `robots.txt` for the GOZIE-SearchBot user agent, follows at most three validated redirects, accepts HTML/XHTML only, limits response bodies to 1 MB, and returns a bounded title, description, readable text excerpt, same-origin canonical URL, optional Open Graph image, publication date, and extraction timestamp. It does not execute page scripts, download media, bypass logins/paywalls/CAPTCHAs, or scrape Google Search result pages. Pages whose robots policy blocks the bot (or cannot be checked) are not fetched. Local/private literal IPs, credential-bearing URLs and non-standard ports are rejected.
+
+Example: `https://henry-search-api.henrymeraldcompany.workers.dev/extract?url=https%3A%2F%2Fexample.org%2Farticle` (replace the example URL with a permitted public article). The endpoint is a page reader, not a general search index. Google Search result pages are not an authorized free no-API source; use an official Google search integration where available, and use GOZIE's independent connectors for other sources. The extraction endpoint's source code is deployed to the existing `henry-search-api` Worker; it does not alter the existing media Worker or D1 index.
+
 ## Tests
 
 Run the media regression suites with Node.js 22:
