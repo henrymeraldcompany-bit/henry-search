@@ -1007,16 +1007,22 @@ function renderVideoResults(items, query) {
       playerButton.disabled = !playableEmbedUrl;
       playerButton.setAttribute("aria-pressed", "false");
       playerButton.addEventListener("click", () => {
-        toggleActiveVideoPlayer(video, playerTarget, playerButton, activePlayerState);
+        const started = toggleActiveVideoPlayer(video, playerTarget, playerButton, activePlayerState);
+        if (started) {
+          playerTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
       });
 
       const externalLink = makeLink(video.url, "Open original video ↗");
       externalLink.className = "video-original-link";
       thumbnailButton.addEventListener("click", () => {
         if (playableEmbedUrl) {
-          const started = toggleActiveVideoPlayer(video, playerTarget, playerButton, activePlayerState);
-          if (started) {
-            playerTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          // The thumbnail is a play action; use the dedicated Stop button once loaded.
+          if (activePlayerState.target !== playerTarget) {
+            const started = toggleActiveVideoPlayer(video, playerTarget, playerButton, activePlayerState);
+            if (started) {
+              playerTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
           }
         } else {
           window.open(video.url, "_blank", "noopener,noreferrer");
