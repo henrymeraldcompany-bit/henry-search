@@ -40,11 +40,31 @@ export function robotsPathAllowed(robotsText, url) {
   return !best || best.allow;
 }
 function decodeHtml(value) {
+  const decodeCodePoint = number => Number.isInteger(number) && number >= 0 && number <= 0x10ffff && !(number >= 0xd800 && number <= 0xdfff)
+    ? String.fromCodePoint(number) : "\uFFFD";
   return String(value || "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([\da-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+    .replace(/&#(\d+);/g, (_, n) => decodeCodePoint(Number(n)))
+    .replace(/&#x([\da-f]+);/gi, (_, n) => decodeCodePoint(parseInt(n, 16)));
+}
+
+/** Extract readable text while discarding executable, hidden and non-content HTML. */
+export function extractReadableText(html, maxLength = 800) {
+  let content = String(html || "").slice(0, 1048576)
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|noscript|svg|canvas|iframe|object|embed|nav|footer|header|aside|form|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
+    .replace(/<([a-z][\w:-]*)\b(?=[^>]*(?:\shidden(?:\s|=|>)|\saria-hidden\s*=\s*["']?true|\sstyle\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden)))[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
+  const mainMatch = content.match(/<main\b[^>]*>([\s\S]*?)<\/main\s*>/i);
+  const articleMatch = content.match(/<article\b[^>]*>([\s\S]*?)<\/article\s*>/i);
+  if (mainMatch) content = mainMatch[1];
+  else if (articleMatch) content = articleMatch[1];
+  content = content.replace(/<(?:br|hr)\b[^>]*>/gi, "\n")
+    .replace(/<\/(?:p|div|li|h[1-6]|section|article|main|blockquote|tr)\s*>/gi, "\n")
+    .replace(/<[^>]*>/g, " ");
+  const limit = Number.isFinite(Number(maxLength)) ? Math.max(0, Math.min(20000, Number(maxLength))) : 800;
+  return decodeHtml(content).replace(/[\t\f\v ]+/g, " ").replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n").trim().slice(0, limit);
 }
 function htmlAttribute(tagText, name) {
   const attrs = String(tagText).matchAll(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g);
@@ -72,16 +92,11 @@ export function extractHtmlMetadata(html, pageUrl) {
   const canonicalTag = linkTags.find(tag => htmlAttribute(tag, "rel").toLowerCase().split(/\s+/).includes("canonical")) || "";
   const canonicalCandidate = htmlAttribute(canonicalTag, "href");
   const canonicalUrl = canonicalCandidate ? safePublicUrl(canonicalCandidate, pageUrl) : null;
-  let content = String(html).replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style|noscript|svg|canvas|iframe|nav|footer|header|aside|form|template)\b[^>]*>[\s\S]*?<\/\1>/gi, " ");
-  const mainMatch = content.match(/<(?:main|article)\b[^>]*>([\s\S]*?)<\/(?:main|article)>/i);
-  if (mainMatch) content = mainMatch[1];
-  content = content.replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/section|\/article)\b[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const readableText = extractReadableText(html, 800);
   return {
     title: title || new URL(pageUrl).hostname,
     description: decodeHtml(description).replace(/\s+/g, " ").trim(),
-    text: decodeHtml(content).slice(0, 800),
+    text: readableText,
     canonical: canonicalUrl && canonicalUrl.hostname === new URL(pageUrl).hostname ? canonicalUrl.href : pageUrl,
     image: imageUrl ? imageUrl.href : "",
     published: published.slice(0, 80)
