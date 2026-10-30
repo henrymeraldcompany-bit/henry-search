@@ -40,14 +40,14 @@ function canonicalImageUrl(value) {
   if (!safe) return "";
   try {
     const url = new URL(safe);
-    url.hostname = url.hostname.toLowerCase().replace(/^www\\./, "");
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
     url.hash = "";
     for (const key of Array.from(url.searchParams.keys())) {
       if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source)$/i.test(key)) url.searchParams.delete(key);
     }
     url.searchParams.sort();
     if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) url.port = "";
-    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\\/+$/, "");
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
     return url.href;
   } catch (_) { return ""; }
 }
