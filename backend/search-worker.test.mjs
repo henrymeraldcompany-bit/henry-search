@@ -120,6 +120,6 @@ test("merges duplicate canonical URLs while retaining the richer result metadata
   assert.equal(result.results[0].title, "Original title");
   assert.match(result.results[0].snippet, /much longer/);
   assert.equal(result.results[0].published, "2026-10-30");
-  assert.deepEqual(result.results[0].sources, ["Publisher A", "Provider B"]);
+  assert.deepEqual(result.results[0].sources, ["Publisher A", "Publisher B"]);
   assert.deepEqual(result.results[0].providers, ["Provider A", "Provider B"]);
 });
