@@ -175,7 +175,7 @@ test("retrieves public HTML through the reusable page retrieval engine", async (
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
     requested.push(url.href);
-    if (url.pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
+    if (url.pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
     if (url.pathname === "/start") return new Response(null, { status: 302, headers: { location: "/article" } });
     return new Response("<html><body><article><p>Retrieved article body.</p></article></body></html>", { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
   };
@@ -184,7 +184,7 @@ test("retrieves public HTML through the reusable page retrieval engine", async (
     assert.equal(result.status, 200);
     assert.equal(result.data.url, "https://example.com/article");
     assert.match(result.data.html, /Retrieved article body/);
-    assert.match(result.data.contentType, /text\\/html/);
+    assert.ok(result.data.contentType.includes("text/html"));
     assert.ok(requested.includes("https://example.com/robots.txt"));
     assert.ok(requested.includes("https://example.com/article"));
   } finally {
@@ -196,7 +196,7 @@ test("retrieval engine rejects non-HTML responses", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
-    if (url.pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
+    if (url.pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
     return new Response("not a webpage", { status: 200, headers: { "content-type": "application/pdf" } });
   };
   try {
