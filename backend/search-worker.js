@@ -1,4 +1,5 @@
 
+import { runSearchProviders } from "./search-providers.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
 async fetch(request) {
@@ -32,14 +33,52 @@ async fetch(request) {
    for(const feed of feeds){try{const r=await fetch(feed.url(),{headers:{"Accept":"application/rss+xml, application/xml, text/xml","User-Agent":"Mozilla/5.0 (compatible; GOZIESearch/1.3)"},signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error("HTTP "+r.status);const xml=await r.text();const results=parseRss(xml);if(results.length)return out({query:q,source:feed.name,results});errors.push(feed.name+": feed returned no readable articles")}catch(e){errors.push(feed.name+": "+e.message)}}
    return out({error:"News providers could not return articles. Please try again shortly.",diagnostic:errors},502);
   }
-  const ddg=new URL("https://api.duckduckgo.com/");Object.entries({q,format:"json",no_html:"1",skip_disambig:"1"}).forEach(([k,v])=>ddg.searchParams.set(k,v));
-  const wiki=new URL("https://en.wikipedia.org/w/api.php");Object.entries({action:"query",list:"search",srsearch:q,srlimit:"8",srprop:"snippet",format:"json",origin:"*"}).forEach(([k,v])=>wiki.searchParams.set(k,v));
-  const settled=await Promise.allSettled([json(ddg.toString()),json(wiki.toString())]),results=[],seen=new Set();
-  const add=x=>{if(!x?.url||!/^https?:\/\//i.test(x.url))return;try{const p=new URL(x.url),key=p.hostname.toLowerCase()+p.pathname.replace(/\/+$/,"");if(!seen.has(key)){seen.add(key);results.push(x)}}catch{}};
-  if(settled[0].status==="fulfilled"){const d=settled[0].value;if(d.AbstractText&&d.AbstractURL)add({title:d.Heading||q,url:d.AbstractURL,snippet:d.AbstractText,source:"DuckDuckGo"});const walk=items=>{for(const x of items||[]){if(x?.FirstURL&&x?.Text)add({title:x.Text.split(" - ")[0],url:x.FirstURL,snippet:x.Text,source:"DuckDuckGo"});if(Array.isArray(x?.Topics))walk(x.Topics)}};walk(d.RelatedTopics)}
-  if(settled[1].status==="fulfilled")for(const p of settled[1].value.query?.search||[])add({title:p.title||q,url:"https://en.wikipedia.org/?curid="+encodeURIComponent(p.pageid),snippet:String(p.snippet||"").replace(/<[^>]*>/g,"").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,"&"),source:"Wikipedia"});
-  if(!results.length&&settled.every(x=>x.status==="rejected"))return out({error:"Search providers are temporarily unavailable. Please try again."},502);
-  return out({query:q,source:settled.every(x=>x.status==="fulfilled")?"DuckDuckGo Instant Answer + Wikipedia":settled[0].status==="fulfilled"?"DuckDuckGo Instant Answer":"Wikipedia",results});
+  const providers = [
+   {
+    name: "DuckDuckGo",
+    search: async query => {
+     const endpoint = new URL("https://api.duckduckgo.com/");
+     Object.entries({q:query,format:"json",no_html:"1",skip_disambig:"1"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
+     const data = await json(endpoint.toString());
+     const items = [];
+     if (data.AbstractText && data.AbstractURL) items.push({title:data.Heading||query,url:data.AbstractURL,snippet:data.AbstractText,source:"DuckDuckGo"});
+     const walk = topics => {
+      for (const item of topics || []) {
+       if (item?.FirstURL && item?.Text) items.push({title:item.Text.split(" - ")[0],url:item.FirstURL,snippet:item.Text,source:"DuckDuckGo"});
+       if (Array.isArray(item?.Topics)) walk(item.Topics);
+      }
+     };
+     walk(data.RelatedTopics);
+     return items;
+    }
+   },
+   {
+    name: "Wikipedia",
+    search: async query => {
+     const endpoint = new URL("https://en.wikipedia.org/w/api.php");
+     Object.entries({action:"query",list:"search",srsearch:query,srlimit:"8",srprop:"snippet",format:"json",origin:"*"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
+     const data = await json(endpoint.toString());
+     return (data.query?.search || []).map(page => ({
+      title:page.title||query,
+      url:"https://en.wikipedia.org/?curid="+encodeURIComponent(page.pageid),
+      snippet:String(page.snippet||"").replace(/<[^>]*>/g,"").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,"&"),
+      source:"Wikipedia"
+     }));
+    }
+   }
+  ];
+  const {results,providers:successfulProviders,failures,attempted} = await runSearchProviders(providers,q);
+  if (!results.length && successfulProviders.length === 0) {
+   return out({error:"Search providers are temporarily unavailable. Please try again.",diagnostic:failures},502);
+  }
+  return out({
+   query:q,
+   source:successfulProviders.join(" + ") || "No providers available",
+   providers:successfulProviders,
+   attemptedProviders:attempted,
+   failedProviders:failures,
+   results:results.map(({canonicalUrl,provider,...item})=>item)
+  });
  }catch(e){return out({error:route==="/news"?"News providers are temporarily unavailable. Please try again shortly.":route==="/images"?"Image service is temporarily unavailable. Please try again.":"Search providers are temporarily unavailable. Please try again."},502)}
 }
 };
