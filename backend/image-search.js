@@ -186,16 +186,30 @@ export function rankImageResults(rows, query, limit = 40) {
   );
   const max = Math.max(1, Math.min(100, Number(limit) || 40));
   const perHostCap = Math.max(2, Math.ceil(max / 5));
+  const providerKeys = candidate => {
+    const values = Array.isArray(candidate.row.sources) ? candidate.row.sources : [candidate.row.source];
+    return [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))];
+  };
+  const providerCount = new Set(candidates.flatMap(providerKeys)).size;
+  const perProviderCap = Math.max(1, Math.ceil(max / Math.max(1, providerCount)));
   const selected = [];
-  const counts = new Map();
+  const hostCounts = new Map();
+  const providerCounts = new Map();
   const deferred = [];
   for (const candidate of candidates) {
-    const count = counts.get(candidate.host) || 0;
-    if (candidate.host && count >= perHostCap) { deferred.push(candidate); continue; }
+    const hostCount = candidate.host ? (hostCounts.get(candidate.host) || 0) : 0;
+    const sources = providerKeys(candidate);
+    const hasProviderRoom = !sources.length || sources.some(name => (providerCounts.get(name) || 0) < perProviderCap);
+    if ((candidate.host && hostCount >= perHostCap) || !hasProviderRoom) {
+      deferred.push(candidate);
+      continue;
+    }
     selected.push(candidate);
-    if (candidate.host) counts.set(candidate.host, count + 1);
+    if (candidate.host) hostCounts.set(candidate.host, hostCount + 1);
+    for (const name of sources) providerCounts.set(name, (providerCounts.get(name) || 0) + 1);
     if (selected.length >= max) break;
   }
+  // Relax diversity caps only after all eligible alternatives have been considered.
   for (const candidate of deferred) {
     if (selected.length >= max) break;
     selected.push(candidate);

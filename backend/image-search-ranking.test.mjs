@@ -53,3 +53,38 @@ test("uses provider preference only after relevance and keeps host diversity", (
 test("returns no candidates for generic-only queries", () => {
   assert.deepEqual(rankImageResults([{title:"A nice image",page_url:"https://a.example/1"}],"images photos search",10),[]);
 });
+
+test("balances image providers while preserving relevance order within each provider", () => {
+  const rows = [
+    ...Array.from({length:12},(_,i)=>({source:"Wikimedia Commons",title:"Solar system image "+i,page_url:"https://commons.example/"+i})),
+    ...Array.from({length:8},(_,i)=>({source:"Openverse",title:"Solar system image "+i,page_url:"https://openverse.example/"+i})),
+    ...Array.from({length:8},(_,i)=>({source:"Flickr public feed",title:"Solar system image "+i,page_url:"https://flickr.example/"+i}))
+  ];
+  const result = rankImageResults(rows,"solar system",12);
+  const counts = result.reduce((map,row)=>map.set(row.source,(map.get(row.source)||0)+1),new Map());
+  assert.equal(result.length,12);
+  assert.ok(counts.get("Wikimedia Commons") <= 4);
+  assert.ok(counts.get("Openverse") >= 3);
+  assert.ok(counts.get("Flickr public feed") >= 3);
+  assert.deepEqual(result.filter(row=>row.source==="Wikimedia Commons").map(row=>row.title),
+    ["Solar system image 0","Solar system image 1","Solar system image 2","Solar system image 3"]);
+});
+
+test("relaxes provider diversity when only one provider returns relevant images", () => {
+  const rows = Array.from({length:7},(_,i)=>({
+    source:"Openverse",title:"Nebula image "+i,page_url:"https://openverse.example/"+i
+  }));
+  const result = rankImageResults(rows,"nebula",7);
+  assert.equal(result.length,7);
+  assert.ok(result.every(row=>row.source==="Openverse"));
+});
+
+test("counts merged multi-provider images as representation from their contributing sources", () => {
+  const result = rankImageResults([
+    {source:"Wikimedia Commons",sources:["Wikimedia Commons","Openverse"],title:"Galaxy image",page_url:"https://a.example/1"},
+    {source:"Wikimedia Commons",title:"Galaxy image",page_url:"https://b.example/2"},
+    {source:"Flickr public feed",title:"Galaxy image",page_url:"https://c.example/3"}
+  ],"galaxy",3);
+  assert.equal(result.length,3);
+  assert.ok(result.some(row=>row.source==="Flickr public feed"));
+});
