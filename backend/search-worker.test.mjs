@@ -23,7 +23,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -84,4 +84,23 @@ test("drops malformed provider results and rejects unsafe result URLs", async ()
 
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].title, "Valid");
+});
+
+
+test("ranks query matches in titles above snippet-only matches", () => {
+  const ranked = rankSearchResults([
+    { title: "General guide", snippet: "Information about solar energy" },
+    { title: "Solar energy guide", snippet: "Panels and power" },
+    { title: "Another page", snippet: "Unrelated topic" }
+  ], "solar energy");
+  assert.equal(ranked[0].title, "Solar energy guide");
+  assert.ok(ranked[0].relevanceScore > ranked[1].relevanceScore);
+  assert.equal(ranked[2].relevanceScore, 0);
+});
+
+test("ranking is stable for ties and handles empty or stop-word-only queries", () => {
+  const items = [{ title: "Alpha", snippet: "same" }, { title: "Beta", snippet: "same" }];
+  assert.deepEqual(rankSearchResults(items, "unmatched").map(x => x.title), ["Alpha", "Beta"]);
+  assert.equal(scoreSearchResult(items[0], "the and of"), 0);
+  assert.equal(rankSearchResults(null, "query").length, 0);
 });

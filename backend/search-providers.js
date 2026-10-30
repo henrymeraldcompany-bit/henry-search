@@ -60,6 +60,48 @@ function normalizeResult(item, providerName) {
   };
 }
 
+const RANKING_STOP_WORDS = new Set(["a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","that","the","this","to","was","what","when","where","which","who","why","with"]);
+
+function tokenize(value) {
+  return String(value || "").toLowerCase().normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .match(/[\p{L}\p{N}]+/gu) || [];
+}
+
+/** Score literal query relevance; title matches carry more weight than snippets. */
+export function scoreSearchResult(result, query) {
+  const queryTokens = [...new Set(tokenize(query).filter(token => !RANKING_STOP_WORDS.has(token)))];
+  if (!queryTokens.length) return 0;
+  const titleTokens = tokenize(result?.title);
+  const snippetTokens = tokenize(result?.snippet);
+  const titleSet = new Set(titleTokens);
+  const snippetSet = new Set(snippetTokens);
+  let score = 0;
+  let matched = 0;
+  for (const token of queryTokens) {
+    const inTitle = titleSet.has(token);
+    const inSnippet = snippetSet.has(token);
+    if (inTitle || inSnippet) matched += 1;
+    if (inTitle) score += 4;
+    if (inSnippet) score += 1;
+  }
+  const normalizedQuery = queryTokens.join(" ");
+  const normalizedTitle = titleTokens.join(" ");
+  const normalizedSnippet = snippetTokens.join(" ");
+  if (normalizedTitle.includes(normalizedQuery)) score += 6;
+  else if (normalizedSnippet.includes(normalizedQuery)) score += 3;
+  score += Math.round((matched / queryTokens.length) * 5);
+  return score;
+}
+
+/** Rank by deterministic text relevance; preserve original order for equal scores. */
+export function rankSearchResults(results, query) {
+  return (Array.isArray(results) ? results : [])
+    .map((result, index) => ({ ...result, relevanceScore: scoreSearchResult(result, query), _rankIndex: index }))
+    .sort((a, b) => b.relevanceScore - a.relevanceScore || a._rankIndex - b._rankIndex)
+    .map(({ _rankIndex, ...result }) => result);
+}
+
 /**
  * Query all configured providers concurrently. A failed provider does not discard
  * successful providers' results. The output intentionally preserves provider order;
