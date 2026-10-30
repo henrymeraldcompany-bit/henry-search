@@ -20,6 +20,7 @@ const helpers = [
   extract("mediaRelevanceScore"),
   extract("rankMediaResults"),
   extract("resolveSafeHttpUrl"),
+  extract("isApplicationOriginUrl"),
   extract("canonicalizeMediaResultUrl"),
   extract("getYouTubeVideoId"),
   embedHostDeclaration[0],
@@ -28,9 +29,10 @@ const helpers = [
   extract("toggleActiveVideoPlayer"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS, stopActiveVideoPlayer, toggleActiveVideoPlayer}; })()",
+  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, isApplicationOriginUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS, stopActiveVideoPlayer, toggleActiveVideoPlayer}; })()",
   {
     URL,
+    window: { location: { origin: "https://gozie.example" } },
     MEDIA_STOP_WORDS: new Set([
       "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
       "how", "i", "in", "is", "it", "of", "on", "or", "the", "to", "with",
@@ -91,6 +93,34 @@ test("allows same-origin PeerTube embeds and matching YouTube embeds", () => {
       embedUrl: "https://www.youtube-nocookie.com/embed/abc123"
     }),
     "https://www.youtube-nocookie.com/embed/abc123"
+  );
+});
+
+test("blocks the application's own origin from both watch and embed URLs", () => {
+  assert.equal(
+    api.isApplicationOriginUrl("https://gozie.example/videos/watch/item"),
+    true
+  );
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://gozie.example/videos/watch/item",
+      embedUrl: "https://gozie.example/videos/embed/item"
+    }),
+    null
+  );
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://gozie.example/videos/watch/item",
+      embedUrl: "https://peertube.tv/videos/embed/item"
+    }),
+    null
+  );
+  assert.equal(
+    api.getPlayableEmbedUrl({
+      url: "https://videos.example/videos/watch/item",
+      embedUrl: "https://videos.example/videos/embed/item"
+    }),
+    "https://videos.example/videos/embed/item"
   );
 });
 

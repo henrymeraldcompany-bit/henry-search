@@ -183,7 +183,7 @@ jobs:
           if (JSON.stringify(hosts) !== JSON.stringify(expected)) {
             throw new Error("Published PeerTube embed allowlist does not match the configured instances");
           }
-          for (const marker of ["function stopActiveVideoPlayer", "function toggleActiveVideoPlayer", "Stop playback"]) {
+          for (const marker of ["function isApplicationOriginUrl", "function stopActiveVideoPlayer", "function toggleActiveVideoPlayer", "Stop playback"]) {
             if (!source.includes(marker)) throw new Error("Published app.js is missing " + marker);
           }
           if (/YOUTUBE_API_KEY\s*=/.test(source)) throw new Error("A YouTube API key assignment must never appear in frontend code");

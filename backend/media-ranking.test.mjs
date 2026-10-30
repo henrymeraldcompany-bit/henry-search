@@ -252,6 +252,7 @@ assert.ok(peerTubeEmbedHostsMatch, "PEERTUBE_EMBED_HOSTS must exist in app.js");
 const frontendHelpers = [
   stopWordsMatch[0],
   extractApp("resolveSafeHttpUrl"),
+  extractApp("isApplicationOriginUrl"),
   extractApp("normalizeMediaText"),
   extractApp("queryWords"),
   extractApp("mediaRelevanceScore"),
@@ -263,7 +264,7 @@ const frontendHelpers = [
 ].join("\n");
 const frontendApi = vm.runInNewContext(
   "(function(){ " + frontendHelpers + "; return {rankMediaResults, getPlayableEmbedUrl}; })()",
-  { URL }
+  { URL, window: { location: { origin: "https://gozie.example" } } }
 );
 
 test("frontend does not show unrelated media when no candidate matches", () => {

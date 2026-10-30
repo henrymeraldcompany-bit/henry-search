@@ -422,6 +422,15 @@ function resolveSafeHttpUrl(value, base) {
   }
 }
 
+function isApplicationOriginUrl(value) {
+  if (typeof window === "undefined" || !window.location?.origin) return false;
+  try {
+    return new URL(value).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeMediaText(value) {
   return String(value || "").toLowerCase().normalize("NFKC")
     .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -704,6 +713,11 @@ function getPlayableEmbedUrl(video) {
   try {
     const embed = new URL(candidate);
     const watch = new URL(video.url);
+    // Never sandbox the application's own origin: allow-scripts plus
+    // allow-same-origin can let a same-origin frame escape its sandbox.
+    if (isApplicationOriginUrl(watch.href) || isApplicationOriginUrl(embed.href)) {
+      return null;
+    }
     const embedHost = embed.hostname.toLowerCase().replace(/^www\./, "");
     const youtubeFallback = youtubeId
       ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`
