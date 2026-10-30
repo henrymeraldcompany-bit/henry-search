@@ -49,7 +49,7 @@ function normalizeResult(item, providerName) {
     type: "web",
     title: title.slice(0, 500),
     url,
-    domain: new URL(canonicalUrl).hostname.replace(/^www\\./i, ""),
+    domain: new URL(canonicalUrl).hostname.replace(/^www\./i, ""),
     snippet: typeof item.snippet === "string" ? item.snippet.trim().slice(0, 3000) : "",
     source: typeof item.source === "string" && item.source.trim()
       ? item.source.trim().slice(0, 160)
@@ -161,14 +161,14 @@ export function diversifySearchResults(results) {
 /** Filter normalized web results by domain, publisher and publication age. */
 export function filterSearchResults(results, filters = {}, now = Date.now()) {
   const items = Array.isArray(results) ? results : [];
-  const domain = String(filters.domain || '').trim().toLowerCase().replace(/^www\\./i, '');
+  const domain = String(filters.domain || '').trim().toLowerCase().replace(/^www\./i, '');
   const source = String(filters.source || '').trim().toLowerCase();
   const date = String(filters.date || 'any').toLowerCase();
   const windows = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
   const maxAge = date === 'any' ? null : windows[date];
   if (date !== 'any' && !maxAge) return [];
   return items.filter(item => {
-    const host = String(item?.domain || '').toLowerCase().replace(/^www\\./i, '');
+    const host = String(item?.domain || '').toLowerCase().replace(/^www\./i, '');
     if (domain && host !== domain) return false;
     const sources = Array.isArray(item?.sources) ? item.sources : [item?.source];
     if (source && !sources.some(value => String(value || '').toLowerCase() === source)) return false;

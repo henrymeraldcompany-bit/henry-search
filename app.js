@@ -95,7 +95,7 @@ function applyWebResultFilters(items) {
  const now=Date.now();
  return items.filter(item=>{
   let host=String(item.domain||''); if(!host){try{host=new URL(item.url||item.link).hostname;}catch{}}
-  host=host.toLowerCase().replace(/^www\\./i,'');
+  host=host.toLowerCase().replace(/^www\./i,'');
   if(currentWebFilters.domain!=='all'&&host!==currentWebFilters.domain)return false;
   const sources=Array.isArray(item.sources)?item.sources:[item.source];
   if(currentWebFilters.source!=='all'&&!sources.some(v=>String(v||'').toLowerCase()===currentWebFilters.source))return false;
@@ -105,7 +105,7 @@ function applyWebResultFilters(items) {
 }
 function renderWebFilterBar(items) {
  const bar=document.createElement('div');bar.className='web-filter-bar';bar.setAttribute('aria-label','Filter search results');
- const domains=[...new Set(items.map(item=>{let h=item.domain||'';if(!h){try{h=new URL(item.url||item.link).hostname;}catch{}}return String(h).toLowerCase().replace(/^www\\./i,'');}).filter(Boolean))].sort();
+ const domains=[...new Set(items.map(item=>{let h=item.domain||'';if(!h){try{h=new URL(item.url||item.link).hostname;}catch{}}return String(h).toLowerCase().replace(/^www\./i,'');}).filter(Boolean))].sort();
  const sources=[...new Set(items.flatMap(item=>Array.isArray(item.sources)?item.sources:[item.source]).filter(Boolean).map(v=>String(v).trim()))].sort();
  const add=(caption,key,opts)=>{const label=document.createElement('label');label.className='web-filter';const span=document.createElement('span');span.textContent=caption;const select=document.createElement('select');select.setAttribute('aria-label',caption);for(const [value,name] of opts){const option=document.createElement('option');option.value=value;option.textContent=name;select.appendChild(option);}select.value=currentWebFilters[key];select.addEventListener('change',()=>{currentWebFilters[key]=select.value;renderResults(currentWebResults);});label.append(span,select);bar.appendChild(label);};
  add('Website','domain',[['all','All websites'],...domains.map(v=>[v,v])]);
