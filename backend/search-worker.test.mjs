@@ -94,6 +94,7 @@ test("queries providers independently and preserves results when one provider fa
     "First result", "Second result", "Duplicate"
   ]);
   assert.equal(result.results[0].provider, "Provider A");
+  assert.equal(result.results[0].originalUrl, "https://example.com/first?utm_medium=test");
 });
 
 test("drops malformed provider results and rejects unsafe result URLs", async () => {

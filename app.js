@@ -157,6 +157,33 @@ function renderResults(items) {
 
     card.append(urlLine, title);
 
+    const attribution = document.createElement("p");
+    attribution.className = "result-attribution";
+    const publisherNames = [...new Set((Array.isArray(item.sources) ? item.sources : [item.source])
+      .filter(value => typeof value === "string" && value.trim()))];
+    const publisherLabel = document.createElement("span");
+    publisherLabel.textContent = publisherNames.length
+      ? "Source: " + publisherNames.join(" · ")
+      : "Original source: " + new URL(url).hostname;
+    attribution.appendChild(publisherLabel);
+
+    const originalUrl = safeHttpUrl(item.originalUrl || item.url || item.link || "");
+    if (originalUrl) {
+      const originalLink = makeLink(originalUrl, "Open original source");
+      originalLink.className = "result-source-link";
+      attribution.append(" · ", originalLink);
+    }
+
+    const providerNames = [...new Set((Array.isArray(item.providers) ? item.providers : [item.provider])
+      .filter(value => typeof value === "string" && value.trim()))];
+    if (providerNames.length) {
+      const provider = document.createElement("span");
+      provider.className = "result-provider-attribution";
+      provider.textContent = " · Found via " + providerNames.join(", ");
+      attribution.appendChild(provider);
+    }
+    card.appendChild(attribution);
+
     const descriptionText =
       item.content || item.description || item.snippet || "";
 

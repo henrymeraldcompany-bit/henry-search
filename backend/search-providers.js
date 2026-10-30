@@ -54,6 +54,7 @@ function normalizeResult(item, providerName) {
     source: typeof item.source === "string" && item.source.trim()
       ? item.source.trim().slice(0, 160)
       : providerName,
+    originalUrl: url,
     published: typeof item.published === "string" ? item.published.slice(0, 100) : "",
     provider: providerName,
     canonicalUrl
