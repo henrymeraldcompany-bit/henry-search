@@ -1,10 +1,19 @@
 
 import { runSearchProviders, filterSearchResults, rankArticles } from "./search-providers.js";
+import { buildSearchCacheKey, isCacheableSearchRoute } from "./search-cache.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
-async fetch(request, env = {}) {
+async fetch(request, env = {}, ctx = {}) {
  const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","X-Content-Type-Options":"nosniff"};
- const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=UTF-8","Cache-Control":status>=400?"no-store":"public, max-age=60, stale-while-revalidate=300"}});
+ let cacheRequest=null;
+ const out=(data,status=200)=>{
+  const response=new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=UTF-8","Cache-Control":status>=400?"no-store":"public, max-age=60, s-maxage=60, stale-while-revalidate=300","X-GOZIE-Cache":cacheRequest?"MISS":"BYPASS"}});
+  if(status===200&&cacheRequest&&typeof caches!=="undefined"&&caches.default){
+   const write=caches.default.put(cacheRequest,response.clone()).catch(()=>{});
+   if(typeof ctx.waitUntil==="function")ctx.waitUntil(write);
+  }
+  return response;
+ };
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
  if(request.method!=="GET")return out({error:"Method not allowed."},405);
  const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
@@ -13,6 +22,18 @@ async fetch(request, env = {}) {
  if(route==="/extract"){const target=u.searchParams.get("url")||"";if(!target)return out({error:"Provide a webpage URL using the url parameter."},400);const result=await extractPublicPage(target);return out(result.data,result.status);}
  if(!q)return out({error:"Enter a search query."},400);
  if(q.length>300)return out({error:"Search query must be 300 characters or fewer."},400);
+ if(isCacheableSearchRoute(route)&&typeof caches!=="undefined"&&caches.default){
+  try{
+   const cacheKey=buildSearchCacheKey(u);
+   cacheRequest=new Request(cacheKey,{method:"GET"});
+   const cached=await caches.default.match(cacheRequest);
+   if(cached){
+    const headers=new Headers(cached.headers);
+    headers.set("X-GOZIE-Cache","HIT");
+    return new Response(cached.body,{status:cached.status,statusText:cached.statusText,headers});
+   }
+  }catch{cacheRequest=null;}
+ }
  const json=async(url,ms=8000)=>{const r=await fetch(url,{headers:{"Accept":"application/json","User-Agent":"GOZIESearch/1.3"},signal:AbortSignal.timeout(ms)});if(!r.ok)throw Error("HTTP "+r.status);return r.json()};
  const decode=s=>String(s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(+n)).replace(/&#x([\da-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)));
  const tag=(s,t)=>{const m=s.match(new RegExp("<"+t+"(?:\\s[^>]*)?>([\\s\\S]*?)</"+t+">","i"));return m?decode(m[1].trim()):""};
