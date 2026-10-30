@@ -434,6 +434,7 @@ async function search(request,env,kind) {
     ]);
     return providers.flat();
   };
+  let live=[];
   let imageProviderState={providers:[],failures:[],attempted:0};
   let liveResult=await fetchLive(q);
   if(kind==="image"){imageProviderState=liveResult;live=liveResult.results;}else{live=liveResult;}
