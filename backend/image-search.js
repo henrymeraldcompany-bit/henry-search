@@ -35,9 +35,27 @@ function normalizeImage(item, providerName) {
   };
 }
 
+function canonicalImageUrl(value) {
+  const safe = safeHttpUrl(value);
+  if (!safe) return "";
+  try {
+    const url = new URL(safe);
+    url.hostname = url.hostname.toLowerCase().replace(/^www\\./, "");
+    url.hash = "";
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) url.port = "";
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\\/+$/, "");
+    return url.href;
+  } catch (_) { return ""; }
+}
+
 function mergeImage(existing, incoming) {
   return {
     ...existing,
+    title: (!existing.title || existing.title === "Untitled image") && incoming.title ? incoming.title : existing.title,
     description: incoming.description.length > existing.description.length ? incoming.description : existing.description,
     author: existing.author || incoming.author,
     license: existing.license || incoming.license,
@@ -45,8 +63,10 @@ function mergeImage(existing, incoming) {
     attribution: existing.attribution || incoming.attribution,
     provider: existing.provider || incoming.provider,
     creator_url: existing.creator_url || incoming.creator_url,
-    thumbnail_url: existing.thumbnail_url || incoming.thumbnail_url,
-    sources: [...new Set([...(existing.sources || [existing.source]), incoming.source])]
+    thumbnail_url: existing.thumbnail_url.length >= incoming.thumbnail_url.length ? existing.thumbnail_url : incoming.thumbnail_url,
+    page_url: existing.page_url || incoming.page_url,
+    media_url: existing.media_url || incoming.media_url,
+    sources: [...new Set([...(existing.sources || [existing.source]), ...(incoming.sources || [incoming.source])])]
   };
 }
 
@@ -71,17 +91,27 @@ export async function runImageProviders(providers, query) {
     for (const raw of Array.isArray(outcome.value) ? outcome.value : []) {
       const item = normalizeImage(raw,name);
       if (!item) continue;
-      const key = item.page_url;
-      if (indexes.has(key)) {
-        const position = indexes.get(key);
-        results[position] = mergeImage(results[position],item);
+      const keys = [
+        canonicalImageUrl(item.page_url) && "page:" + canonicalImageUrl(item.page_url),
+        canonicalImageUrl(item.media_url) && "media:" + canonicalImageUrl(item.media_url)
+      ].filter(Boolean);
+      const positions = [...new Set(keys.map(key => indexes.get(key)).filter(position => position !== undefined))];
+      if (positions.length) {
+        const position = positions[0];
+        results[position] = mergeImage(results[position], item);
+        for (const duplicatePosition of positions.slice(1)) {
+          results[position] = mergeImage(results[position], results[duplicatePosition]);
+          results[duplicatePosition] = null;
+        }
+        for (const key of keys) indexes.set(key, position);
       } else {
-        indexes.set(key,results.length);
+        const position = results.length;
         results.push({...item,sources:[item.source]});
+        for (const key of keys) indexes.set(key, position);
       }
     }
   });
-  return {results,providers:[...successful],failures,attempted:configured.length};
+  return {results:results.filter(Boolean),providers:[...successful],failures,attempted:configured.length};
 }
 
 
