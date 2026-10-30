@@ -22,3 +22,66 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   const result = extractHtmlMetadata('<title>Safe</title><meta property="og:image" content="javascript:alert(1)"><link rel="canonical" href="https://attacker.example/">', "https://example.com/a");
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
+
+import { canonicalizeResultUrl, runSearchProviders } from "./search-providers.js";
+
+test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
+  assert.equal(
+    canonicalizeResultUrl("https://Example.com/story/?utm_source=news#section"),
+    "https://example.com/story"
+  );
+  assert.equal(
+    canonicalizeResultUrl("https://example.com/story?fbclid=abc"),
+    "https://example.com/story"
+  );
+  assert.equal(canonicalizeResultUrl("javascript:alert(1)"), null);
+  assert.equal(canonicalizeResultUrl("https://user:pass@example.com/"), null);
+});
+
+test("queries providers independently and preserves results when one provider fails", async () => {
+  const result = await runSearchProviders([
+    {
+      name: "Provider A",
+      search: async () => [
+        { title: "First result", url: "https://example.com/first?utm_medium=test", snippet: "A useful summary" },
+        { title: "Duplicate", url: "https://example.com/shared#top" }
+      ]
+    },
+    {
+      name: "Provider B",
+      search: async () => [
+        { title: "Same page from another provider", url: "https://example.com/shared?fbclid=123" },
+        { title: "Second result", url: "https://another.example/article" }
+      ]
+    },
+    {
+      name: "Unavailable",
+      search: async () => { throw new Error("temporary outage"); }
+    }
+  ], "test query");
+
+  assert.deepEqual(result.providers, ["Provider A", "Provider B"]);
+  assert.equal(result.attempted, 3);
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].provider, "Unavailable");
+  assert.equal(result.results.length, 3);
+  assert.deepEqual(result.results.map(item => item.title), [
+    "First result", "Duplicate", "Second result"
+  ]);
+  assert.equal(result.results[0].provider, "Provider A");
+});
+
+test("drops malformed provider results and rejects unsafe result URLs", async () => {
+  const result = await runSearchProviders([{
+    name: "Test provider",
+    search: async () => [
+      { title: "Unsafe", url: "javascript:alert(1)" },
+      { title: "", url: "https://example.com/no-title" },
+      null,
+      { title: "Valid", url: "https://example.com/valid" }
+    ]
+  }], "test");
+
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].title, "Valid");
+});
