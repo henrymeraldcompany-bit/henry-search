@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runImageProviders } from "./image-search.js";
+import { readFile } from "node:fs/promises";
+const moduleSource = await readFile(new URL("./image-search.js", import.meta.url), "utf8");
+const moduleUrl = "data:text/javascript;base64," + Buffer.from(moduleSource).toString("base64");
+const { runImageProviders } = await import(moduleUrl);
 
 test("deduplicates identical image pages despite tracking parameters and fragments", async () => {
   const result = await runImageProviders([
