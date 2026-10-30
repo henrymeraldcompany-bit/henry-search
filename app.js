@@ -68,14 +68,14 @@ function makeLink(url, text) {
   return link;
 }
 
-async function fetchJson(url) {
+async function fetchJson(url, timeoutMs = 12000) {
   // Keep a slow provider from hanging the whole search on mobile connections.
   // The caller can then move on to the next configured provider.
   const response = await fetch(url, {
     headers: {
       Accept: "application/json"
     },
-    signal: AbortSignal.timeout(12000)
+    signal: AbortSignal.timeout(timeoutMs)
   });
 
   const data = await response.json().catch(() => ({}));
@@ -135,6 +135,56 @@ function renderResults(items) {
       card.appendChild(description);
     }
 
+    const readButton = document.createElement("button");
+    readButton.type = "button";
+    readButton.className = "read-in-gozie-button";
+    readButton.textContent = "Read here in GOZIE";
+    readButton.setAttribute("aria-expanded", "false");
+
+    const extractedPanel = document.createElement("section");
+    extractedPanel.className = "gozie-extracted-panel";
+    extractedPanel.hidden = true;
+    extractedPanel.setAttribute("aria-live", "polite");
+
+    readButton.addEventListener("click", async () => {
+      if (!extractedPanel.hidden) {
+        extractedPanel.hidden = true;
+        readButton.setAttribute("aria-expanded", "false");
+        return;
+      }
+      extractedPanel.hidden = false;
+      readButton.setAttribute("aria-expanded", "true");
+      if (extractedPanel.dataset.loaded === "true") return;
+      readButton.disabled = true;
+      readButton.textContent = "Retrieving permitted page text…";
+      extractedPanel.textContent = "Checking the source website's robots policy and retrieving its public webpage.";
+      try {
+        const endpoint = SEARCH_API + "/extract?url=" + encodeURIComponent(url);
+        const data = await fetchJson(endpoint, 22000);
+        extractedPanel.replaceChildren();
+        const heading = document.createElement("h3");
+        heading.textContent = data.title || item.title || "Extracted webpage";
+        const summary = document.createElement("p");
+        summary.className = "gozie-extracted-summary";
+        summary.textContent = data.description || "";
+        const body = document.createElement("p");
+        body.className = "gozie-extracted-text";
+        body.textContent = data.text || "No readable text was returned.";
+        const source = makeLink(data.url || url, "Open original source");
+        source.className = "gozie-extracted-source";
+        extractedPanel.append(heading);
+        if (data.description) extractedPanel.appendChild(summary);
+        extractedPanel.append(body, source);
+        extractedPanel.dataset.loaded = "true";
+      } catch (error) {
+        extractedPanel.textContent = error.message || "This page could not be retrieved. The website may block automated reading or be temporarily unavailable.";
+      } finally {
+        readButton.disabled = false;
+        readButton.textContent = "Read here in GOZIE";
+      }
+    });
+
+    card.append(readButton, extractedPanel);
     resultsList.appendChild(card);
     validCount++;
   }
