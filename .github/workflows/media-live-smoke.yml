@@ -10,6 +10,7 @@ on:
       - "style.css"
       - "backend/worker.js"
       - "backend/wrangler.toml"
+      - "backend/browser-playback-smoke.mjs"
   workflow_dispatch:
   schedule:
     # Run after the daily D1 refresh (07:00 UTC / 08:00 Africa/Lagos).
