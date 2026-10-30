@@ -64,7 +64,7 @@ export function extractHtmlMetadata(html, pageUrl) {
   };
   const titleMatch = String(html).match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
   const title = decodeHtml((titleMatch?.[1] || meta("og:title")).replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 300);
-  const description = (meta("description") || meta("og:description") || meta("twitter:description")).slice(0, 1000);
+  const description = (meta("description") || meta("og:description") || meta("twitter:description")).slice(0, 300);
   const published = meta("article:published_time") || meta("date") || meta("pubdate") || "";
   const imageCandidate = meta("og:image") || meta("twitter:image") || "";
   const imageUrl = imageCandidate ? safePublicUrl(imageCandidate, pageUrl) : null;
@@ -81,7 +81,7 @@ export function extractHtmlMetadata(html, pageUrl) {
   return {
     title: title || new URL(pageUrl).hostname,
     description: decodeHtml(description).replace(/\s+/g, " ").trim(),
-    text: decodeHtml(content).slice(0, 16000),
+    text: decodeHtml(content).slice(0, 800),
     canonical: canonicalUrl && canonicalUrl.hostname === new URL(pageUrl).hostname ? canonicalUrl.href : pageUrl,
     image: imageUrl ? imageUrl.href : "",
     published: published.slice(0, 80)
