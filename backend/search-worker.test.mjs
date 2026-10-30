@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, retrievePublicPage } from "./search-extract.js";
+import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, extractReadableText, retrievePublicPage } from "./search-extract.js";
 
 test("rejects local, private literal, credential and non-standard-port targets", () => {
   for (const value of ["http://localhost/page","http://127.0.0.1/","http://192.168.1.2/","http://service.local/","https://user:pass@example.com/","https://example.com:8443/"]) assert.equal(safePublicUrl(value), null);
@@ -206,4 +206,19 @@ test("retrieval engine rejects non-HTML responses", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test("extracts readable text while excluding scripts, navigation and hidden content", () => {
+  const html = '<html><body><nav>Navigation noise</nav><main><h1>Useful heading</h1><p>Readable &amp; safe text.</p><script>doNotRun()</script><div hidden>Hidden text</div><section aria-hidden="true">Screen-reader-hidden content</section><div style="display:none">Invisible text</div></main><footer>Footer noise</footer></body></html>';
+  const text = extractReadableText(html, 500);
+  assert.match(text, /Useful heading/);
+  assert.match(text, /Readable & safe text/);
+  assert.doesNotMatch(text, /Navigation noise|doNotRun|Hidden text|Screen-reader-hidden|Invisible text|Footer noise/);
+});
+
+test("limits extracted text and safely handles invalid numeric HTML entities", () => {
+  const text = extractReadableText('<article><p>Alpha &#x110000; Beta &#99999999; Gamma</p></article>', 12);
+  assert.ok(text.length <= 12);
+  assert.match(extractReadableText('<p>Safe &#x110000; text</p>'), /Safe/);
 });
