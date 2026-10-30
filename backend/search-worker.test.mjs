@@ -278,7 +278,7 @@ test("ranks news articles by query relevance before quality and freshness", () =
  const articles=[
   {title:"General world update from today",url:"https://news.example/general",snippet:"A detailed report with enough background and context to be useful to readers following world events and current affairs.",source:"News Desk",published:"2026-10-30T11:30:00Z"},
   {title:"Solar energy research reveals new battery breakthrough",url:"https://science.example/solar",snippet:"Researchers report a solar energy battery breakthrough with additional details, background, and context for readers.",source:"Science Journal",published:"2026-10-28T09:00:00Z"},
-  {title:"Solar energy policy and technology explained",url:"https://policy.example/solar",snippet:"Solar energy policy and technology coverage.",source:"Policy News",published:"2026-10-29T09:00:00Z"},
+  {title:"Government policy update for clean power",url:"https://policy.example/solar",snippet:"Solar energy policy coverage.",source:"Policy News",published:"2026-10-29T09:00:00Z"},
   {title:"News",url:"https://junk.example/home",snippet:"",source:""}
  ];
  const ranked=rankArticles(articles,"solar energy",now);
