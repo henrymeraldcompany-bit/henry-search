@@ -29,7 +29,7 @@ const helpers = [
   extract("toggleActiveVideoPlayer"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS, stopActiveVideoPlayer, toggleActiveVideoPlayer}; })()",
+  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, isApplicationOriginUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS, stopActiveVideoPlayer, toggleActiveVideoPlayer}; })()",
   {
     URL,
     window: { location: { origin: "https://gozie.example" } },
