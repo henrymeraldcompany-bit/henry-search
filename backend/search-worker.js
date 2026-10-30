@@ -2,7 +2,7 @@
 import { runSearchProviders } from "./search-providers.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
-async fetch(request) {
+async fetch(request, env = {}) {
  const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","X-Content-Type-Options":"nosniff"};
  const out=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=UTF-8","Cache-Control":status>=400?"no-store":"public, max-age=60, stale-while-revalidate=300"}});
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
@@ -65,7 +65,35 @@ async fetch(request) {
       source:"Wikipedia"
      }));
     }
-   }
+   },
+   ...(typeof env.SEARXNG_URL === "string" && env.SEARXNG_URL.trim() ? [{
+    name: "SearXNG",
+    search: async query => {
+     let endpoint;
+     try {
+      const base = new URL(env.SEARXNG_URL.trim());
+      if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash) {
+       throw new Error("SEARXNG_URL must be an HTTPS instance URL without credentials, query, or fragment");
+      }
+      base.pathname = base.pathname.replace(/\\/+$/, "") + "/search";
+      endpoint = base;
+     } catch (error) {
+      throw new Error(error.message || "SEARXNG_URL is invalid");
+     }
+     endpoint.searchParams.set("q", query);
+     endpoint.searchParams.set("format", "json");
+     endpoint.searchParams.set("safesearch", "1");
+     endpoint.searchParams.set("language", "en");
+     const data = await json(endpoint.toString(), 8000);
+     return (Array.isArray(data.results) ? data.results : []).map(item => ({
+      title: item.title || "",
+      url: item.url || "",
+      snippet: item.content || item.description || "",
+      source: item.engine || "SearXNG",
+      published: item.publishedDate || ""
+     }));
+    }
+   }] : [])
   ];
   const {results,providers:successfulProviders,failures,attempted} = await runSearchProviders(providers,q);
   if (!results.length && successfulProviders.length === 0) {
