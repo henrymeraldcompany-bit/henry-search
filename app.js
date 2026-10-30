@@ -91,6 +91,8 @@ async function fetchJson(url, timeoutMs = 12000) {
 
 let currentWebResults = [];
 let currentWebFilters = { domain: 'all', source: 'all', date: 'any' };
+let currentWebPage = 1;
+const WEB_RESULTS_PER_PAGE = 10;
 function applyWebResultFilters(items) {
  const now=Date.now();
  return items.filter(item=>{
@@ -107,7 +109,7 @@ function renderWebFilterBar(items) {
  const bar=document.createElement('div');bar.className='web-filter-bar';bar.setAttribute('aria-label','Filter search results');
  const domains=[...new Set(items.map(item=>{let h=item.domain||'';if(!h){try{h=new URL(item.url||item.link).hostname;}catch{}}return String(h).toLowerCase().replace(/^www\./i,'');}).filter(Boolean))].sort();
  const sources=[...new Set(items.flatMap(item=>Array.isArray(item.sources)?item.sources:[item.source]).filter(Boolean).map(v=>String(v).trim()))].sort();
- const add=(caption,key,opts)=>{const label=document.createElement('label');label.className='web-filter';const span=document.createElement('span');span.textContent=caption;const select=document.createElement('select');select.setAttribute('aria-label',caption);for(const [value,name] of opts){const option=document.createElement('option');option.value=value;option.textContent=name;select.appendChild(option);}select.value=currentWebFilters[key];select.addEventListener('change',()=>{currentWebFilters[key]=select.value;renderResults(currentWebResults);});label.append(span,select);bar.appendChild(label);};
+ const add=(caption,key,opts)=>{const label=document.createElement('label');label.className='web-filter';const span=document.createElement('span');span.textContent=caption;const select=document.createElement('select');select.setAttribute('aria-label',caption);for(const [value,name] of opts){const option=document.createElement('option');option.value=value;option.textContent=name;select.appendChild(option);}select.value=currentWebFilters[key];select.addEventListener('change',()=>{currentWebFilters[key]=select.value;currentWebPage=1;renderResults(currentWebResults);});label.append(span,select);bar.appendChild(label);};
  add('Website','domain',[['all','All websites'],...domains.map(v=>[v,v])]);
  add('Source','source',[['all','All sources'],...sources.map(v=>[v.toLowerCase(),v])]);
  add('Date','date',[['any','Any time'],['day','Past 24 hours'],['week','Past week'],['month','Past month'],['year','Past year']]);
@@ -120,12 +122,16 @@ function renderWebFilterBar(items) {
 
 function renderResults(items) {
   if (!resultsList) return;
-  if (Array.isArray(items) && items !== currentWebResults) { currentWebResults = items; currentWebFilters = { domain: 'all', source: 'all', date: 'any' }; }
+  if (Array.isArray(items) && items !== currentWebResults) { currentWebResults = items; currentWebFilters = { domain: 'all', source: 'all', date: 'any' }; currentWebPage = 1; }
   const originalItems = Array.isArray(currentWebResults) ? currentWebResults : [];
   const filteredItems = applyWebResultFilters(originalItems);
   resultsList.replaceChildren();
   if (originalItems.length) resultsList.appendChild(renderWebFilterBar(originalItems));
   items = filteredItems;
+  const pageCount = Math.max(1, Math.ceil(items.length / WEB_RESULTS_PER_PAGE));
+  currentWebPage = Math.min(Math.max(1, currentWebPage), pageCount);
+  const pageStart = (currentWebPage - 1) * WEB_RESULTS_PER_PAGE;
+  const pageItems = items.slice(pageStart, pageStart + WEB_RESULTS_PER_PAGE);
   if (!items.length) {
     const message=document.createElement('div');message.className='message-card';
     message.textContent=originalItems.length?'No results match these filters. Change a filter or choose the default options.':'No results were returned. Try another search.';
@@ -134,7 +140,7 @@ function renderResults(items) {
 
   let validCount = 0;
 
-  for (const item of items) {
+  for (const item of pageItems) {
     const url = safeHttpUrl(item.url || item.link || "");
 
     if (!url) continue;
@@ -215,11 +221,50 @@ function renderResults(items) {
     validCount++;
   }
 
+  if (pageCount > 1) resultsList.appendChild(renderWebPagination(pageCount, items.length));
+
   if (!validCount) {
     showMessage(
       "The provider returned results, but none had a valid web address."
     );
   }
+}
+
+
+function renderWebPagination(pageCount, totalCount) {
+  const nav = document.createElement("nav");
+  nav.className = "web-pagination";
+  nav.setAttribute("aria-label", "Search result pages");
+
+  const previous = document.createElement("button");
+  previous.type = "button";
+  previous.className = "web-page-button";
+  previous.textContent = "Previous";
+  previous.disabled = currentWebPage <= 1;
+  previous.addEventListener("click", () => {
+    currentWebPage = Math.max(1, currentWebPage - 1);
+    renderResults(currentWebResults);
+  });
+
+  const status = document.createElement("span");
+  status.className = "web-page-status";
+  status.setAttribute("aria-live", "polite");
+  const first = (currentWebPage - 1) * WEB_RESULTS_PER_PAGE + 1;
+  const last = Math.min(currentWebPage * WEB_RESULTS_PER_PAGE, totalCount);
+  status.textContent = `Page ${currentWebPage} of ${pageCount} · Showing ${first}–${last} of ${totalCount}`;
+
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "web-page-button";
+  next.textContent = "Next";
+  next.disabled = currentWebPage >= pageCount;
+  next.addEventListener("click", () => {
+    currentWebPage = Math.min(pageCount, currentWebPage + 1);
+    renderResults(currentWebResults);
+  });
+
+  nav.append(previous, status, next);
+  return nav;
 }
 
 // ========================================

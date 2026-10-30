@@ -1565,3 +1565,11 @@ input:focus-visible {
 .web-filter select{width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--border,#345);border-radius:8px;background:var(--background,#0b1118);color:var(--text,#eaf0f6);font:inherit}
 .web-filter-count{margin-left:auto;padding:8px 2px;color:var(--muted,#9aabba);font-size:12px}
 @media(max-width:480px){.web-filter-bar{gap:7px;padding:9px}.web-filter{min-width:calc(50% - 7px);flex-basis:calc(50% - 7px)}.web-filter-count{width:100%;margin-left:0}}
+
+/* Accessible pagination for web and news results */
+.web-pagination{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:20px 0 8px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.web-page-button{min-height:40px;padding:8px 15px;border:1px solid var(--border);border-radius:9px;background:var(--surface-soft);color:var(--text);font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+.web-page-button:disabled{opacity:.45;cursor:not-allowed}
+.web-page-button:not(:disabled):hover{border-color:var(--accent)}
+.web-page-status{color:var(--muted);font-size:12px;text-align:center}
+@media(max-width:480px){.web-pagination{gap:7px;padding:9px}.web-page-button{min-height:38px;padding:7px 10px}.web-page-status{flex:1 1 100%;order:-1}}
