@@ -91,7 +91,6 @@ try {
   assert.equal((await firstButton.textContent()).trim(), "Play here",
     "Stop control must reset to Play here");
 
-  let activeButton = firstButton;
   if (playableCount >= 2) {
     await firstButton.click();
     await firstFrame.waitFor({ state: "attached" });
@@ -107,7 +106,6 @@ try {
       "Starting a second player must remove the first iframe");
     assert.equal((await firstButton.textContent()).trim(), "Play here");
     assert.equal((await secondButton.textContent()).trim(), "Stop playback");
-    activeButton = secondButton;
   } else {
     await firstButton.click();
     await firstFrame.waitFor({ state: "attached" });
