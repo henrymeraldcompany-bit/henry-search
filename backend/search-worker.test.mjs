@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata } from "./search-extract.js";
+import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, retrievePublicPage } from "./search-extract.js";
 
 test("rejects local, private literal, credential and non-standard-port targets", () => {
   for (const value of ["http://localhost/page","http://127.0.0.1/","http://192.168.1.2/","http://service.local/","https://user:pass@example.com/","https://example.com:8443/"]) assert.equal(safePublicUrl(value), null);
@@ -166,4 +166,44 @@ test('date filtering excludes unknown and future dates but any-time preserves al
  assert.equal(filterSearchResults(items,{date:'month'},now).length,2);
  assert.equal(filterSearchResults(items,{date:'any'},now).length,5);
  assert.equal(filterSearchResults(items,{date:'invalid'},now).length,0);
+});
+
+
+test("retrieves public HTML through the reusable page retrieval engine", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    requested.push(url.href);
+    if (url.pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
+    if (url.pathname === "/start") return new Response(null, { status: 302, headers: { location: "/article" } });
+    return new Response("<html><body><article><p>Retrieved article body.</p></article></body></html>", { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+  };
+  try {
+    const result = await retrievePublicPage("https://example.com/start");
+    assert.equal(result.status, 200);
+    assert.equal(result.data.url, "https://example.com/article");
+    assert.match(result.data.html, /Retrieved article body/);
+    assert.match(result.data.contentType, /text\\/html/);
+    assert.ok(requested.includes("https://example.com/robots.txt"));
+    assert.ok(requested.includes("https://example.com/article"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("retrieval engine rejects non-HTML responses", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
+    return new Response("not a webpage", { status: 200, headers: { "content-type": "application/pdf" } });
+  };
+  try {
+    const result = await retrievePublicPage("https://example.com/file");
+    assert.equal(result.status, 415);
+    assert.match(result.data.error, /not an HTML webpage/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
