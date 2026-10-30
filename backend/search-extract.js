@@ -76,7 +76,7 @@ function htmlAttribute(tagText, name) {
 export function extractHtmlMetadata(html, pageUrl) {
   const source = String(html || "");
   const meta = (...keys) => {
-    const tags = source.match(/<meta\\b[^>]*>/gi) || [];
+    const tags = source.match(/<meta\b[^>]*>/gi) || [];
     for (const key of keys) for (const tagText of tags) {
       if (htmlAttribute(tagText, "name").toLowerCase() === key.toLowerCase() ||
           htmlAttribute(tagText, "property").toLowerCase() === key.toLowerCase()) {
@@ -87,8 +87,8 @@ export function extractHtmlMetadata(html, pageUrl) {
     return "";
   };
   const clean = (value, limit = 300) => decodeHtml(String(value || "").replace(/<[^>]*>/g, " "))
-    .replace(/\\s+/g, " ").trim().slice(0, limit);
-  const titleMatch = source.match(/<title\\b[^>]*>([\\s\\S]*?)<\\/title>/i);
+    .replace(/\s+/g, " ").trim().slice(0, limit);
+  const titleMatch = source.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
   const title = clean(titleMatch?.[1] || meta("og:title", "twitter:title"), 300);
   const description = clean(meta("description", "og:description", "twitter:description"), 500);
   const author = clean(meta("author", "article:author", "parsely-author", "byl"), 200);
@@ -98,12 +98,12 @@ export function extractHtmlMetadata(html, pageUrl) {
     .split(/[,;]+/).map(item => item.trim()).filter(Boolean).slice(0, 20);
   const published = clean(meta("article:published_time", "datePublished", "date", "pubdate"), 80);
   const modified = clean(meta("article:modified_time", "og:updated_time", "dateModified", "last-modified"), 80);
-  const htmlTag = source.match(/<html\\b[^>]*>/i)?.[0] || "";
+  const htmlTag = source.match(/<html\b[^>]*>/i)?.[0] || "";
   const language = clean(htmlAttribute(htmlTag, "lang") || meta("og:locale"), 35);
   const imageCandidate = meta("og:image", "twitter:image", "twitter:image:src");
   const imageUrl = imageCandidate ? safePublicUrl(imageCandidate, pageUrl) : null;
-  const linkTags = source.match(/<link\\b[^>]*>/gi) || [];
-  const findLink = rel => linkTags.find(tag => htmlAttribute(tag, "rel").toLowerCase().split(/\\s+/).includes(rel)) || "";
+  const linkTags = source.match(/<link\b[^>]*>/gi) || [];
+  const findLink = rel => linkTags.find(tag => htmlAttribute(tag, "rel").toLowerCase().split(/\s+/).includes(rel)) || "";
   const canonicalCandidate = htmlAttribute(findLink("canonical"), "href");
   const canonicalUrl = canonicalCandidate ? safePublicUrl(canonicalCandidate, pageUrl) : null;
   const iconCandidate = htmlAttribute(findLink("icon") || findLink("shortcut"), "href");
