@@ -75,7 +75,7 @@ async fetch(request, env = {}) {
       if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash) {
        throw new Error("SEARXNG_URL must be an HTTPS instance URL without credentials, query, or fragment");
       }
-      base.pathname = base.pathname.replace(/\\/+$/, "") + "/search";
+      base.pathname = base.pathname.replace(/\/+$/, "") + "/search";
       endpoint = base;
      } catch (error) {
       throw new Error(error.message || "SEARXNG_URL is invalid");
