@@ -72,11 +72,11 @@ function mergeDuplicateResults(existing, incoming) {
   };
 }
 
-const EXPANSION_PREFIXES = /^(?:what is|what are|who is|who was|how does|how do|how can|tell me about|explain|define)\\s+/i;
+const EXPANSION_PREFIXES = /^(?:what is|what are|who is|who was|how does|how do|how can|tell me about|explain|define)\s+/i;
 
 /** Build a small, conservative set of equivalent query phrasings. */
 export function expandSearchQueries(query) {
-  const original = String(query || "").trim().replace(/\\s+/g, " ");
+  const original = String(query || "").trim().replace(/\s+/g, " ");
   if (!original) return [];
   const variants = [original];
   const cleaned = original.replace(/[?!.,;:]+$/g, "").trim();
