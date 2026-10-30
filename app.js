@@ -847,6 +847,44 @@ function createVideoPlayer(video) {
   return wrapper;
 }
 
+
+function stopActiveVideoPlayer(state) {
+  if (!state || !state.target) return false;
+
+  state.target.replaceChildren();
+  if (state.button) {
+    state.button.textContent = "Play here";
+    state.button.disabled = false;
+    state.button.setAttribute("aria-pressed", "false");
+  }
+
+  state.target = null;
+  state.button = null;
+  return true;
+}
+
+function toggleActiveVideoPlayer(video, target, button, state) {
+  if (!target || !button || !state) return false;
+
+  if (state.target === target) {
+    stopActiveVideoPlayer(state);
+    return false;
+  }
+
+  const player = createVideoPlayer(video);
+  if (!player) return false;
+
+  // A phone should not keep several external players consuming data/audio.
+  stopActiveVideoPlayer(state);
+  target.replaceChildren(player);
+  button.textContent = "Stop playback";
+  button.disabled = false;
+  button.setAttribute("aria-pressed", "true");
+  state.target = target;
+  state.button = button;
+  return true;
+}
+
 function renderVideoResults(items, query) {
   if (!resultsList) return;
   const rankedItems = rankMediaResults(items, query, ["title", "name"], ["description", "channel", "account"], ["url", "watchUrl", "originalUrl"]);
@@ -900,6 +938,7 @@ function renderVideoResults(items, query) {
   filterBar.append(sourceLabel, dateLabel, durationLabel);
   const gallery = document.createElement("div");
   gallery.className = "video-gallery";
+  const activePlayerState = { target: null, button: null };
   const filterStatus = document.createElement("p");
   filterStatus.className = "video-filter-status";
   filterStatus.setAttribute("aria-live", "polite");
@@ -914,6 +953,7 @@ function renderVideoResults(items, query) {
       videoMatchesFilters(video, sourceFilter, dateFilter, durationFilter, now)
     );
 
+    stopActiveVideoPlayer(activePlayerState);
     gallery.replaceChildren();
     if (!filtered.length) {
       filterStatus.textContent = "No videos match all selected filters. Try relaxing one filter; some sources do not provide dates or durations.";
@@ -963,25 +1003,21 @@ function renderVideoResults(items, query) {
       const playerButton = document.createElement("button");
       playerButton.type = "button";
       playerButton.className = "video-play-button";
-      playerButton.textContent = getPlayableEmbedUrl(video) ? "Play here" : "Playback unavailable here";
-      playerButton.disabled = !getPlayableEmbedUrl(video);
+      playerButton.textContent = playableEmbedUrl ? "Play here" : "Playback unavailable here";
+      playerButton.disabled = !playableEmbedUrl;
+      playerButton.setAttribute("aria-pressed", "false");
       playerButton.addEventListener("click", () => {
-        const player = createVideoPlayer(video);
-        if (!player) return;
-        playerTarget.replaceChildren(player);
-        playerButton.textContent = "Player loaded";
-        playerButton.disabled = true;
+        toggleActiveVideoPlayer(video, playerTarget, playerButton, activePlayerState);
       });
 
       const externalLink = makeLink(video.url, "Open original video ↗");
       externalLink.className = "video-original-link";
       thumbnailButton.addEventListener("click", () => {
-        const player = createVideoPlayer(video);
-        if (player) {
-          playerTarget.replaceChildren(player);
-          playerButton.textContent = "Player loaded";
-          playerButton.disabled = true;
-          playerTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (playableEmbedUrl) {
+          const started = toggleActiveVideoPlayer(video, playerTarget, playerButton, activePlayerState);
+          if (started) {
+            playerTarget.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
         } else {
           window.open(video.url, "_blank", "noopener,noreferrer");
         }
