@@ -397,6 +397,13 @@ function renderImageGallery(items, query = "") {
 // ========================================
 
 const VIDEO_SEARCH_BASE = "https://peertube.tv";
+// Cross-origin PeerTube embeds are permitted only on the same three instances
+// queried by the Media Worker. Other cross-origin players remain blocked.
+const PEERTUBE_EMBED_HOSTS = new Set([
+  "peertube.tv",
+  "peer.tube",
+  "spectra.video"
+]);
 const MEDIA_STOP_WORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
   "how", "i", "in", "is", "it", "of", "on", "or", "the", "to", "with",
@@ -697,31 +704,42 @@ function getPlayableEmbedUrl(video) {
   try {
     const embed = new URL(candidate);
     const watch = new URL(video.url);
-    const embedHost = embed.hostname.toLowerCase();
-    const isYouTubeEmbedHost = [
-      "youtube.com", "www.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"
-    ].includes(embedHost);
+    const embedHost = embed.hostname.toLowerCase().replace(/^www\./, "");
+    const youtubeFallback = youtubeId
+      ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`
+      : null;
 
-    // For YouTube, accept only the matching /embed/{id} path; otherwise
-    // generate the privacy-enhanced embed from the trusted watch URL's ID.
+    if (watch.username || watch.password) return null;
+
+    // YouTube uses a separate privacy-enhanced player origin. Require HTTPS,
+    // the expected host, and the exact video ID; otherwise use a safe fallback.
     if (youtubeId) {
+      if (embed.username || embed.password || embed.protocol !== "https:" || embed.port) {
+        return youtubeFallback;
+      }
+      const isYouTubeEmbedHost = [
+        "youtube.com", "youtube-nocookie.com"
+      ].includes(embedHost);
       const embedId = embed.pathname.match(/^\/embed\/([\w-]+)\/?$/)?.[1] || "";
       return isYouTubeEmbedHost && embedId === youtubeId
         ? embed.href
-        : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`;
+        : youtubeFallback;
     }
 
-    // PeerTube embeds must use the platform's dedicated player route.
-    // Same-origin alone is insufficient: embedding a normal watch/about page
-    // can duplicate the whole site inside the result card.
+    // PeerTube may return its official player URL from another configured
+    // search instance. Permit that cross-origin case only for the three
+    // instances queried by the backend; arbitrary third-party embeds stay blocked.
     const isPeerTubePlayerPath =
       /^\/videos\/embed\/[A-Za-z0-9_-]+\/?$/.test(embed.pathname);
-    if (embed.username || embed.password || watch.username || watch.password) {
+    const securePlayer = embed.protocol === "https:" && watch.protocol === "https:" &&
+      !embed.port && !watch.port;
+    const sameOrigin = embed.origin === watch.origin;
+    const trustedPeerTubeOrigin = PEERTUBE_EMBED_HOSTS.has(embedHost);
+
+    if (embed.username || embed.password || !securePlayer || !isPeerTubePlayerPath) {
       return null;
     }
-    return embed.origin === watch.origin && isPeerTubePlayerPath
-      ? embed.href
-      : null;
+    return sameOrigin || trustedPeerTubeOrigin ? embed.href : null;
   } catch {
     return youtubeId
       ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeId)}`
