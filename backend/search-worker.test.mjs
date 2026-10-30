@@ -104,3 +104,22 @@ test("ranking is stable for ties and handles empty or stop-word-only queries", (
   assert.equal(scoreSearchResult(items[0], "the and of"), 0);
   assert.equal(rankSearchResults(null, "query").length, 0);
 });
+
+
+test("merges duplicate canonical URLs while retaining the richer result metadata", async () => {
+  const result = await runSearchProviders([
+    { name: "Provider A", search: async () => [
+      { title: "Original title", url: "https://example.com/story?utm_source=a", snippet: "Short summary", source: "Publisher A" }
+    ] },
+    { name: "Provider B", search: async () => [
+      { title: "Alternate title", url: "https://www.example.com/story#section", snippet: "A much longer and more useful summary of the same article.", source: "Publisher B", published: "2026-10-30" }
+    ] }
+  ], "story");
+
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].title, "Original title");
+  assert.match(result.results[0].snippet, /much longer/);
+  assert.equal(result.results[0].published, "2026-10-30");
+  assert.deepEqual(result.results[0].sources, ["Publisher A", "Provider B"]);
+  assert.deepEqual(result.results[0].providers, ["Provider A", "Provider B"]);
+});

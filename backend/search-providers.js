@@ -60,6 +60,18 @@ function normalizeResult(item, providerName) {
   };
 }
 
+function mergeDuplicateResults(existing, incoming) {
+  const sources = [...new Set([...(existing.sources || [existing.source]), ...(incoming.sources || [incoming.source])].filter(Boolean))];
+  const providers = [...new Set([...(existing.providers || [existing.provider]), ...(incoming.providers || [incoming.provider])].filter(Boolean))];
+  return {
+    ...existing,
+    snippet: incoming.snippet.length > existing.snippet.length ? incoming.snippet : existing.snippet,
+    published: existing.published || incoming.published,
+    sources,
+    providers
+  };
+}
+
 const RANKING_STOP_WORDS = new Set(["a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","that","the","this","to","was","what","when","where","which","who","why","with"]);
 
 function tokenize(value) {
@@ -120,7 +132,7 @@ export async function runSearchProviders(providers, query) {
   );
 
   const results = [];
-  const seen = new Set();
+  const resultIndexes = new Map();
   const successfulProviders = [];
   const failures = [];
 
@@ -137,9 +149,14 @@ export async function runSearchProviders(providers, query) {
     const items = Array.isArray(outcome.value) ? outcome.value : [];
     for (const item of items) {
       const normalized = normalizeResult(item, providerName);
-      if (!normalized || seen.has(normalized.canonicalUrl)) continue;
-      seen.add(normalized.canonicalUrl);
-      results.push(normalized);
+      if (!normalized) continue;
+      const existingIndex = resultIndexes.get(normalized.canonicalUrl);
+      if (existingIndex !== undefined) {
+        results[existingIndex] = mergeDuplicateResults(results[existingIndex], normalized);
+        continue;
+      }
+      resultIndexes.set(normalized.canonicalUrl, results.length);
+      results.push({ ...normalized, sources: [normalized.source], providers: [normalized.provider] });
     }
   }
 
