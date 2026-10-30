@@ -83,3 +83,92 @@ export async function runImageProviders(providers, query) {
   });
   return {results,providers:[...successful],failures,attempted:configured.length};
 }
+
+
+const IMAGE_STOP_WORDS = new Set([
+  "a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","the","to","was","what","when","where","which","who","why","with","about","this","that",
+  "image","images","photo","photos","picture","pictures","wallpaper","illustration","search","find"
+]);
+
+function imageTerms(value) {
+  return String(value || "").toLowerCase()
+    .split(/[^\\p{L}\\p{N}]+/u).filter(word => word.length > 1 && !IMAGE_STOP_WORDS.has(word));
+}
+
+function imageMetadataText(value) {
+  if (Array.isArray(value)) return value.map(item => typeof item === "string" ? item : item && item.name || "").join(" ");
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed[0] === "[" || trimmed[0] === "{") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed.map(item => typeof item === "string" ? item : item && item.name || "").join(" ") : "";
+    } catch (_) {}
+  }
+  return trimmed;
+}
+
+/**
+ * Rank image candidates by query relevance before provider preference.
+ * Exact phrases and title matches outweigh description/tags; metadata and
+ * source preference are tie-breakers only, never substitutes for relevance.
+ */
+export function rankImageResults(rows, query, limit = 40) {
+  const rawQuery = String(query || "").trim().toLowerCase();
+  const queryTokens = imageTerms(rawQuery);
+  if (!queryTokens.length || !Array.isArray(rows)) return [];
+  const normalizedPhrase = rawQuery.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+  const candidates = [];
+  rows.forEach((row, index) => {
+    if (!row || typeof row !== "object") return;
+    const title = String(row.title || "").toLowerCase();
+    const description = String(row.description || "").toLowerCase();
+    const tags = imageMetadataText(row.tags).toLowerCase();
+    const author = String(row.author || "").toLowerCase();
+    const titleTokens = imageTerms(title);
+    const titleSet = new Set(titleTokens);
+    const detailSet = new Set(imageTerms([description, tags, author].join(" ")));
+    const titlePhrase = title.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+    const exactTitlePhrase = !!normalizedPhrase && (" " + titlePhrase + " ").includes(" " + normalizedPhrase + " ");
+    const matchedTitle = queryTokens.filter(token => titleSet.has(token)).length;
+    const matchedDetails = queryTokens.filter(token => !titleSet.has(token) && detailSet.has(token)).length;
+    const matched = matchedTitle + matchedDetails;
+    const minMatches = queryTokens.length >= 3 ? 2 : 1;
+    if (!exactTitlePhrase && matched < minMatches) return;
+    const coverage = matched / queryTokens.length;
+    const score = (exactTitlePhrase ? 30 : 0) + matchedTitle * 8 + matchedDetails * 3 +
+      (matchedTitle === queryTokens.length ? 6 : 0) + coverage * 5;
+    const page = String(row.page_url || row.page || row.url || "");
+    let host = "";
+    try { host = new URL(page).hostname.toLowerCase().replace(/^www\\./, ""); } catch (_) {}
+    candidates.push({
+      row, index, score, host,
+      providerPriority: row.source === "Google Images" ? 1 : 0,
+      metadataCompleteness: [row.author, row.license, row.license_url, row.attribution].filter(Boolean).length
+    });
+  });
+  candidates.sort((a, b) =>
+    b.score - a.score ||
+    b.providerPriority - a.providerPriority ||
+    b.metadataCompleteness - a.metadataCompleteness ||
+    a.index - b.index
+  );
+  const max = Math.max(1, Math.min(100, Number(limit) || 40));
+  const perHostCap = Math.max(2, Math.ceil(max / 5));
+  const selected = [];
+  const counts = new Map();
+  const deferred = [];
+  for (const candidate of candidates) {
+    const count = counts.get(candidate.host) || 0;
+    if (candidate.host && count >= perHostCap) { deferred.push(candidate); continue; }
+    selected.push(candidate);
+    if (candidate.host) counts.set(candidate.host, count + 1);
+    if (selected.length >= max) break;
+  }
+  for (const candidate of deferred) {
+    if (selected.length >= max) break;
+    selected.push(candidate);
+  }
+  return selected.map(candidate => candidate.row);
+}

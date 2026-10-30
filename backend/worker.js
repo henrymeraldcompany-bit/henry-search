@@ -1,4 +1,4 @@
-import { runImageProviders } from "./image-search.js";
+import { runImageProviders, rankImageResults } from "./image-search.js";
 
 /**
  * GOZIE SEARCH Media Worker
@@ -495,7 +495,7 @@ async function search(request,env,kind) {
   let imageProviderState={providers:[],failures:[],attempted:0};
   let liveResult=await fetchLive(q);
   if(kind==="image"){imageProviderState=liveResult;live=liveResult.results;}else{live=liveResult;}
-  let ranked=rank(live.concat(saved),q,40);
+  let ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rank(live.concat(saved),q,40);
   let results=capFlickrResults(ranked,20);
   let expandedQuery="";
   // Only spend extra provider requests when the exact search is sparse.
@@ -506,7 +506,7 @@ async function search(request,env,kind) {
       const expandedLive=await fetchLive(expandedQuery);
       if((kind==="image"?expandedLive.results.length:expandedLive.length)) {
         if(kind==="image"){imageProviderState.providers=Array.from(new Set(imageProviderState.providers.concat(expandedLive.providers)));imageProviderState.failures=imageProviderState.failures.concat(expandedLive.failures);imageProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}else{live=live.concat(expandedLive);}
-        ranked=rank(live.concat(saved),q,40);
+        ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rank(live.concat(saved),q,40);
         results=capFlickrResults(ranked,20);
       }
     }
