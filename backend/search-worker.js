@@ -105,7 +105,7 @@ async fetch(request, env = {}) {
    providers:successfulProviders,
    attemptedProviders:attempted,
    failedProviders:failures,
-   results:results.map(({canonicalUrl,provider,...item})=>item)
+   results
   });
  }catch(e){return out({error:route==="/news"?"News providers are temporarily unavailable. Please try again shortly.":route==="/images"?"Image service is temporarily unavailable. Please try again.":"Search providers are temporarily unavailable. Please try again."},502)}
 }

@@ -45,8 +45,11 @@ function normalizeResult(item, providerName) {
   if (!canonicalUrl || !title) return null;
 
   return {
+    id: canonicalUrl,
+    type: "web",
     title: title.slice(0, 500),
     url,
+    domain: new URL(canonicalUrl).hostname.replace(/^www\\./i, ""),
     snippet: typeof item.snippet === "string" ? item.snippet.trim().slice(0, 3000) : "",
     source: typeof item.source === "string" && item.source.trim()
       ? item.source.trim().slice(0, 160)
