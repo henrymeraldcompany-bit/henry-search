@@ -544,10 +544,24 @@ function renderImageGallery(items, query = "") {
       ? `License: ${item.license}`
       : "License information unavailable";
 
+    const creator = document.createElement("p");
+    creator.className = "image-card-license";
+    creator.textContent = item.author ? `Creator: ${item.author}` : "";
+
+    const attribution = document.createElement("p");
+    attribution.className = "image-card-license";
+    attribution.textContent = item.attribution || "";
+
+    const licenseLinkUrl = safeHttpUrl(item.licenseUrl);
+    const licenseLink = licenseLinkUrl ? makeLink(licenseLinkUrl, "License terms ↗") : null;
     const sourceLink = makeLink(sourcePage, "View source ↗");
     sourceLink.className = "image-source-link";
 
-    card.append(previewButton, title, license, sourceLink);
+    card.append(previewButton, title, license);
+    if (creator.textContent) card.appendChild(creator);
+    if (attribution.textContent) card.appendChild(attribution);
+    if (licenseLink) card.appendChild(licenseLink);
+    card.appendChild(sourceLink);
     gallery.appendChild(card);
     validCount++;
   }

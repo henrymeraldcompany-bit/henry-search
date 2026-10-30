@@ -17,12 +17,16 @@ test("queries image providers independently and preserves successful sources", a
 test("deduplicates identical original pages and merges useful metadata", async () => {
   const result=await runImageProviders([
     {name:"Commons",search:async()=>[{title:"Image",page_url:"https://example.com/photo",media_url:"https://cdn.example/photo.jpg",description:"Short"}]},
-    {name:"Flickr",search:async()=>[{title:"Image",page_url:"https://example.com/photo",media_url:"https://cdn.example/photo.jpg",description:"A longer description",author:"Photographer",license:"CC BY"}]}
+    {name:"Flickr",search:async()=>[{title:"Image",page_url:"https://example.com/photo",media_url:"https://cdn.example/photo.jpg",description:"A longer description",author:"Photographer",license:"CC BY",license_url:"https://creativecommons.org/licenses/by/4.0/",attribution:"Photo by Artist",provider:"catalog",creator_url:"https://example.com/artist"}]}
   ],"photo");
   assert.equal(result.results.length,1);
   assert.equal(result.results[0].description,"A longer description");
   assert.equal(result.results[0].author,"Photographer");
   assert.deepEqual(result.results[0].sources,["Commons","Flickr"]);
+  assert.equal(result.results[0].license_url,"https://creativecommons.org/licenses/by/4.0/");
+  assert.equal(result.results[0].attribution,"Photo by Artist");
+  assert.equal(result.results[0].provider,"catalog");
+  assert.equal(result.results[0].creator_url,"https://example.com/artist");
 });
 
 test("rejects unsafe and incomplete image results", async () => {

@@ -27,7 +27,11 @@ function normalizeImage(item, providerName) {
     media_url: media,
     thumbnail_url: thumbnail,
     author: String(item.author || "").trim().slice(0, 200),
-    license: String(item.license || "").trim().slice(0, 120)
+    license: String(item.license || "").trim().slice(0, 120),
+    license_url: safeHttpUrl(item.license_url),
+    attribution: String(item.attribution || "").trim().slice(0, 500),
+    provider: String(item.provider || "").trim().slice(0, 100),
+    creator_url: safeHttpUrl(item.creator_url)
   };
 }
 
@@ -37,6 +41,10 @@ function mergeImage(existing, incoming) {
     description: incoming.description.length > existing.description.length ? incoming.description : existing.description,
     author: existing.author || incoming.author,
     license: existing.license || incoming.license,
+    license_url: existing.license_url || incoming.license_url,
+    attribution: existing.attribution || incoming.attribution,
+    provider: existing.provider || incoming.provider,
+    creator_url: existing.creator_url || incoming.creator_url,
     thumbnail_url: existing.thumbnail_url || incoming.thumbnail_url,
     sources: [...new Set([...(existing.sources || [existing.source]), incoming.source])]
   };

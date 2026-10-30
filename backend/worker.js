@@ -98,6 +98,35 @@ function flickrRow(item) {
     duration_seconds: null, tags: clean(item.tags || "", 400)
   };
 }
+function openverseRow(item) {
+  if (!item || typeof item !== "object") return null;
+  const page = safeUrl(item.foreign_landing_url);
+  const media = safeUrl(item.url);
+  const thumb = safeUrl(item.thumbnail);
+  if (!page || !media || !thumb) return null;
+  const license = clean(item.license || "", 80);
+  const licenseVersion = clean(item.license_version || "", 30);
+  return {
+    kind: "image", source: "Openverse", provider: clean(item.provider || item.source || "Openverse", 100),
+    source_id: String(item.id || page), title: clean(item.title || "Untitled image", 250),
+    description: clean((Array.isArray(item.tags) ? item.tags.map(function(tag){return tag && tag.name || "";}).filter(Boolean).join(", ") : ""), 900),
+    page_url: page, media_url: media, thumbnail_url: thumb, embed_url: "",
+    author: clean(item.creator || "", 200), creator_url: safeUrl(item.creator_url),
+    license: license ? license.toUpperCase() + (licenseVersion ? " " + licenseVersion : "") : "License details unavailable",
+    license_url: safeUrl(item.license_url), attribution: clean(item.attribution || "", 500),
+    published_at: "", duration_seconds: null, tags: ""
+  };
+}
+async function openverse(q, count) {
+  const query = String(q || "").trim().slice(0, 180);
+  if (!query) return [];
+  const u = new URL("https://api.openverse.org/v1/images/");
+  [["q", query], ["page_size", String(Math.min(20, Math.max(1, Number(count) || 12)))],
+   ["license_type", "commercial,modification"], ["mature", "false"], ["filter_dead", "true"]]
+    .forEach(function (p) { u.searchParams.set(p[0], p[1]); });
+  const data = await getJson(u.href);
+  return (Array.isArray(data.results) ? data.results : []).map(openverseRow).filter(Boolean);
+}
 async function flickr(q, count) {
   const tags = (fallbackQuery(q) || String(q || "").trim()).split(/\s+/).filter(Boolean).slice(0, 5).join(",");
   if (!tags) return [];
@@ -400,7 +429,7 @@ function rank(rows,q,limit) {
   return picked.map(function(x){return x.r;});
 }
 function front(r) {
-  if (r.kind==="image") return {title:r.title,description:r.description,page:r.page_url,image:r.media_url,thumbnail:r.thumbnail_url,license:r.license,source:r.source};
+  if (r.kind==="image") return {title:r.title,description:r.description,page:r.page_url,image:r.media_url,thumbnail:r.thumbnail_url,license:r.license,licenseUrl:r.license_url,attribution:r.attribution,author:r.author,creatorUrl:r.creator_url,provider:r.provider,source:r.source};
   let host="";try{host=new URL(r.page_url).hostname;}catch(_){}
   return {title:r.title,description:r.description,url:r.page_url,watchUrl:r.page_url,embedUrl:r.embed_url,thumbnailUrl:r.thumbnail_url,thumbnail:r.thumbnail_url,host:host,channel:r.author,duration:r.duration_seconds,publishedAt:r.published_at,source:r.source};
 }
@@ -424,6 +453,7 @@ async function search(request,env,kind) {
     if(kind==="image") {
       const outcome=await runImageProviders([
         {name:"Wikimedia Commons",search:function(searchQuery){return commons(searchQuery,16);}},
+        {name:"Openverse",search:function(searchQuery){return openverse(searchQuery,12);}},
         {name:"Flickr public feed",search:function(searchQuery){return flickr(searchQuery,12);}}
       ],query);
       return outcome;
@@ -474,7 +504,7 @@ async function refresh(env) {
   const daySlot=Math.floor(Date.now()/86400000)%SEEDS.length;
   for(let index=0;index<SEEDS.length;index++) {
     const q=SEEDS[index];
-    const calls=[commons(q,12),flickr(q,12),peertube(q,12)];
+    const calls=[commons(q,12),openverse(q,12),flickr(q,12),peertube(q,12)];
     // Keep daily external provider requests under the free-plan subrequest cap.
     // One YouTube seed rotates per day; live searches can still query YouTube immediately.
     if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY))) {
