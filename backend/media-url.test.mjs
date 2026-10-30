@@ -4,6 +4,9 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
+const workerSource = await readFile(new URL("./worker.js", import.meta.url), "utf8");
+const embedHostDeclaration = source.match(/const PEERTUBE_EMBED_HOSTS = new Set\(\[[^\]]*\]\);/);
+assert.ok(embedHostDeclaration, "PEERTUBE_EMBED_HOSTS must exist in app.js");
 function extract(name) {
   const start = source.indexOf("function " + name + "(");
   assert.notEqual(start, -1, name + " must exist in app.js");
@@ -19,10 +22,11 @@ const helpers = [
   extract("resolveSafeHttpUrl"),
   extract("canonicalizeMediaResultUrl"),
   extract("getYouTubeVideoId"),
+  embedHostDeclaration[0],
   extract("getPlayableEmbedUrl"),
 ].join("\n");
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults}; })()",
+  "(function(){ " + helpers + "; return {canonicalizeMediaResultUrl, getPlayableEmbedUrl, rankMediaResults, PEERTUBE_EMBED_HOSTS}; })()",
   {
     URL,
     MEDIA_STOP_WORDS: new Set([
@@ -135,4 +139,47 @@ test("rejects mismatched and cross-origin embeds, using a safe YouTube fallback 
     }),
     null
   );
+});
+
+
+test("allows canonical cross-origin PeerTube embeds only from configured search instances", () => {
+  const watchUrl = "https://remote-instance.example/videos/watch/original-id";
+  for (const host of api.PEERTUBE_EMBED_HOSTS) {
+    assert.equal(
+      api.getPlayableEmbedUrl({
+        url: watchUrl,
+        embedUrl: `https://${host}/videos/embed/provider-player-id`
+      }),
+      `https://${host}/videos/embed/provider-player-id`
+    );
+  }
+});
+
+test("rejects untrusted, insecure, credential-bearing, and custom-port PeerTube embeds", () => {
+  const watchUrl = "https://remote-instance.example/videos/watch/original-id";
+  for (const embedUrl of [
+    "https://untrusted.example/videos/embed/player-id",
+    "http://peertube.tv/videos/embed/player-id",
+    "https://peertube.tv:8443/videos/embed/player-id",
+    "https://user:pass@peertube.tv/videos/embed/player-id",
+    "https://peertube.tv/videos/watch/player-id"
+  ]) {
+    assert.equal(
+      api.getPlayableEmbedUrl({ url: watchUrl, embedUrl }),
+      null,
+      embedUrl
+    );
+  }
+});
+
+test("keeps the PeerTube embed allowlist aligned with the backend search instances", () => {
+  const primary = workerSource.match(/const PEERTUBE = "([^"]+)";/);
+  const instances = workerSource.match(/const PEERTUBE_INSTANCES = \[([\s\S]*?)\];/);
+  assert.ok(primary, "backend PEERTUBE base must exist");
+  assert.ok(instances, "backend PEERTUBE_INSTANCES must exist");
+  const configuredHosts = [
+    new URL(primary[1]).hostname.replace(/^www\./, ""),
+    ...Array.from(instances[1].matchAll(/"https:\/\/([^"]+)"/g), match => match[1])
+  ].sort();
+  assert.deepEqual([...api.PEERTUBE_EMBED_HOSTS].sort(), configuredHosts);
 });
