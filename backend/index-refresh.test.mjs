@@ -31,3 +31,11 @@ test("bounds stored provider failure notes and handles missing error details", (
   assert.ok(long.length <= 150);
   assert.equal(indexFailure("", null), "Unknown provider: request failed");
 });
+
+
+test("collapses multiline and repeated whitespace in provider failure notes", () => {
+  assert.equal(
+    indexFailure("Openverse", { message: "  timeout\nwhile\tfetch  " }),
+    "Openverse: timeout while fetch"
+  );
+});
