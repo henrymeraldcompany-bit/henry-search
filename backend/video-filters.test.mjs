@@ -48,6 +48,15 @@ test("treats missing and invalid durations as unknown rather than zero", () => {
   ), false);
 });
 
+test("normalization rejects a video explicitly marked NSFW", () => {
+  const video = api.normalizeVideoResult({
+    url: "https://peertube.tv/videos/watch/flagged",
+    title: "Flagged result",
+    nsfw: true
+  });
+  assert.equal(video, null);
+});
+
 test("normalizes unknown video duration metadata without displaying 0:00", () => {
   const video = api.normalizeVideoResult({
     url: "https://peer.tube/w/unknown-duration",
@@ -115,7 +124,7 @@ function createMediaFetchers(fetchJson) {
       SEARCH_API: "https://legacy.example",
       VIDEO_SEARCH_BASE: "https://peertube.tv",
       fetchJson,
-      normalizeVideoResult: item => item && item.url ? item : null,
+      normalizeVideoResult: item => item && item.url && item.nsfw !== true ? item : null,
       console: { warn() {} }
     }
   );
@@ -140,13 +149,38 @@ test("keeps a successful empty video response instead of asking weaker fallback 
   const fetchers = createMediaFetchers(async value => {
     const url = new URL(value);
     calls.push(url.hostname);
-    if (url.hostname === "media.example") return { results: [] };
+    if (url.hostname === "media.example") return { results: [], safeSearch: true };
     throw new Error("A fallback should not be called after a successful empty response");
   });
 
   const result = await fetchers.fetchVideoResults("solar system");
   assert.equal(result.items.length, 0);
   assert.deepEqual(calls, ["media.example"]);
+});
+
+test("requires safety confirmation and filters direct PeerTube fallback to explicitly safe results", async () => {
+  const calls = [];
+  const fetchers = createMediaFetchers(async value => {
+    const url = new URL(value);
+    calls.push(url);
+    if (url.hostname === "media.example" || url.hostname === "legacy.example") {
+      return { results: [] }; // Missing safeSearch is not trusted for video results.
+    }
+    assert.equal(url.searchParams.get("nsfw"), "false");
+    return {
+      data: [
+        { url: "https://peertube.tv/videos/watch/safe", title: "Safe result", nsfw: false },
+        { url: "https://peertube.tv/videos/watch/flagged", title: "Flagged result", nsfw: true },
+        { url: "https://peertube.tv/videos/watch/unknown", title: "Unclassified result" }
+      ]
+    };
+  });
+
+  const result = await fetchers.fetchVideoResults("solar system");
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].searchParams.get("nsfw"), "false");
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].title, "Safe result");
 });
 
 test("uses the legacy image endpoint only when the preferred media endpoint fails", async () => {

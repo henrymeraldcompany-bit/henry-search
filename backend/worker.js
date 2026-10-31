@@ -603,7 +603,7 @@ async function refresh(env) {
       {name:"Flickr public feed",run:()=>flickr(q,12)},
       {name:"PeerTube",run:()=>peertube(q,12)}
     ].filter(function(call){return !circuit.isDisabled(call.name);});
-    // Four rotating seeds keep the daily discovery set broad while leaving
+    // Six rotating seeds keep the daily discovery set broad while leaving
     // substantial headroom under the Workers Free 50-subrequest ceiling.
     // YouTube, when configured, adds one strict-safe search and one duration lookup.
     if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY),dailySeeds.length) &&

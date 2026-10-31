@@ -835,7 +835,7 @@ function getYouTubeVideoId(value) {
 }
 
 function normalizeVideoResult(item) {
-  if (!item || typeof item !== "object") return null;
+  if (!item || typeof item !== "object" || item.nsfw === true) return null;
 
   let instanceBase = VIDEO_SEARCH_BASE;
   const hostValue = typeof item.host === "string" ? item.host
@@ -977,6 +977,9 @@ async function fetchVideoResults(query) {
       const endpoint = new URL("/videos", api);
       endpoint.searchParams.set("q", query);
       const data = await fetchJson(endpoint.toString());
+      if (data.safeSearch !== true) {
+        throw new Error("Video endpoint did not confirm restricted-content filtering");
+      }
       const items = Array.isArray(data.results) ? data.results
         : Array.isArray(data.items) ? data.items : [];
       return {
@@ -991,12 +994,13 @@ async function fetchVideoResults(query) {
   const endpoint = new URL("/api/v1/search/videos", VIDEO_SEARCH_BASE);
   endpoint.searchParams.set("search", query);
   endpoint.searchParams.set("count", "24");
-  endpoint.searchParams.set("sort", "-publishedAt");
+  endpoint.searchParams.set("sort", "-match");
+  endpoint.searchParams.set("nsfw", "false");
 
   const data = await fetchJson(endpoint.toString());
   const items = Array.isArray(data.data) ? data.data : Array.isArray(data.results) ? data.results : [];
   return {
-    items: items.map((item) => {
+    items: items.filter((item) => item && item.nsfw === false).map((item) => {
       const normalized = normalizeVideoResult({ ...item, host: item.host || VIDEO_SEARCH_BASE });
       return normalized;
     }).filter(Boolean),
