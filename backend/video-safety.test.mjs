@@ -99,22 +99,22 @@ test("indexed video SQL excludes unknown and flagged rows while image lookup is 
 
 test("daily rotating batches cover the full seed bank without overlap across a cycle", () => {
   const seeds = Array.from({ length: 24 }, (_, index) => "seed-" + index);
-  const batches = Array.from({ length: 6 }, (_, day) =>
-    Array.from(api.getDailySeedBatch(day, seeds, 4))
+  const batches = Array.from({ length: 4 }, (_, day) =>
+    Array.from(api.getDailySeedBatch(day, seeds, 6))
   );
-  assert.equal(batches.every(batch => batch.length === 4), true);
+  assert.equal(batches.every(batch => batch.length === 6), true);
   assert.equal(new Set(batches.flat()).size, 24);
   assert.equal(JSON.stringify(batches.flat()), JSON.stringify(seeds));
 });
 
 test("optional YouTube indexing rotates one selected seed per batch day", () => {
-  for (let day = 0; day < 4; day++) {
-    const selected = [0, 1, 2, 3].filter(index =>
-      api.shouldIndexYouTubeSeed(index, day, true, 4)
+  for (let day = 0; day < 6; day++) {
+    const selected = [0, 1, 2, 3, 4, 5].filter(index =>
+      api.shouldIndexYouTubeSeed(index, day, true, 6)
     );
     assert.equal(JSON.stringify(selected), JSON.stringify([day]));
   }
-  assert.equal(api.shouldIndexYouTubeSeed(0, 0, false, 4), false);
+  assert.equal(api.shouldIndexYouTubeSeed(0, 0, false, 6), false);
 });
 
 test("daily index circuit breaker disables a provider only after consecutive failures", () => {

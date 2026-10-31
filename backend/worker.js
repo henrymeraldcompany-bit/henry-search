@@ -13,7 +13,7 @@ const SEEDS = [
   "renewable energy", "language learning", "architecture", "art education",
   "music performance", "literature", "astronomy", "wildlife"
 ];
-const DAILY_SEED_BATCH_SIZE = 4;
+const DAILY_SEED_BATCH_SIZE = 6;
 const PEERTUBE = "https://peertube.tv";
 // Use several public PeerTube instances so search is not tied to one instance's
 // federation/search-index settings. Failed instances are isolated per request.
