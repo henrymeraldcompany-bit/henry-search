@@ -9,6 +9,18 @@ on:
       - "index.html"
       - "style.css"
       - "backend/worker.js"
+      - "backend/image-search.js"
+      - "backend/wrangler.toml"
+      - "backend/browser-playback-smoke.mjs"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/media-live-smoke.yml"
+      - "app.js"
+      - "index.html"
+      - "style.css"
+      - "backend/worker.js"
+      - "backend/image-search.js"
       - "backend/wrangler.toml"
       - "backend/browser-playback-smoke.mjs"
   workflow_dispatch:
@@ -66,6 +78,7 @@ jobs:
             catch { return false; }
           };
           const hosts = new Set();
+          const providers = new Set();
           for (const item of d.results) {
             if (!item || typeof item.title !== "string" || !item.title.trim()) {
               throw new Error("Media result is missing a title");
@@ -78,6 +91,8 @@ jobs:
             }
             const sourceUrl = new URL(kind === "images" ? item.page : item.url);
             hosts.add(sourceUrl.hostname);
+            const providerName = String(item.source || "").trim();
+            if (providerName) providers.add(providerName);
             if (kind === "videos") {
               for (const key of ["thumbnailUrl", "embedUrl"]) {
                 const value = item[key];
@@ -123,8 +138,12 @@ jobs:
               }
             }
           }
+          if (d.count === 0) throw new Error("No media results returned for " + kind);
+          if (d.count >= 6 && providers.size < 2) {
+            throw new Error("Expected multiple contributing sources for " + kind + ", received " + providers.size);
+          }
           console.log("Search route: " + kind + "; " + d.count +
-            " results across " + hosts.size + " source hosts");
+            " results across " + hosts.size + " source hosts and " + providers.size + " providers");
           NODE
             rm -f "$tmp"
           done
@@ -201,10 +220,10 @@ jobs:
           echo "Last HTTP status: ${status:-request-error}"
           exit 1
       - name: Install Playwright and Chromium for browser checks
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         run: |
           npm install --no-save --no-package-lock playwright@1.56.0
           npx playwright install chromium
       - name: Verify in-page video player controls in Chromium
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         run: node backend/browser-playback-smoke.mjs
