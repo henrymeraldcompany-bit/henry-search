@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rankImageResults } from "./image-search.js";
+import { rankImageResults, runImageProviders } from "./image-search.js";
 
 test("ranks exact image-title phrases above loose description matches", () => {
   const rows = [
@@ -118,4 +118,93 @@ test("normalizes www host aliases before applying source-host diversity", () => 
   assert.equal(hosts.filter(host => host === "alpha.example").length, 2);
   assert.ok(hosts.includes("beta.example"));
   assert.ok(hosts.includes("charlie.example"));
+});
+
+
+test("deduplicates live and indexed image variants by canonical media URL and merges useful attribution", () => {
+  const result = rankImageResults([
+    {
+      source: "Flickr public feed",
+      title: "Solar poster",
+      page_url: "https://www.flickr.com/photos/example/1",
+      media_url: "https://www.cdn.example/solar.jpg?utm_source=index",
+      license: "CC BY 4.0",
+      license_url: "https://creativecommons.org/licenses/by/4.0/",
+      author: "Example photographer"
+    },
+    {
+      source: "Openverse",
+      title: "Solar system diagram",
+      page_url: "https://openverse.org/image/2",
+      media_url: "https://cdn.example/solar.jpg",
+      license: "",
+      author: ""
+    }
+  ], "solar system", 10);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].title, "Solar system diagram");
+  assert.equal(result[0].license, "CC BY 4.0");
+  assert.equal(result[0].license_url, "https://creativecommons.org/licenses/by/4.0/");
+  assert.equal(result[0].author, "Example photographer");
+  assert.deepEqual([...result[0].sources].sort(), ["Flickr public feed", "Openverse"]);
+});
+
+test("keeps distinct image files from the same gallery page", () => {
+  const result = rankImageResults([
+    {
+      source: "Wikimedia Commons",
+      title: "Solar system diagram A",
+      page_url: "https://commons.example/gallery/solar-system",
+      media_url: "https://cdn.example/images/solar-a.jpg"
+    },
+    {
+      source: "Wikimedia Commons",
+      title: "Solar system diagram B",
+      page_url: "https://commons.example/gallery/solar-system",
+      media_url: "https://cdn.example/images/solar-b.jpg"
+    }
+  ], "solar system", 10);
+
+  assert.equal(result.length, 2);
+  assert.deepEqual(result.map(row => row.title), [
+    "Solar system diagram A",
+    "Solar system diagram B"
+  ]);
+});
+
+test("merges cross-provider image duplicates without collapsing different gallery images", async () => {
+  const outcome = await runImageProviders([
+    {
+      name: "Wikimedia Commons",
+      search: async () => [
+        {
+          title: "Solar system image A",
+          page_url: "https://commons.wikimedia.org/wiki/Gallery",
+          media_url: "https://upload.wikimedia.org/images/solar-a.jpg",
+          thumbnail_url: "https://upload.wikimedia.org/images/solar-a.jpg"
+        },
+        {
+          title: "Solar system image B",
+          page_url: "https://commons.wikimedia.org/wiki/Gallery",
+          media_url: "https://upload.wikimedia.org/images/solar-b.jpg",
+          thumbnail_url: "https://upload.wikimedia.org/images/solar-b.jpg"
+        }
+      ]
+    },
+    {
+      name: "Openverse",
+      search: async () => [{
+        title: "Solar system image A from Openverse",
+        page_url: "https://openverse.org/image/solar-a",
+        media_url: "https://www.upload.wikimedia.org/images/solar-a.jpg?utm_source=feed",
+        thumbnail_url: "https://www.upload.wikimedia.org/images/solar-a.jpg"
+      }]
+    }
+  ], "solar system");
+
+  assert.equal(outcome.results.length, 2);
+  const duplicate = outcome.results.find(row => row.media_url.includes("solar-a.jpg"));
+  assert.deepEqual([...duplicate.sources].sort(), ["Openverse", "Wikimedia Commons"]);
+  assert.ok(outcome.results.some(row => row.media_url.includes("solar-b.jpg")));
 });
