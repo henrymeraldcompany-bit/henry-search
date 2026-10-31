@@ -29,4 +29,4 @@ jobs:
         with:
           node-version: 22
       - name: Run media regression tests
-        run: node --check backend/worker.js && node --check backend/image-search.js && node --check backend/search-worker.js && node --test backend/duration.test.mjs backend/indexed-search.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs backend/image-search-ranking.test.mjs backend/search-worker.test.mjs
+        run: node --check backend/worker.js && node --check backend/image-search.js && node --check backend/search-worker.js && node --test backend/duration.test.mjs backend/indexed-search.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs backend/image-search-ranking.test.mjs backend/index-refresh.test.mjs backend/search-worker.test.mjs
