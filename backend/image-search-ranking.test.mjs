@@ -41,7 +41,7 @@ test("uses tags and descriptions as secondary relevance signals", () => {
 
 test("uses provider preference only after relevance and keeps host diversity", () => {
   const result = rankImageResults([
-    {source:"Google Images",title:"Solar system unrelated",page_url:"https://google.example/1"},
+    {source:"Google Images",title:"Football highlights",page_url:"https://google.example/1"},
     {source:"Openverse",title:"Solar system image",page_url:"https://openverse.example/1"},
     {source:"Google Images",title:"Solar system image",page_url:"https://google.example/2"}
   ],"solar system",10);
@@ -87,4 +87,35 @@ test("counts merged multi-provider images as representation from their contribut
   ],"galaxy",3);
   assert.equal(result.length,3);
   assert.ok(result.some(row=>row.source==="Flickr public feed"));
+});
+
+
+test("tokenizes accented and non-Latin image query words", () => {
+  const accented = rankImageResults([
+    { title: "Café technology", page_url: "https://accent.example/1" }
+  ], "café technology", 10);
+  assert.equal(accented.length, 1);
+  assert.equal(accented[0].title, "Café technology");
+
+  const mixedScript = rankImageResults([
+    { title: "東京 system", page_url: "https://unicode.example/1" }
+  ], "東京 system", 10);
+  assert.equal(mixedScript.length, 1);
+  assert.equal(mixedScript[0].title, "東京 system");
+});
+
+test("normalizes www host aliases before applying source-host diversity", () => {
+  const rows = [
+    { source: "Wikimedia Commons", title: "Solar system image 1", page_url: "https://www.alpha.example/1" },
+    { source: "Wikimedia Commons", title: "Solar system image 2", page_url: "https://alpha.example/2" },
+    { source: "Wikimedia Commons", title: "Solar system image 3", page_url: "https://www.alpha.example/3" },
+    { source: "Wikimedia Commons", title: "Solar system image 4", page_url: "https://beta.example/4" },
+    { source: "Wikimedia Commons", title: "Solar system image 5", page_url: "https://charlie.example/5" }
+  ];
+  const result = rankImageResults(rows, "solar system", 4);
+  const hosts = result.map(row => new URL(row.page_url).hostname.replace(/^www\./, ""));
+  assert.equal(result.length, 4);
+  assert.equal(hosts.filter(host => host === "alpha.example").length, 2);
+  assert.ok(hosts.includes("beta.example"));
+  assert.ok(hosts.includes("charlie.example"));
 });

@@ -122,7 +122,7 @@ const IMAGE_STOP_WORDS = new Set([
 
 function imageTerms(value) {
   return String(value || "").toLowerCase()
-    .split(/[^\\p{L}\\p{N}]+/u).filter(word => word.length > 1 && !IMAGE_STOP_WORDS.has(word));
+    .split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1 && !IMAGE_STOP_WORDS.has(word));
 }
 
 function imageMetadataText(value) {
@@ -148,7 +148,7 @@ export function rankImageResults(rows, query, limit = 40) {
   const rawQuery = String(query || "").trim().toLowerCase();
   const queryTokens = imageTerms(rawQuery);
   if (!queryTokens.length || !Array.isArray(rows)) return [];
-  const normalizedPhrase = rawQuery.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+  const normalizedPhrase = rawQuery.split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
   const candidates = [];
   rows.forEach((row, index) => {
     if (!row || typeof row !== "object") return;
@@ -159,7 +159,7 @@ export function rankImageResults(rows, query, limit = 40) {
     const titleTokens = imageTerms(title);
     const titleSet = new Set(titleTokens);
     const detailSet = new Set(imageTerms([description, tags, author].join(" ")));
-    const titlePhrase = title.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+    const titlePhrase = title.split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
     const exactTitlePhrase = !!normalizedPhrase && (" " + titlePhrase + " ").includes(" " + normalizedPhrase + " ");
     const matchedTitle = queryTokens.filter(token => titleSet.has(token)).length;
     const matchedDetails = queryTokens.filter(token => !titleSet.has(token) && detailSet.has(token)).length;
@@ -171,7 +171,7 @@ export function rankImageResults(rows, query, limit = 40) {
       (matchedTitle === queryTokens.length ? 6 : 0) + coverage * 5;
     const page = String(row.page_url || row.page || row.url || "");
     let host = "";
-    try { host = new URL(page).hostname.toLowerCase().replace(/^www\\./, ""); } catch (_) {}
+    try { host = new URL(page).hostname.toLowerCase().replace(/^www\./, ""); } catch (_) {}
     candidates.push({
       row, index, score, host,
       providerPriority: row.source === "Google Images" ? 1 : 0,
@@ -209,10 +209,31 @@ export function rankImageResults(rows, query, limit = 40) {
     for (const name of sources) providerCounts.set(name, (providerCounts.get(name) || 0) + 1);
     if (selected.length >= max) break;
   }
-  // Relax diversity caps only after all eligible alternatives have been considered.
-  for (const candidate of deferred) {
-    if (selected.length >= max) break;
+  // Relax diversity caps only after the first pass, then fill fairly. A simple
+  // relevance-ordered fallback would let the first provider dominate whenever
+  // every provider reaches its cap. Prefer the least represented provider and
+  // host first, while retaining relevance order within each group.
+  const remaining = deferred.slice();
+  while (selected.length < max && remaining.length) {
+    remaining.sort((a, b) => {
+      const providerCountFor = candidate => {
+        const sources = providerKeys(candidate);
+        return sources.length
+          ? Math.min(...sources.map(name => providerCounts.get(name) || 0))
+          : 0;
+      };
+      const providerDifference = providerCountFor(a) - providerCountFor(b);
+      if (providerDifference) return providerDifference;
+      const hostDifference = (hostCounts.get(a.host) || 0) - (hostCounts.get(b.host) || 0);
+      if (hostDifference) return hostDifference;
+      return a.index - b.index;
+    });
+    const candidate = remaining.shift();
     selected.push(candidate);
+    if (candidate.host) hostCounts.set(candidate.host, (hostCounts.get(candidate.host) || 0) + 1);
+    for (const name of providerKeys(candidate)) {
+      providerCounts.set(name, (providerCounts.get(name) || 0) + 1);
+    }
   }
   return selected.map(candidate => candidate.row);
 }
