@@ -180,6 +180,8 @@ jobs:
     env:
       PAGES_BASE: https://henrymeraldcompany-bit.github.io/henry-search
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
       - name: Verify the published app.js matches this commit
         shell: bash
         run: |

@@ -526,21 +526,35 @@ function shouldIndexYouTubeSeed(seedIndex, daySlot, hasKey) {
   const slot = ((daySlot % SEEDS.length) + SEEDS.length) % SEEDS.length;
   return seedIndex === slot;
 }
+function indexFailure(provider, error) {
+  const name = String(provider || "Unknown provider").trim().slice(0, 48);
+  const message = String(error && error.message || error || "request failed")
+    .replace(/\s+/g, " ").trim();
+  return (name + ": " + message).slice(0, 150);
+}
+
 async function refresh(env) {
   let saved=0, failures=[];
   const daySlot=Math.floor(Date.now()/86400000)%SEEDS.length;
   for(let index=0;index<SEEDS.length;index++) {
     const q=SEEDS[index];
-    const calls=[commons(q,12),openverse(q,12),flickr(q,12),peertube(q,12)];
+    const calls=[
+      {name:"Wikimedia Commons",run:()=>commons(q,12)},
+      {name:"Openverse",run:()=>openverse(q,12)},
+      {name:"Flickr public feed",run:()=>flickr(q,12)},
+      {name:"PeerTube",run:()=>peertube(q,12)}
+    ];
     // Keep daily external provider requests under the free-plan subrequest cap.
     // One YouTube seed rotates per day; live searches can still query YouTube immediately.
     if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY))) {
-      calls.push(youtube(q,env.YOUTUBE_API_KEY,8));
+      calls.push({name:"YouTube",run:()=>youtube(q,env.YOUTUBE_API_KEY,8)});
     }
-    const settled=await Promise.allSettled(calls);
-    for(const c of settled) {
-      if(c.status==="rejected"){failures.push(clean(c.reason && c.reason.message || "provider failed",150));continue;}
-      try{saved+=await save(env,c.value);}catch(e){failures.push(clean(e && e.message || "database failed",150));}
+    const settled=await Promise.allSettled(calls.map(call=>call.run()));
+    for(let callIndex=0;callIndex<settled.length;callIndex++) {
+      const outcome=settled[callIndex], providerName=calls[callIndex].name;
+      if(outcome.status==="rejected"){failures.push(indexFailure(providerName,outcome.reason));continue;}
+      try{saved+=await save(env,outcome.value);}
+      catch(error){failures.push(indexFailure(providerName+" database save",error));}
     }
   }
   await env.MEDIA_DB.prepare("DELETE FROM media_items WHERE indexed_at < ?").bind(new Date(Date.now()-180*86400000).toISOString()).run();
