@@ -537,13 +537,12 @@ function renderImageGallery(items, query = "") {
   if (currentImageFilterQuery !== query) { currentImageFilterQuery = query; currentImageFilters = {date:"any",dimensions:"any",source:"all",format:"all"}; }
   items = applyImageFilters(originalItems);
   resultsList.replaceChildren();
+  resultsList.appendChild(renderImageFilterBar(originalItems));
 
   if (!Array.isArray(items) || items.length === 0) {
-    showMessage("No images were found. Try another search.");
+    showMessage(originalItems.length ? "No images match these filters. Change a filter or choose the default options." : "No images were found. Try another search.");
     return;
   }
-
-  resultsList.appendChild(renderImageFilterBar(originalItems));
   const gallery = document.createElement("div");
   gallery.className = "image-gallery";
 
