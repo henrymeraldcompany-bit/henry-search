@@ -5,7 +5,15 @@ import { runImageProviders, rankImageResults } from "./image-search.js";
  * Indexes metadata and original URLs only; does not re-host media files.
  * Binding required: MEDIA_DB (Cloudflare D1). Optional secret: YOUTUBE_API_KEY.
  */
-const SEEDS = ["science", "technology", "education", "nature", "history", "engineering", "Nigeria", "space"];
+const SEEDS = [
+  "science", "technology", "education", "nature",
+  "history", "engineering", "Nigeria", "space",
+  "mathematics", "biology", "computer science", "programming",
+  "geography", "African history", "Nigerian culture", "climate science",
+  "renewable energy", "language learning", "architecture", "art education",
+  "music performance", "literature", "astronomy", "wildlife"
+];
+const DAILY_SEED_BATCH_SIZE = 6;
 const PEERTUBE = "https://peertube.tv";
 // Use several public PeerTube instances so search is not tied to one instance's
 // federation/search-index settings. Failed instances are isolated per request.
@@ -173,6 +181,9 @@ function normalizeNumericDuration(value) {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 function videoRow(v) {
+  // Require an explicit safe classification from PeerTube; unknown or flagged
+  // items are not returned or indexed.
+  if (!v || v.nsfw !== false) return null;
   const baseText = v && v.host ? (String(v.host).startsWith("http") ? v.host : "https://" + v.host) : PEERTUBE;
   const base = safeUrl(baseText, PEERTUBE) || PEERTUBE;
   const watch = v && (v.url || v.watchUrl || v.originalUrl ||
@@ -192,6 +203,7 @@ function videoRow(v) {
     author: clean((v && v.channel && v.channel.displayName) || (v && v.account && (v.account.displayName || v.account.name)) || "", 200),
     license: "", published_at: published,
     duration_seconds: normalizeNumericDuration(v && v.duration),
+    nsfw: 0,
     tags: ""
   };
 }
@@ -207,6 +219,7 @@ function peertubeSearchTargets(q, count) {
     url.searchParams.set("search", search);
     url.searchParams.set("count", String(limit));
     url.searchParams.set("sort", "-match");
+    url.searchParams.set("nsfw", "false");
     return { base: base, url: url.href };
   });
 }
@@ -224,6 +237,12 @@ async function peertube(q, count) {
       return videoRow(row);
     }).filter(Boolean);
   }));
+  const successfulResponses = responses.filter(function (response) {
+    return response.status === "fulfilled";
+  }).length;
+  if (targets.length && successfulResponses === 0) {
+    throw new Error("All configured PeerTube instances failed");
+  }
   const rows = [];
   responses.forEach(function (response, index) {
     if (response.status === "fulfilled") {
@@ -243,7 +262,7 @@ function isoDurationSeconds(value) {
 async function youtube(q, key, count) {
   if (!key) return [];
   const u = new URL("https://www.googleapis.com/youtube/v3/search");
-  [["part","snippet"],["type","video"],["maxResults",String(count || 10)],["order","relevance"],["q",q],["key",key]]
+  [["part","snippet"],["type","video"],["maxResults",String(count || 10)],["order","relevance"],["safeSearch","strict"],["q",q],["key",key]]
     .forEach(function (p) { u.searchParams.set(p[0], p[1]); });
   const data = await getJson(u.href);
   const rows = (data.items || []).map(function (v) {
@@ -256,7 +275,7 @@ async function youtube(q, key, count) {
       thumbnail_url:safeUrl((t.high && t.high.url) || (t.medium && t.medium.url) || (t.default && t.default.url) || ""),
       embed_url:"https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id),
       author:clean(s.channelTitle,200), license:"", published_at:s.publishedAt || "",
-      duration_seconds:null, tags:"" };
+      duration_seconds:null, nsfw:0, tags:"" };
   }).filter(Boolean);
   if (!rows.length) return rows;
   const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
@@ -278,10 +297,10 @@ async function save(env, rows) {
   if (!rows.length) return 0;
   const stmts = rows.map(function (r) {
     return env.MEDIA_DB.prepare(
-      "INSERT INTO media_items (kind,source,source_id,title,description,page_url,media_url,thumbnail_url,embed_url,author,license,published_at,duration_seconds,tags,indexed_at) " +
-      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,source,page_url) DO UPDATE SET " +
-      "source_id=excluded.source_id,title=excluded.title,description=excluded.description,media_url=excluded.media_url,thumbnail_url=excluded.thumbnail_url,embed_url=excluded.embed_url,author=excluded.author,license=excluded.license,published_at=excluded.published_at,duration_seconds=excluded.duration_seconds,tags=excluded.tags,indexed_at=excluded.indexed_at"
-    ).bind(r.kind,r.source,r.source_id,r.title,r.description,r.page_url,r.media_url,r.thumbnail_url,r.embed_url,r.author,r.license,r.published_at,r.duration_seconds,JSON.stringify(r.tags || []),new Date().toISOString());
+      "INSERT INTO media_items (kind,source,source_id,title,description,page_url,media_url,thumbnail_url,embed_url,author,license,published_at,duration_seconds,tags,nsfw,indexed_at) " +
+      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,source,page_url) DO UPDATE SET " +
+      "source_id=excluded.source_id,title=excluded.title,description=excluded.description,media_url=excluded.media_url,thumbnail_url=excluded.thumbnail_url,embed_url=excluded.embed_url,author=excluded.author,license=excluded.license,published_at=excluded.published_at,duration_seconds=excluded.duration_seconds,tags=excluded.tags,nsfw=excluded.nsfw,indexed_at=excluded.indexed_at"
+    ).bind(r.kind,r.source,r.source_id,r.title,r.description,r.page_url,r.media_url,r.thumbnail_url,r.embed_url,r.author,r.license,r.published_at,r.duration_seconds,JSON.stringify(r.tags || []),Number(r.nsfw) === 0 ? 0 : 1,new Date().toISOString());
   });
   for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));
   return rows.length;
@@ -341,10 +360,11 @@ function indexedQuery(kind, q, limit) {
     ? Math.min(120, Math.floor(requestedLimit))
     : 100;
 
+  const safeVideoFilter = kind === "video" ? " AND nsfw=0" : "";
   return {
     sql: "WITH normalized AS (SELECT *, " + titleWords + " AS title_words, " +
       descriptionWords + " AS description_words, " + tagsWords +
-      " AS tags_words FROM media_items WHERE kind=?) " +
+      " AS tags_words FROM media_items WHERE kind=?" + safeVideoFilter + ") " +
       "SELECT *, (" + score + ") AS relevance_score, " +
       "CASE WHEN title_words LIKE ? THEN 0 ELSE 1 END AS phrase_rank " +
       "FROM normalized WHERE (" + conditions + ") " +
@@ -398,6 +418,7 @@ function rank(rows,q,limit) {
   if(!queryTerms.length)return [];
   const candidates=[];
   for (const r of rows) {
+    if (r.nsfw === true || Number(r.nsfw) > 0) continue;
     const url=safeUrl(r.page_url || r.url || r.page);
     const key=canonicalMediaKey(url);
     if (!url || !key) continue;
@@ -519,12 +540,48 @@ async function search(request,env,kind) {
     providers:kind==="image"?imageProviderState.providers:undefined,
     failedProviders:kind==="image"?imageProviderState.failures:undefined,
     attemptedProviders:kind==="image"?imageProviderState.attempted:undefined,
+    safeSearch:kind==="video",
     expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
-function shouldIndexYouTubeSeed(seedIndex, daySlot, hasKey) {
-  if (!hasKey || !Number.isInteger(seedIndex) || !Number.isInteger(daySlot) || !SEEDS.length) return false;
-  const slot = ((daySlot % SEEDS.length) + SEEDS.length) % SEEDS.length;
+function getDailySeedBatch(daySlot, seeds, batchSize) {
+  const list = Array.isArray(seeds) && seeds.length ? seeds : SEEDS;
+  const requested = Number(batchSize);
+  const size = Number.isFinite(requested) && requested > 0
+    ? Math.min(list.length, Math.floor(requested))
+    : DAILY_SEED_BATCH_SIZE;
+  const day = Number.isInteger(daySlot) ? daySlot : 0;
+  const normalizedDay = ((day % list.length) + list.length) % list.length;
+  const start = (normalizedDay * size) % list.length;
+  return Array.from({ length: size }, function (_, offset) {
+    return list[(start + offset) % list.length];
+  });
+}
+function shouldIndexYouTubeSeed(seedIndex, daySlot, hasKey, batchSize) {
+  const requested = Number(batchSize);
+  const size = Number.isFinite(requested) && requested > 0
+    ? Math.floor(requested)
+    : DAILY_SEED_BATCH_SIZE;
+  if (!hasKey || !Number.isInteger(seedIndex) || !Number.isInteger(daySlot) || size < 1) return false;
+  const slot = ((daySlot % size) + size) % size;
   return seedIndex === slot;
+}
+function createIndexCircuitBreaker(threshold) {
+  const requested = Number(threshold);
+  const limit = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 2;
+  const streaks = new Map();
+  const disabled = new Set();
+  return {
+    isDisabled: function (provider) { return disabled.has(provider); },
+    recordSuccess: function (provider) { streaks.delete(provider); },
+    recordFailure: function (provider) {
+      if (disabled.has(provider)) return streaks.get(provider) || limit;
+      const streak = (streaks.get(provider) || 0) + 1;
+      streaks.set(provider, streak);
+      if (streak >= limit) disabled.add(provider);
+      return streak;
+    },
+    disabledProviders: function () { return Array.from(disabled); }
+  };
 }
 function indexFailure(provider, error) {
   const name = String(provider || "Unknown provider").trim().slice(0, 48);
@@ -535,32 +592,46 @@ function indexFailure(provider, error) {
 
 async function refresh(env) {
   let saved=0, failures=[];
-  const daySlot=Math.floor(Date.now()/86400000)%SEEDS.length;
-  for(let index=0;index<SEEDS.length;index++) {
-    const q=SEEDS[index];
+  const daySlot=Math.floor(Date.now()/86400000);
+  const dailySeeds=getDailySeedBatch(daySlot,SEEDS,DAILY_SEED_BATCH_SIZE);
+  const circuit=createIndexCircuitBreaker(2);
+  for(let index=0;index<dailySeeds.length;index++) {
+    const q=dailySeeds[index];
     const calls=[
       {name:"Wikimedia Commons",run:()=>commons(q,12)},
       {name:"Openverse",run:()=>openverse(q,12)},
       {name:"Flickr public feed",run:()=>flickr(q,12)},
       {name:"PeerTube",run:()=>peertube(q,12)}
-    ];
-    // Keep daily external provider requests under the free-plan subrequest cap.
-    // One YouTube seed rotates per day; live searches can still query YouTube immediately.
-    if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY))) {
+    ].filter(function(call){return !circuit.isDisabled(call.name);});
+    // Six rotating seeds keep the daily discovery set broad while leaving
+    // substantial headroom under the Workers Free 50-subrequest ceiling.
+    // YouTube, when configured, adds one strict-safe search and one duration lookup.
+    if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY),dailySeeds.length) &&
+       !circuit.isDisabled("YouTube")) {
       calls.push({name:"YouTube",run:()=>youtube(q,env.YOUTUBE_API_KEY,8)});
     }
     const settled=await Promise.allSettled(calls.map(call=>call.run()));
     for(let callIndex=0;callIndex<settled.length;callIndex++) {
       const outcome=settled[callIndex], providerName=calls[callIndex].name;
-      if(outcome.status==="rejected"){failures.push(indexFailure(providerName,outcome.reason));continue;}
+      if(outcome.status==="rejected") {
+        circuit.recordFailure(providerName);
+        failures.push(indexFailure(providerName,outcome.reason));
+        continue;
+      }
+      circuit.recordSuccess(providerName);
       try{saved+=await save(env,outcome.value);}
       catch(error){failures.push(indexFailure(providerName+" database save",error));}
     }
   }
+  const disabledProviders=circuit.disabledProviders();
+  if(disabledProviders.length) {
+    console.warn("Daily index disabled repeatedly failing providers for this run:",disabledProviders.join(", "));
+  }
   await env.MEDIA_DB.prepare("DELETE FROM media_items WHERE indexed_at < ?").bind(new Date(Date.now()-180*86400000).toISOString()).run();
   await env.MEDIA_DB.prepare("INSERT INTO index_runs (finished_at,rows_processed,failure_count,note) VALUES (?,?,?,?)")
     .bind(new Date().toISOString(),saved,failures.length,failures.slice(0,10).join("; ").slice(0,1200)).run();
-  console.log(JSON.stringify({event:"daily-index-refresh",saved:saved,failures:failures.length}));
+  console.log(JSON.stringify({event:"daily-index-refresh",saved:saved,failures:failures.length,
+    seedsProcessed:dailySeeds.length,disabledProviders:disabledProviders}));
 }
 export default {
   async fetch(request,env) {

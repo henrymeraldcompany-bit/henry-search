@@ -86,6 +86,7 @@ test("PeerTube rows preserve missing durations as null instead of zero", () => {
     embedUrl: "/videos/embed/abc123",
     thumbnailUrl: "/thumb.jpg",
     title: "Example video",
+    nsfw: false,
     duration
   });
 
@@ -107,7 +108,8 @@ test("does not turn missing video URLs into the instance homepage", () => {
 
   const missingPage = videoRow({
     host: "videos.example",
-    title: "Video without a watch URL"
+    title: "Video without a watch URL",
+    nsfw: false
   });
   assert.equal(missingPage, null);
 });
@@ -116,7 +118,8 @@ test("keeps absent PeerTube embed and thumbnail URLs empty", () => {
   const row = videoRow({
     host: "https://videos.example",
     url: "/videos/watch/abc123",
-    title: "Video without optional media URLs"
+    title: "Video without optional media URLs",
+    nsfw: false
   });
   assert.ok(row);
   assert.equal(row.page_url, "https://videos.example/videos/watch/abc123");

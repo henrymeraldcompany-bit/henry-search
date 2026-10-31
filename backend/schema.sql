@@ -7,12 +7,14 @@ CREATE TABLE IF NOT EXISTS media_items (
   thumbnail_url TEXT NOT NULL DEFAULT '', embed_url TEXT NOT NULL DEFAULT '',
   author TEXT NOT NULL DEFAULT '', license TEXT NOT NULL DEFAULT '',
   published_at TEXT NOT NULL DEFAULT '', duration_seconds REAL,
+  nsfw INTEGER NOT NULL DEFAULT 1,
   tags TEXT NOT NULL DEFAULT '[]', indexed_at TEXT NOT NULL,
   UNIQUE(kind,source,page_url)
 );
 CREATE INDEX IF NOT EXISTS idx_media_items_kind ON media_items(kind);
 CREATE INDEX IF NOT EXISTS idx_media_items_source ON media_items(source);
 CREATE INDEX IF NOT EXISTS idx_media_items_indexed_at ON media_items(indexed_at);
+CREATE INDEX IF NOT EXISTS idx_media_items_kind_nsfw ON media_items(kind,nsfw,indexed_at);
 CREATE TABLE IF NOT EXISTS index_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   finished_at TEXT NOT NULL, rows_processed INTEGER NOT NULL DEFAULT 0,
