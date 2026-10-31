@@ -122,7 +122,7 @@ const IMAGE_STOP_WORDS = new Set([
 
 function imageTerms(value) {
   return String(value || "").toLowerCase()
-    .split(/[^\\p{L}\\p{N}]+/u).filter(word => word.length > 1 && !IMAGE_STOP_WORDS.has(word));
+    .split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1 && !IMAGE_STOP_WORDS.has(word));
 }
 
 function imageMetadataText(value) {
@@ -148,7 +148,7 @@ export function rankImageResults(rows, query, limit = 40) {
   const rawQuery = String(query || "").trim().toLowerCase();
   const queryTokens = imageTerms(rawQuery);
   if (!queryTokens.length || !Array.isArray(rows)) return [];
-  const normalizedPhrase = rawQuery.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+  const normalizedPhrase = rawQuery.split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
   const candidates = [];
   rows.forEach((row, index) => {
     if (!row || typeof row !== "object") return;
@@ -159,7 +159,7 @@ export function rankImageResults(rows, query, limit = 40) {
     const titleTokens = imageTerms(title);
     const titleSet = new Set(titleTokens);
     const detailSet = new Set(imageTerms([description, tags, author].join(" ")));
-    const titlePhrase = title.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+    const titlePhrase = title.split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
     const exactTitlePhrase = !!normalizedPhrase && (" " + titlePhrase + " ").includes(" " + normalizedPhrase + " ");
     const matchedTitle = queryTokens.filter(token => titleSet.has(token)).length;
     const matchedDetails = queryTokens.filter(token => !titleSet.has(token) && detailSet.has(token)).length;
@@ -171,7 +171,7 @@ export function rankImageResults(rows, query, limit = 40) {
       (matchedTitle === queryTokens.length ? 6 : 0) + coverage * 5;
     const page = String(row.page_url || row.page || row.url || "");
     let host = "";
-    try { host = new URL(page).hostname.toLowerCase().replace(/^www\\./, ""); } catch (_) {}
+    try { host = new URL(page).hostname.toLowerCase().replace(/^www\./, ""); } catch (_) {}
     candidates.push({
       row, index, score, host,
       providerPriority: row.source === "Google Images" ? 1 : 0,
