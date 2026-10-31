@@ -34,13 +34,15 @@ const helpers = [
   extract("createIndexCircuitBreaker"),
   extract("sqlWordText"),
   extract("indexedQuery"),
+  extract("indexStatusCountsQuery"),
+  extract("videoSafetySummary"),
   extract("isoDurationSeconds"),
   extractAsync("getJson"),
   extractAsync("youtube")
 ].join("\n");
 
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {videoRow,peertubeSearchTargets,getDailySeedBatch,shouldIndexYouTubeSeed,createIndexCircuitBreaker,indexedQuery,youtube}; })()",
+  "(function(){ " + helpers + "; return {videoRow,peertubeSearchTargets,getDailySeedBatch,shouldIndexYouTubeSeed,createIndexCircuitBreaker,indexedQuery,indexStatusCountsQuery,videoSafetySummary,youtube}; })()",
   {
     URL,
     Date,
@@ -140,4 +142,21 @@ test("D1 schema and migration default unverified media to hidden for video searc
   assert.match(schema, /idx_media_items_kind_nsfw/);
   assert.match(migration, /ALTER TABLE media_items ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 1/);
   assert.match(source, /duration_seconds,tags,nsfw,indexed_at/);
+});
+test("index status reports verified-safe and unverified video counts without changing kind totals", () => {
+  const sql = api.indexStatusCountsQuery();
+  assert.match(sql, /SUM\\(CASE WHEN nsfw=0 THEN 1 ELSE 0 END\\) AS verified_safe/);
+  assert.match(sql, /SUM\\(CASE WHEN nsfw=1 THEN 1 ELSE 0 END\\) AS unverified/);
+  const summary = api.videoSafetySummary([
+    { kind: "image", verified_safe: 0, unverified: 674 },
+    { kind: "video", verified_safe: "13", unverified: "253" }
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary)), {
+    verifiedSafe: 13,
+    unverified: 253
+  });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(api.videoSafetySummary([{ kind: "image", total: 10 }]))),
+    { verifiedSafe: 0, unverified: 0 }
+  );
 });
