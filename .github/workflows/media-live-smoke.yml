@@ -138,6 +138,9 @@ jobs:
               }
             }
           }
+          if (kind === "videos" && d.safeSearch !== true) {
+            throw new Error("Video route did not confirm its restricted-content filter");
+          }
           if (d.count === 0) throw new Error("No media results returned for " + kind);
           if (d.count >= 6 && providers.size < 2) {
             throw new Error("Expected multiple contributing sources for " + kind + ", received " + providers.size);
