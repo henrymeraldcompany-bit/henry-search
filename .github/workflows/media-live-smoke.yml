@@ -50,6 +50,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Pull requests may run before the production Worker is deployed; push/manual runs require the new videoSafety fields.
           curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 15 "$MEDIA_API/index/status" |
             node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(!Array.isArray(d.counts)||!("latestRun" in d))throw new Error("Index status response is missing expected fields");const v=d.videoSafety;if(!v&&process.env.GITHUB_EVENT_NAME==="pull_request"){console.log("Index status legacy contract: ok; safety fields await backend deployment");return;}if(!v||!Number.isSafeInteger(v.verifiedSafe)||v.verifiedSafe<0||!Number.isSafeInteger(v.unverified)||v.unverified<0)throw new Error("Index status is missing valid video safety counts");console.log("Index status contract: ok; verified-safe videos "+v.verifiedSafe+"; unverified videos "+v.unverified)})'
 
