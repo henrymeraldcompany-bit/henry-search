@@ -209,10 +209,31 @@ export function rankImageResults(rows, query, limit = 40) {
     for (const name of sources) providerCounts.set(name, (providerCounts.get(name) || 0) + 1);
     if (selected.length >= max) break;
   }
-  // Relax diversity caps only after all eligible alternatives have been considered.
-  for (const candidate of deferred) {
-    if (selected.length >= max) break;
+  // Relax diversity caps only after the first pass, then fill fairly. A simple
+  // relevance-ordered fallback would let the first provider dominate whenever
+  // every provider reaches its cap. Prefer the least represented provider and
+  // host first, while retaining relevance order within each group.
+  const remaining = deferred.slice();
+  while (selected.length < max && remaining.length) {
+    remaining.sort((a, b) => {
+      const providerCountFor = candidate => {
+        const sources = providerKeys(candidate);
+        return sources.length
+          ? Math.min(...sources.map(name => providerCounts.get(name) || 0))
+          : 0;
+      };
+      const providerDifference = providerCountFor(a) - providerCountFor(b);
+      if (providerDifference) return providerDifference;
+      const hostDifference = (hostCounts.get(a.host) || 0) - (hostCounts.get(b.host) || 0);
+      if (hostDifference) return hostDifference;
+      return a.index - b.index;
+    });
+    const candidate = remaining.shift();
     selected.push(candidate);
+    if (candidate.host) hostCounts.set(candidate.host, (hostCounts.get(candidate.host) || 0) + 1);
+    for (const name of providerKeys(candidate)) {
+      providerCounts.set(name, (providerCounts.get(name) || 0) + 1);
+    }
   }
   return selected.map(candidate => candidate.row);
 }
