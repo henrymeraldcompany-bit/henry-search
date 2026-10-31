@@ -41,7 +41,7 @@ test("uses tags and descriptions as secondary relevance signals", () => {
 
 test("uses provider preference only after relevance and keeps host diversity", () => {
   const result = rankImageResults([
-    {source:"Google Images",title:"Solar system unrelated",page_url:"https://google.example/1"},
+    {source:"Google Images",title:"Football highlights",page_url:"https://google.example/1"},
     {source:"Openverse",title:"Solar system image",page_url:"https://openverse.example/1"},
     {source:"Google Images",title:"Solar system image",page_url:"https://google.example/2"}
   ],"solar system",10);
