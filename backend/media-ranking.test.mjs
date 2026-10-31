@@ -14,6 +14,8 @@ function extract(name) {
 }
 const seedsMatch = source.match(/const SEEDS = \[[^\]]*\];/);
 assert.ok(seedsMatch, "SEEDS must exist in worker.js");
+const batchSizeMatch = source.match(/const DAILY_SEED_BATCH_SIZE = \d+;/);
+assert.ok(batchSizeMatch, "DAILY_SEED_BATCH_SIZE must exist in worker.js");
 const peerTubeInstancesMatch = source.match(/const PEERTUBE_INSTANCES = \[[\s\S]*?\];/);
 assert.ok(peerTubeInstancesMatch, "PEERTUBE_INSTANCES must exist in worker.js");
 
@@ -27,6 +29,7 @@ function extractAsync(signature) {
 
 const helpers = [
   seedsMatch[0],
+  batchSizeMatch[0],
   'const PEERTUBE = "https://peertube.tv";',
   peerTubeInstancesMatch[0],
   extract("safeUrl"),
@@ -70,7 +73,8 @@ const peertubeHarness = vm.runInNewContext(
           url: "https://peertube.tv/videos/watch/a",
           uuid: "a",
           title: "Science documentary",
-          duration: 120
+          duration: 120,
+          nsfw: false
         }] };
       }
       if (host === "spectra.video") {
@@ -78,7 +82,8 @@ const peertubeHarness = vm.runInNewContext(
           url: "/videos/watch/b",
           uuid: "b",
           title: "Science tutorial",
-          duration: 90
+          duration: 90,
+          nsfw: false
         }] };
       }
       return { data: [] };
@@ -88,12 +93,12 @@ const peertubeHarness = vm.runInNewContext(
 );
 
 test("rotates optional YouTube indexing across one seed per day", () => {
-  for (let daySlot = 0; daySlot < api.SEEDS.length; daySlot++) {
-    const selected = Array.from({length: api.SEEDS.length}, (_, index) => index)
-      .filter((index) => api.shouldIndexYouTubeSeed(index, daySlot, true));
+  for (let daySlot = 0; daySlot < 6; daySlot++) {
+    const selected = Array.from({length: 6}, (_, index) => index)
+      .filter((index) => api.shouldIndexYouTubeSeed(index, daySlot, true, 6));
     assert.deepEqual(selected, [daySlot]);
   }
-  assert.equal(api.shouldIndexYouTubeSeed(0, 0, false), false);
+  assert.equal(api.shouldIndexYouTubeSeed(0, 0, false, 6), false);
 });
 
 test("builds encoded search requests for three independent PeerTube instances", () => {
@@ -108,6 +113,7 @@ test("builds encoded search requests for three independent PeerTube instances", 
     assert.equal(url.searchParams.get("search"), "solar system & stars");
     assert.equal(url.searchParams.get("count"), "20");
     assert.equal(url.searchParams.get("sort"), "-match");
+    assert.equal(url.searchParams.get("nsfw"), "false");
   }
   assert.deepEqual(Array.from(api.peertubeSearchTargets("   ", 10)), []);
 });
