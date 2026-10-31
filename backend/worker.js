@@ -633,6 +633,23 @@ async function refresh(env) {
   console.log(JSON.stringify({event:"daily-index-refresh",saved:saved,failures:failures.length,
     seedsProcessed:dailySeeds.length,disabledProviders:disabledProviders}));
 }
+function indexStatusCountsQuery() {
+  return "SELECT kind,COUNT(*) AS total," +
+    "SUM(CASE WHEN nsfw=0 THEN 1 ELSE 0 END) AS verified_safe," +
+    "SUM(CASE WHEN nsfw=1 THEN 1 ELSE 0 END) AS unverified " +
+    "FROM media_items GROUP BY kind";
+}
+function videoSafetySummary(rows) {
+  const video = Array.isArray(rows)
+    ? rows.find(function (row) { return row && row.kind === "video"; })
+    : null;
+  const safe = Number(video && video.verified_safe);
+  const unverified = Number(video && video.unverified);
+  return {
+    verifiedSafe: Number.isSafeInteger(safe) && safe >= 0 ? safe : 0,
+    unverified: Number.isSafeInteger(unverified) && unverified >= 0 ? unverified : 0
+  };
+}
 export default {
   async fetch(request,env) {
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET, OPTIONS","access-control-allow-headers":"Content-Type"}});
@@ -643,9 +660,9 @@ export default {
       if(p==="/images")return await search(request,env,"image");
       if(p==="/videos")return await search(request,env,"video");
       if(p==="/index/status"){
-        const counts=await env.MEDIA_DB.prepare("SELECT kind,COUNT(*) AS total FROM media_items GROUP BY kind").all();
+        const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
         const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note FROM index_runs ORDER BY id DESC LIMIT 1").first();
-        return reply({counts:counts.results||[],latestRun:latest||null});
+        return reply({counts:counts.results||[],videoSafety:videoSafetySummary(counts.results),latestRun:latest||null});
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
