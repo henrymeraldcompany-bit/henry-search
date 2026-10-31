@@ -529,7 +529,7 @@ function shouldIndexYouTubeSeed(seedIndex, daySlot, hasKey) {
 function indexFailure(provider, error) {
   const name = String(provider || "Unknown provider").trim().slice(0, 48);
   const message = String(error && error.message || error || "request failed")
-    .replace(/\\s+/g, " ").trim();
+    .replace(/\s+/g, " ").trim();
   return (name + ": " + message).slice(0, 150);
 }
 
