@@ -40,3 +40,4 @@ jobs:
           backend/video-filters.test.mjs
           backend/image-providers.test.mjs
           backend/image-duplicate-detection.test.mjs
+          backend/image-filters.test.mjs

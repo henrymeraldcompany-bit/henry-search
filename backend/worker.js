@@ -1,4 +1,5 @@
 import { runImageProviders, rankImageResults } from "./image-search.js";
+import { filterImageResults } from "./image-filters.js";
 
 /**
  * GOZIE SEARCH Media Worker
@@ -77,7 +78,7 @@ function imageRow(p) {
     page_url: page, media_url: media, thumbnail_url: thumb, embed_url: "",
     author: clean((m.Artist && m.Artist.value) || "", 200),
     license: clean((m.LicenseShortName && m.LicenseShortName.value) || (m.UsageTerms && m.UsageTerms.value) || "", 100),
-    published_at: "", duration_seconds: null, tags: ""
+    published_at: clean((m.DateTimeOriginal && m.DateTimeOriginal.value) || (m.DateTime && m.DateTime.value) || "", 80), width: Number(m.ImageWidth && m.ImageWidth.value) || null, height: Number(m.ImageHeight && m.ImageHeight.value) || null, format: clean((m.MimeType && m.MimeType.value) || "", 40), duration_seconds: null, tags: ""
   };
 }
 async function commons(q, count) {
@@ -102,7 +103,7 @@ function flickrRow(item) {
     page_url: page, media_url: media, thumbnail_url: media, embed_url: "",
     author: clean(item.author || item.author_id || "", 200),
     license: "License information unavailable",
-    published_at: Number.isFinite(publishedMs) ? new Date(publishedMs).toISOString() : "",
+    published_at: Number.isFinite(publishedMs) ? new Date(publishedMs).toISOString() : "", width: Number(item.width) || null, height: Number(item.height) || null, format: clean(item.media.m.split("?")[0].split(".").pop() || "", 12).toLowerCase(),
     duration_seconds: null, tags: clean(item.tags || "", 400)
   };
 }
@@ -122,7 +123,7 @@ function openverseRow(item) {
     author: clean(item.creator || "", 200), creator_url: safeUrl(item.creator_url),
     license: license ? license.toUpperCase() + (licenseVersion ? " " + licenseVersion : "") : "License details unavailable",
     license_url: safeUrl(item.license_url), attribution: clean(item.attribution || "", 500),
-    published_at: "", duration_seconds: null, tags: ""
+    published_at: clean(item.created_on || item.created || "", 80), width: Number(item.width) || null, height: Number(item.height) || null, format: clean(item.mime_type || "", 40), duration_seconds: null, tags: ""
   };
 }
 function googleImageRow(item) {
@@ -135,7 +136,7 @@ function googleImageRow(item) {
     source_id:media, title:clean(item.title || "Untitled image",250), description:clean(item.snippet || "",900),
     page_url:page, media_url:media, thumbnail_url:thumb, embed_url:"", author:"",
     license:"License details not supplied by Google", license_url:"", attribution:"",
-    published_at:"", duration_seconds:null, tags:"" };
+    published_at:"", width:Number(item.image.width)||null, height:Number(item.image.height)||null, format:clean(item.mime||"",40), duration_seconds:null, tags:"" };
 }
 async function googleImages(q, env, count) {
   const key=String(env && env.GOOGLE_CSE_API_KEY || "").trim();
@@ -475,7 +476,7 @@ function rank(rows,q,limit) {
   return picked.map(function(x){return x.r;});
 }
 function front(r) {
-  if (r.kind==="image") return {title:r.title,description:r.description,page:r.page_url,image:r.media_url,thumbnail:r.thumbnail_url,license:r.license,licenseUrl:r.license_url,attribution:r.attribution,author:r.author,creatorUrl:r.creator_url,provider:r.provider,source:r.source};
+  if (r.kind==="image") return {title:r.title,description:r.description,page:r.page_url,image:r.media_url,thumbnail:r.thumbnail_url,license:r.license,licenseUrl:r.license_url,attribution:r.attribution,author:r.author,creatorUrl:r.creator_url,provider:r.provider,source:r.source,publishedAt:r.published_at||"",width:Number(r.width)||null,height:Number(r.height)||null,format:r.format||""};
   let host="";try{host=new URL(r.page_url).hostname;}catch(_){}
   return {title:r.title,description:r.description,url:r.page_url,watchUrl:r.page_url,embedUrl:r.embed_url,thumbnailUrl:r.thumbnail_url,thumbnail:r.thumbnail_url,host:host,channel:r.author,duration:r.duration_seconds,publishedAt:r.published_at,source:r.source};
 }
@@ -531,6 +532,10 @@ async function search(request,env,kind) {
         results=capFlickrResults(ranked,20);
       }
     }
+  }
+  if(kind==="image") {
+    const params=new URL(request.url).searchParams;
+    results=filterImageResults(results,{date:params.get("date")||"any",dimensions:params.get("dimensions")||"any",source:params.get("source")||"all",format:params.get("format")||"all"});
   }
   const sourceNames=Array.from(new Set(results.map(function(r){return r.source;}).filter(Boolean))).slice(0,8);
   const source=sourceNames.length ? sourceNames.join(" + ")

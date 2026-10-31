@@ -481,10 +481,61 @@ function openImageViewer(imageUrl, title) {
 // IMAGE GALLERY
 // ========================================
 
+let currentImageFilters = {date:"any",dimensions:"any",source:"all",format:"all"};
+let currentImageFilterQuery = "";
+function applyImageFilters(items, now = Date.now()) {
+  const windows = {day:86400000,week:604800000,month:2592000000,year:31536000000};
+  return items.filter(item => {
+    const source = String(item.source || item.provider || "").trim().toLowerCase();
+    if (currentImageFilters.source !== "all" && source !== currentImageFilters.source) return false;
+    const mime = String(item.format || "").toLowerCase();
+    const path = String(item.image || "").split("?")[0];
+    const ext = (mime.includes("/") ? mime.split("/").pop().replace("jpeg","jpg") : mime) || (path.match(/\.([a-z0-9]{2,5})$/i)||[])[1]?.toLowerCase() || "";
+    if (currentImageFilters.format !== "all" && ext.replace("jpeg","jpg") !== currentImageFilters.format) return false;
+    const width = Number(item.width), height = Number(item.height), dimension = currentImageFilters.dimensions;
+    if (dimension !== "any") {
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return false;
+      const longest = Math.max(width,height);
+      if (dimension === "small" && longest >= 640) return false;
+      if (dimension === "medium" && (longest < 640 || longest >= 1600)) return false;
+      if (dimension === "large" && longest < 1600) return false;
+      if (dimension === "landscape" && width <= height) return false;
+      if (dimension === "portrait" && height <= width) return false;
+      if (dimension === "square" && width !== height) return false;
+    }
+    if (currentImageFilters.date !== "any") {
+      const published = Date.parse(item.publishedAt || "");
+      if (!Number.isFinite(published) || published > now || now - published > windows[currentImageFilters.date]) return false;
+    }
+    return true;
+  });
+}
+function renderImageFilterBar(items) {
+  const bar=document.createElement("div"); bar.className="image-filter-bar"; bar.setAttribute("aria-label","Image filters");
+  const choices=[
+    ["date","Date",[["any","Any date"],["day","Past 24 hours"],["week","Past week"],["month","Past month"],["year","Past year"]]],
+    ["dimensions","Dimensions",[["any","Any dimensions"],["small","Small (<640 px)"],["medium","Medium"],["large","Large (1600+ px)"],["landscape","Landscape"],["portrait","Portrait"],["square","Square"]]],
+    ["source","Source",[["all","All sources"],...Array.from(new Set(items.map(x=>x.source).filter(Boolean))).sort().map(x=>[x.toLowerCase(),x])]],
+    ["format","Format",[["all","All formats"],...Array.from(new Set(items.map(x=>{const mime=String(x.format||"").toLowerCase();const ext=mime.includes("/")?mime.split("/").pop().replace("jpeg","jpg"):mime;return ext||((String(x.image||"").split("?")[0].match(/\.([a-z0-9]{2,5})$/i)||[])[1]||"").toLowerCase().replace("jpeg","jpg");}).filter(Boolean))).sort().map(x=>[x,x.toUpperCase()])]]
+  ];
+  for(const [key,label,options] of choices){
+    const wrapper=document.createElement("label"); wrapper.className="image-filter";
+    const caption=document.createElement("span"); caption.textContent=label;
+    const select=document.createElement("select"); select.setAttribute("aria-label",label);
+    for(const [value,name] of options){const option=document.createElement("option");option.value=value;option.textContent=name;select.appendChild(option);}
+    select.value=currentImageFilters[key]; select.addEventListener("change",()=>{currentImageFilters[key]=select.value;renderImageGallery(items,currentImageFilterQuery);});
+    wrapper.append(caption,select);bar.appendChild(wrapper);
+  }
+  const count=document.createElement("span");count.className="image-filter-count";count.textContent=applyImageFilters(items).length+" of "+items.length+" images";bar.appendChild(count);
+  return bar;
+}
+
 function renderImageGallery(items, query = "") {
   if (!resultsList) return;
 
-  items = rankMediaResults(items, query, ["title", "name", "alt"], ["description", "caption"], ["image", "url"]);
+  const originalItems = rankMediaResults(items, query, ["title", "name", "alt"], ["description", "caption"], ["image", "url"]);
+  if (currentImageFilterQuery !== query) { currentImageFilterQuery = query; currentImageFilters = {date:"any",dimensions:"any",source:"all",format:"all"}; }
+  items = applyImageFilters(originalItems);
   resultsList.replaceChildren();
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -492,6 +543,7 @@ function renderImageGallery(items, query = "") {
     return;
   }
 
+  resultsList.appendChild(renderImageFilterBar(originalItems));
   const gallery = document.createElement("div");
   gallery.className = "image-gallery";
 
@@ -567,7 +619,7 @@ function renderImageGallery(items, query = "") {
   }
 
   if (!validCount) {
-    showMessage("No usable images were returned. Try another search.");
+    showMessage("No images match these filters. Change a filter or choose the default options.");
     return;
   }
 
