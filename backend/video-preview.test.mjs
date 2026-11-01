@@ -69,7 +69,7 @@ test("preview indicator remains readable over thumbnails and keyboard focus is v
 function extractFunction(name) {
   const start = source.indexOf("function " + name + "(");
   assert.notEqual(start, -1, name + " must exist in app.js");
-  const end = source.indexOf("\\n}", start);
+  const end = source.indexOf("\n}", start);
   assert.notEqual(end, -1, "Could not find end of " + name);
   return source.slice(start, end + 2);
 }
