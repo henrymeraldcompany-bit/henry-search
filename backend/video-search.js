@@ -85,3 +85,52 @@ export async function runVideoProviders(providers, query) {
   });
   return { results, providers: successful, failures, attempted: configured.length };
 }
+
+const VIDEO_STOP_WORDS = new Set([
+  "a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","the","to","was","what","when","where","which","who","why","with","about","this","that",
+  "video","videos","clip","clips","watch","search","find"
+]);
+function videoTerms(value) {
+  return String(value || "").toLowerCase()
+    .split(/[^\\p{L}\\p{N}]+/u)
+    .filter(word => word.length > 1 && !VIDEO_STOP_WORDS.has(word));
+}
+
+/**
+ * Rank normalized video candidates by query relevance. Exact title phrases
+ * and title matches lead; descriptions, tags and creator names are secondary.
+ * Provider preference never overrides relevance.
+ */
+export function rankVideoResults(rows, query, limit = 40) {
+  const rawQuery = String(query || "").trim().toLowerCase();
+  const queryTokens = videoTerms(rawQuery);
+  if (!queryTokens.length || !Array.isArray(rows)) return [];
+  const normalizedPhrase = rawQuery.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+  const candidates = [];
+  rows.forEach((row, index) => {
+    if (!row || typeof row !== "object") return;
+    const title = String(row.title || "").toLowerCase();
+    const titleTokens = videoTerms(title);
+    const titleSet = new Set(titleTokens);
+    const detailText = [
+      row.description, row.author, row.channel, row.tags,
+      row.title === "Untitled video" ? "" : ""
+    ].map(value => Array.isArray(value) ? value.join(" ") : String(value || "")).join(" ");
+    const detailSet = new Set(videoTerms(detailText));
+    const titlePhrase = title.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+    const exactTitlePhrase = !!normalizedPhrase &&
+      (" " + titlePhrase + " ").includes(" " + normalizedPhrase + " ");
+    const matchedTitle = queryTokens.filter(token => titleSet.has(token)).length;
+    const matchedDetails = queryTokens.filter(token => !titleSet.has(token) && detailSet.has(token)).length;
+    const matched = matchedTitle + matchedDetails;
+    const minMatches = queryTokens.length >= 3 ? 2 : 1;
+    if (!exactTitlePhrase && matched < minMatches) return;
+    const coverage = matched / queryTokens.length;
+    const score = (exactTitlePhrase ? 30 : 0) + matchedTitle * 8 +
+      matchedDetails * 3 + (matchedTitle === queryTokens.length ? 6 : 0) + coverage * 5;
+    candidates.push({ row, index, score });
+  });
+  candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+  const max = Math.max(1, Math.min(100, Number(limit) || 40));
+  return candidates.slice(0, max).map(candidate => candidate.row);
+}

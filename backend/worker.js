@@ -1,4 +1,4 @@
-import { runVideoProviders } from "./video-search.js";
+import { runVideoProviders, rankVideoResults } from "./video-search.js";
 import { createYouTubeProvider } from "./youtube-search.js";
 import { createWikimediaVideoProvider } from "./wikimedia-video-search.js";
 import { runImageProviders, rankImageResults } from "./image-search.js";
@@ -522,7 +522,7 @@ async function search(request,env,kind) {
   let videoProviderState={providers:[],failures:[],attempted:0};
   let liveResult=await fetchLive(q);
   if(kind==="image"){imageProviderState=liveResult;live=liveResult.results;}else{videoProviderState=liveResult;live=liveResult.results;}
-  let ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rank(live.concat(saved),q,40);
+  let ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rankVideoResults(live.concat(saved),q,40);
   let results=capFlickrResults(ranked,20);
   let expandedQuery="";
   // Only spend extra provider requests when the exact search is sparse.
@@ -533,7 +533,7 @@ async function search(request,env,kind) {
       const expandedLive=await fetchLive(expandedQuery);
       if(expandedLive.results.length) {
         if(kind==="image"){imageProviderState.providers=Array.from(new Set(imageProviderState.providers.concat(expandedLive.providers)));imageProviderState.failures=imageProviderState.failures.concat(expandedLive.failures);imageProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}else{videoProviderState.providers=Array.from(new Set(videoProviderState.providers.concat(expandedLive.providers)));videoProviderState.failures=videoProviderState.failures.concat(expandedLive.failures);videoProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}
-        ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rank(live.concat(saved),q,40);
+        ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rankVideoResults(live.concat(saved),q,40);
         results=capFlickrResults(ranked,20);
       }
     }

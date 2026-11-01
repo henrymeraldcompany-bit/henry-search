@@ -116,3 +116,51 @@ test("keeps different meaningful video identifiers separate", async () => {
   ]}],"video");
   assert.equal(result.results.length,2);
 });
+
+import { rankVideoResults } from "./video-search.js";
+
+test("ranks exact video title phrases above loose description matches", () => {
+  const rows = [
+    {title:"A planet documentary",description:"Solar system science",page_url:"https://a.example/1"},
+    {title:"Solar system documentary",description:"A tour of the planets",page_url:"https://b.example/2"},
+    {title:"Solar system facts",description:"",page_url:"https://c.example/3"}
+  ];
+  const result = rankVideoResults(rows,"solar system",10);
+  assert.equal(result[0].title,"Solar system documentary");
+  assert.equal(result[1].title,"Solar system facts");
+  assert.equal(result[2].title,"A planet documentary");
+});
+
+test("requires meaningful matches and excludes unrelated video results", () => {
+  const result=rankVideoResults([
+    {title:"Football highlights",description:"Sports clip"},
+    {title:"Solar system model",description:"Planets and the Sun"}
+  ],"how to find a solar system video",10);
+  assert.deepEqual(result.map(row=>row.title),["Solar system model"]);
+});
+
+test("uses descriptions and creator metadata as secondary relevance signals", () => {
+  const result=rankVideoResults([
+    {title:"Untitled video",description:""},
+    {title:"Untitled video",description:"",author:"Astronomy educator"}
+  ],"astronomy educator",10);
+  assert.equal(result.length,1);
+  assert.equal(result[0].author,"Astronomy educator");
+});
+
+test("does not match short query fragments inside unrelated words", () => {
+  const result=rankVideoResults([
+    {title:"Party music performance"},
+    {title:"Art history lecture"}
+  ],"art",10);
+  assert.deepEqual(result.map(row=>row.title),["Art history lecture"]);
+});
+
+test("supports accented and non-Latin video search terms", () => {
+  assert.equal(rankVideoResults([{title:"Café technology talk"}],"café technology",10).length,1);
+  assert.equal(rankVideoResults([{title:"東京 system lecture"}],"東京 system",10).length,1);
+});
+
+test("returns no ranked results for generic-only queries", () => {
+  assert.deepEqual(rankVideoResults([{title:"A nice video"}],"videos clips watch",10),[]);
+});
