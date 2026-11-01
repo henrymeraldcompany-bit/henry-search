@@ -117,7 +117,7 @@ test("keeps different meaningful video identifiers separate", async () => {
   assert.equal(result.results.length,2);
 });
 
-import { rankVideoResults } from "./video-search.js";
+import { rankVideoResults, diversifyVideoResults } from "./video-search.js";
 
 test("ranks exact video title phrases above loose description matches", () => {
   const rows = [
@@ -227,4 +227,50 @@ test("does not merge different YouTube video IDs", () => {
   ], "solar system", 10);
 
   assert.equal(results.length, 2);
+});
+
+test("balances video sources while preserving relevance order within each provider", () => {
+  const rows = [
+    {source:"YouTube",title:"YT highest",score:30},
+    {source:"YouTube",title:"YT second",score:25},
+    {source:"YouTube",title:"YT third",score:20},
+    {source:"PeerTube",title:"Peer highest",score:28},
+    {source:"PeerTube",title:"Peer second",score:18},
+    {source:"Wikimedia Commons",title:"Wiki highest",score:26}
+  ];
+  const result = diversifyVideoResults(rows, 6);
+  assert.deepEqual(result.map(row => row.title), [
+    "YT highest","Peer highest","Wiki highest",
+    "YT second","Peer second","YT third"
+  ]);
+});
+
+test("does not invent results when a provider has fewer matching videos", () => {
+  const rows = [
+    {source:"YouTube",title:"YT one"},
+    {source:"YouTube",title:"YT two"},
+    {source:"YouTube",title:"YT three"},
+    {source:"PeerTube",title:"Peer one"}
+  ];
+  const result = diversifyVideoResults(rows, 10);
+  assert.equal(result.length, 4);
+  assert.deepEqual(result.map(row => row.title), ["YT one","Peer one","YT two","YT three"]);
+});
+
+test("preserves ranked order when only one video provider contributes", () => {
+  const rows = [
+    {source:"YouTube",title:"First"},
+    {source:"YouTube",title:"Second"},
+    {source:"YouTube",title:"Third"}
+  ];
+  assert.deepEqual(diversifyVideoResults(rows, 2).map(row => row.title), ["First","Second"]);
+});
+
+test("uses source hosts as a fallback when provider labels are missing", () => {
+  const rows = [
+    {page_url:"https://video-a.example/watch/1",title:"A one"},
+    {page_url:"https://video-a.example/watch/2",title:"A two"},
+    {page_url:"https://video-b.example/watch/1",title:"B one"}
+  ];
+  assert.deepEqual(diversifyVideoResults(rows, 3).map(row => row.title), ["A one","B one","A two"]);
 });
