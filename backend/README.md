@@ -72,6 +72,6 @@ npx wrangler secret put YOUTUBE_API_KEY --config backend/wrangler.toml
 
 Enter the secret interactively. Never commit it or include it in frontend code. Free-tier quotas and provider terms apply; the daily index covers only configured seed queries and returned provider results.
 
-### Index-status provider diagnostics
+### Index-status provider diagnostics and run metrics
 
-`GET /index/status` retains the existing `counts`, `videoSafety`, and `latestRun` fields and also returns `failureSummary`. This array groups the latest run's bounded failure note by provider and stage (`request`, `database-save`, or `unknown`), with an occurrence count and the latest short error message. It is derived from the existing `index_runs.note` value, so it adds no D1 query, schema migration, or stored media data.
+`GET /index/status` returns `counts`, `videoSafety`, `latestRun`, and `failureSummary`. The failure summary groups the latest run's bounded note by provider and stage (`request`, `database-save`, or `unknown`). The latest run also exposes a parsed `stats` object: rotating seeds processed, provider calls, request failures, database-save failures, metadata rows received/saved, duration, disabled providers, and per-provider attempt/success/failure/row counts. These metrics are written to `index_runs.stats_json` by the daily Worker run. The migration `20261101_index_run_metrics.sql` adds this backward-compatible JSON column; legacy runs without metrics return `stats: null` until the next scheduled refresh. This avoids additional D1 reads and does not store media files.

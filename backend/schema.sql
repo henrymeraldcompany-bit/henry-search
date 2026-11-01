@@ -18,5 +18,6 @@ CREATE INDEX IF NOT EXISTS idx_media_items_kind_nsfw ON media_items(kind,nsfw,in
 CREATE TABLE IF NOT EXISTS index_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   finished_at TEXT NOT NULL, rows_processed INTEGER NOT NULL DEFAULT 0,
-  failure_count INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT ''
+  failure_count INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '',
+  stats_json TEXT NOT NULL DEFAULT '{}'
 );

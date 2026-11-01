@@ -595,48 +595,134 @@ function indexFailure(provider, error) {
   return (name + ": " + message).slice(0, 150);
 }
 
+function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, durationMs) {
+  const providers = {};
+  let providerCalls = 0, providerFailures = 0, databaseSaveFailures = 0;
+  let rowsReceived = 0, rowsSaved = 0;
+  const source = providerStats && typeof providerStats === "object" ? providerStats : {};
+  Object.keys(source).sort().forEach(function (name) {
+    const raw = source[name] && typeof source[name] === "object" ? source[name] : {};
+    const count = function (value) {
+      const number = Number(value);
+      return Number.isSafeInteger(number) && number >= 0 ? number : 0;
+    };
+    const metric = {
+      attempted: count(raw.attempted),
+      succeeded: count(raw.succeeded),
+      failed: count(raw.failed),
+      databaseSaveFailures: count(raw.databaseSaveFailures),
+      rowsReceived: count(raw.rowsReceived),
+      rowsSaved: count(raw.rowsSaved)
+    };
+    providers[String(name).slice(0, 48)] = metric;
+    providerCalls += metric.attempted;
+    providerFailures += metric.failed;
+    databaseSaveFailures += metric.databaseSaveFailures;
+    rowsReceived += metric.rowsReceived;
+    rowsSaved += metric.rowsSaved;
+  });
+  const seeds = Number(seedsProcessed);
+  const duration = Number(durationMs);
+  return {
+    version: 1,
+    seedsProcessed: Number.isSafeInteger(seeds) && seeds >= 0 ? seeds : 0,
+    providerCalls: providerCalls,
+    providerFailures: providerFailures,
+    databaseSaveFailures: databaseSaveFailures,
+    rowsReceived: rowsReceived,
+    rowsSaved: rowsSaved,
+    disabledProviders: Array.from(new Set((Array.isArray(disabledProviders) ? disabledProviders : [])
+      .map(function (name) { return String(name || "").trim().slice(0, 48); })
+      .filter(Boolean))).slice(0, 12),
+    durationMs: Number.isFinite(duration) && duration >= 0 ? Math.floor(duration) : 0,
+    providers: providers
+  };
+}
+function parseIndexRunStats(value) {
+  if (typeof value !== "string" || value.length > 16000) return null;
+  let parsed;
+  try { parsed = JSON.parse(value); } catch (_) { return null; }
+  if (!parsed || parsed.version !== 1 || !parsed.providers ||
+      typeof parsed.providers !== "object" || Array.isArray(parsed.providers)) return null;
+  return buildIndexRunStats(parsed.providers, parsed.seedsProcessed,
+    parsed.disabledProviders, parsed.durationMs);
+}
+
 async function refresh(env) {
-  let saved=0, failures=[];
-  const daySlot=Math.floor(Date.now()/86400000);
-  const dailySeeds=getDailySeedBatch(daySlot,SEEDS,DAILY_SEED_BATCH_SIZE);
-  const circuit=createIndexCircuitBreaker(2);
-  for(let index=0;index<dailySeeds.length;index++) {
-    const q=dailySeeds[index];
-    const calls=[
-      {name:"Wikimedia Commons",run:()=>commons(q,12)},
-      {name:"Openverse",run:()=>openverse(q,12)},
-      {name:"Flickr public feed",run:()=>flickr(q,12)},
-      {name:"PeerTube",run:()=>peertube(q,12)}
-    ].filter(function(call){return !circuit.isDisabled(call.name);});
+  const startedAt = Date.now();
+  let saved = 0, failures = [];
+  const providerStats = Object.create(null);
+  function metricsFor(name) {
+    if (!providerStats[name]) {
+      providerStats[name] = {
+        attempted: 0, succeeded: 0, failed: 0,
+        databaseSaveFailures: 0, rowsReceived: 0, rowsSaved: 0
+      };
+    }
+    return providerStats[name];
+  }
+  const daySlot = Math.floor(Date.now() / 86400000);
+  const dailySeeds = getDailySeedBatch(daySlot, SEEDS, DAILY_SEED_BATCH_SIZE);
+  const circuit = createIndexCircuitBreaker(2);
+  for (let index = 0; index < dailySeeds.length; index++) {
+    const q = dailySeeds[index];
+    const calls = [
+      { name: "Wikimedia Commons", run: () => commons(q, 12) },
+      { name: "Openverse", run: () => openverse(q, 12) },
+      { name: "Flickr public feed", run: () => flickr(q, 12) },
+      { name: "PeerTube", run: () => peertube(q, 12) }
+    ].filter(function (call) { return !circuit.isDisabled(call.name); });
     // Six rotating seeds keep the daily discovery set broad while leaving
     // substantial headroom under the Workers Free 50-subrequest ceiling.
     // YouTube, when configured, adds one strict-safe search and one duration lookup.
-    if(shouldIndexYouTubeSeed(index,daySlot,Boolean(env.YOUTUBE_API_KEY),dailySeeds.length) &&
-       !circuit.isDisabled("YouTube")) {
-      calls.push({name:"YouTube",run:()=>youtube(q,env.YOUTUBE_API_KEY,8)});
+    if (shouldIndexYouTubeSeed(index, daySlot, Boolean(env.YOUTUBE_API_KEY), dailySeeds.length) &&
+        !circuit.isDisabled("YouTube")) {
+      calls.push({ name: "YouTube", run: () => youtube(q, env.YOUTUBE_API_KEY, 8) });
     }
-    const settled=await Promise.allSettled(calls.map(call=>call.run()));
-    for(let callIndex=0;callIndex<settled.length;callIndex++) {
-      const outcome=settled[callIndex], providerName=calls[callIndex].name;
-      if(outcome.status==="rejected") {
+    calls.forEach(function (call) { metricsFor(call.name).attempted += 1; });
+    const settled = await Promise.allSettled(calls.map(function (call) { return call.run(); }));
+    for (let callIndex = 0; callIndex < settled.length; callIndex++) {
+      const outcome = settled[callIndex], providerName = calls[callIndex].name;
+      const metric = metricsFor(providerName);
+      if (outcome.status === "rejected") {
+        metric.failed += 1;
         circuit.recordFailure(providerName);
-        failures.push(indexFailure(providerName,outcome.reason));
+        failures.push(indexFailure(providerName, outcome.reason));
         continue;
       }
+      metric.succeeded += 1;
+      const rows = Array.isArray(outcome.value) ? outcome.value : [];
+      metric.rowsReceived += rows.length;
       circuit.recordSuccess(providerName);
-      try{saved+=await save(env,outcome.value);}
-      catch(error){failures.push(indexFailure(providerName+" database save",error));}
+      try {
+        const savedCount = await save(env, rows);
+        saved += savedCount;
+        metric.rowsSaved += savedCount;
+      } catch (error) {
+        metric.databaseSaveFailures += 1;
+        failures.push(indexFailure(providerName + " database save", error));
+      }
     }
   }
-  const disabledProviders=circuit.disabledProviders();
-  if(disabledProviders.length) {
-    console.warn("Daily index disabled repeatedly failing providers for this run:",disabledProviders.join(", "));
+  const disabledProviders = circuit.disabledProviders();
+  if (disabledProviders.length) {
+    console.warn("Daily index disabled repeatedly failing providers for this run:", disabledProviders.join(", "));
   }
-  await env.MEDIA_DB.prepare("DELETE FROM media_items WHERE indexed_at < ?").bind(new Date(Date.now()-180*86400000).toISOString()).run();
-  await env.MEDIA_DB.prepare("INSERT INTO index_runs (finished_at,rows_processed,failure_count,note) VALUES (?,?,?,?)")
-    .bind(new Date().toISOString(),saved,failures.length,failures.slice(0,10).join("; ").slice(0,1200)).run();
-  console.log(JSON.stringify({event:"daily-index-refresh",saved:saved,failures:failures.length,
-    seedsProcessed:dailySeeds.length,disabledProviders:disabledProviders}));
+  await env.MEDIA_DB.prepare("DELETE FROM media_items WHERE indexed_at < ?")
+    .bind(new Date(Date.now() - 180 * 86400000).toISOString()).run();
+  const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
+  await env.MEDIA_DB.prepare(
+    "INSERT INTO index_runs (finished_at,rows_processed,failure_count,note,stats_json) VALUES (?,?,?,?,?)"
+  ).bind(new Date().toISOString(), saved, failures.length,
+    failures.slice(0, 10).join("; ").slice(0, 1200), JSON.stringify(stats)).run();
+  console.log(JSON.stringify({
+    event: "daily-index-refresh",
+    saved: saved,
+    failures: failures.length,
+    seedsProcessed: dailySeeds.length,
+    disabledProviders: disabledProviders,
+    stats: stats
+  }));
 }
 function indexStatusCountsQuery() {
   return "SELECT kind,COUNT(*) AS total," +
@@ -713,8 +799,9 @@ export default {
       if(p==="/videos")return await search(request,env,"video");
       if(p==="/index/status"){
         const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
-        const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note FROM index_runs ORDER BY id DESC LIMIT 1").first();
-        return reply({counts:counts.results||[],videoSafety:videoSafetySummary(counts.results),latestRun:latest||null,failureSummary:indexFailureSummary(latest&&latest.note)});
+        const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1").first();
+        const latestRun=latest?{finished_at:latest.finished_at,rows_processed:latest.rows_processed,failure_count:latest.failure_count,note:latest.note,stats:parseIndexRunStats(latest.stats_json)}:null;
+        return reply({counts:counts.results||[],videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}

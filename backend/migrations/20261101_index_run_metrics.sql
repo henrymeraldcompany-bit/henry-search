@@ -1,0 +1,1 @@
+ALTER TABLE index_runs ADD COLUMN stats_json TEXT NOT NULL DEFAULT '{}';
