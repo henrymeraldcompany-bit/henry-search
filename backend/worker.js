@@ -316,7 +316,7 @@ async function save(env, rows) {
         Number.isFinite(Number(r.duration_seconds)) && Number(r.duration_seconds) >= 0
         ? Number(r.duration_seconds) : null,
       JSON.stringify(r.tags || []),
-      Number(r.nsfw) === 0 ? 0 : 1,indexedAt
+      r.nsfw === 0 ? 0 : 1,indexedAt
     );
   });
   for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));

@@ -103,7 +103,7 @@ test("video duration storage accepts zero and numeric strings but rejects invali
     [0, 125.5, null, null, null, null, null, null, null]);
 });
 
-test("video records without explicit safe classification remain unverified", async () => {
+test("video records without an explicit numeric safe classification remain unverified", async () => {
   const { save, env, statements } = makeSaveHarness();
   const rows = [undefined, null, 1, "0", true].map((classification, index) => ({
     kind: "video", source: "PeerTube", source_id: "unverified-" + index,
