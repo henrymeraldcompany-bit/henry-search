@@ -39,7 +39,7 @@ function videoKey(row) {
       if ((url.protocol === "https:" && url.port === "443") ||
           (url.protocol === "http:" && url.port === "80")) url.port = "";
       url.searchParams.sort();
-      if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\\/+$/, "");
+      if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
       return url.href;
     } catch (_) {}
   }
