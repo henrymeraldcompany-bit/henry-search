@@ -311,7 +311,11 @@ async function save(env, rows) {
       r.creator_url || "",r.license_url || "",r.attribution || "",
       Number.isSafeInteger(Number(r.width)) && Number(r.width) > 0 ? Number(r.width) : null,
       Number.isSafeInteger(Number(r.height)) && Number(r.height) > 0 ? Number(r.height) : null,
-      r.format || "",r.published_at,r.duration_seconds,JSON.stringify(r.tags || []),
+      r.format || "",r.published_at,
+      r.duration_seconds !== null && r.duration_seconds !== undefined && r.duration_seconds !== "" &&
+        Number.isFinite(Number(r.duration_seconds)) && Number(r.duration_seconds) >= 0
+        ? Number(r.duration_seconds) : null,
+      JSON.stringify(r.tags || []),
       Number(r.nsfw) === 0 ? 0 : 1,indexedAt
     );
   });

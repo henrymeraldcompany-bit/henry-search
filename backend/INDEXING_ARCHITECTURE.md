@@ -82,6 +82,28 @@ The index stores titles, descriptions, source identifiers, original page/media/t
 
 Flickr's public feed does not provide reliable license metadata; those rows must remain labelled as having unavailable license information. Consumers should check the original source before reuse.
 
+## 5A. Video-index persistence contract
+
+Video records share the `media_items` table with images and are isolated by
+`kind='video'`. The common row stores the original watch/page URL, media URL,
+thumbnail and embed URLs, source/provider identity, title, description, creator,
+publication timestamp, duration in seconds, tags, safe-content classification,
+and indexing timestamp. The existing unique key `(kind, source, page_url)`
+keeps an image and a video from colliding and makes repeated video discoveries
+an upsert rather than a duplicate row.
+
+Video duration is stored only as a finite, non-negative numeric number of
+seconds; missing, malformed, infinite, or negative values become SQL NULL.
+A real zero-second duration remains valid. Video safety is fail-closed:
+only an explicit numeric safe classification of zero is stored as verified
+safe; all other or missing values are stored as unverified (1), and video
+search only returns rows with `nsfw=0`. Missing duration metadata does not
+erase an earlier known duration during an upsert.
+
+Regression coverage lives in `backend/video-index-database.test.mjs` and is
+part of the backend CI workflow. It checks video field persistence, duration
+normalization, safe-by-default behavior, and metadata-preserving updates.
+
 ## 6. Run records and observability
 
 Each completed refresh writes one row to `index_runs` containing:
