@@ -109,6 +109,27 @@ export async function runVideoProviders(providers, query) {
   return { results, providers: successful, failures, attempted: configured.length };
 }
 
+const VIDEO_EXPANSION_STOP_WORDS = new Set([
+  "a","an","and","are","as","at","be","by","for","from","how","in","is","it",
+  "of","on","or","the","to","was","what","when","where","which","who","why",
+  "with","about","this","that","video","videos","clip","clips","watch","search",
+  "find","best","top","free","latest","new","official","online","full","hd"
+]);
+
+/**
+ * Build one modestly broader query only when a search is likely to be sparse.
+ * Keep up to the three most useful query terms; never reduce a multiword query
+ * to a single generic word, which would invite unrelated recommendations.
+ */
+export function buildVideoFallbackQuery(query) {
+  const words = String(query || "").toLowerCase()
+    .split(/[^\\p{L}\\p{N}]+/u)
+    .filter(word => word.length > 1 && !VIDEO_EXPANSION_STOP_WORDS.has(word))
+    .slice(0, 8);
+  if (words.length < 2) return "";
+  return words.slice(0, 3).join(" ");
+}
+
 const VIDEO_STOP_WORDS = new Set([
   "a","an","and","are","as","at","be","by","for","from","how","in","is","it","of","on","or","the","to","was","what","when","where","which","who","why","with","about","this","that",
   "video","videos","clip","clips","watch","search","find"
