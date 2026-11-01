@@ -23,13 +23,14 @@ function makeSaveHarness() {
     Date, JSON, Number, String
   });
   const statements = [];
+  const batchSizes = [];
   const env = { MEDIA_DB: {
     prepare(sql) {
       return { bind(...values) { return { sql, values }; } };
     },
-    async batch(batch) { statements.push(...batch); }
+    async batch(batch) { statements.push(...batch); batchSizes.push(batch.length); }
   }};
-  return { save, env, statements };
+  return { save, env, statements, batchSizes };
 }
 
 test("shared D1 schema contains the complete video-index persistence contract", () => {
@@ -118,7 +119,7 @@ test("video records without an explicit numeric safe classification remain unver
 });
 
 test("video writes are batched within the D1 statement limit", async () => {
-  const { save, env, statements } = makeSaveHarness();
+  const { save, env, statements, batchSizes } = makeSaveHarness();
   const rows = Array.from({ length: 85 }, (_, index) => ({
     kind: "video", source: "PeerTube", source_id: "batch-" + index,
     title: "Batch video " + index, description: "",
@@ -128,4 +129,5 @@ test("video writes are batched within the D1 statement limit", async () => {
   }));
   assert.equal(await save(env, rows), 85);
   assert.equal(statements.length, 85);
+  assert.deepEqual(batchSizes, [40, 40, 5]);
 });
