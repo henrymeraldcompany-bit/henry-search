@@ -117,7 +117,6 @@ test("keeps different meaningful video identifiers separate", async () => {
   assert.equal(result.results.length,2);
 });
 
-import { rankVideoResults, diversifyVideoResults } from "./video-search.js";
 
 test("ranks exact video title phrases above loose description matches", () => {
   const rows = [
