@@ -174,3 +174,46 @@ export function rankVideoResults(rows, query, limit = 40) {
   const max = Math.max(1, Math.min(100, Number(limit) || 40));
   return unique.slice(0, max);
 }
+
+/**
+ * Reorders already-ranked, already-deduplicated video results so each
+ * contributing provider gets a fair turn. Relevance order is preserved
+ * within each provider; providers with fewer matches do not create filler.
+ */
+export function diversifyVideoResults(rows, limit = 40) {
+  if (!Array.isArray(rows)) return [];
+  const maximum = Math.max(1, Math.min(100, Number(limit) || 40));
+  const groups = new Map();
+
+  rows.forEach(function (row) {
+    if (!row || typeof row !== "object") return;
+    const label = String(row.source || row.provider ||
+      (Array.isArray(row.sources) ? row.sources[0] : "") || "").trim();
+    let key = label.toLocaleLowerCase();
+    if (!key) {
+      try { key = new URL(row.page_url || row.url).hostname.toLowerCase(); }
+      catch (_) { key = "unknown"; }
+    }
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  });
+
+  const providerGroups = Array.from(groups.values());
+  if (providerGroups.length < 2) return rows.filter(row => row && typeof row === "object").slice(0, maximum);
+
+  const diversified = [];
+  let offset = 0;
+  while (diversified.length < maximum) {
+    let added = false;
+    for (const group of providerGroups) {
+      if (offset < group.length) {
+        diversified.push(group[offset]);
+        added = true;
+        if (diversified.length >= maximum) break;
+      }
+    }
+    if (!added) break;
+    offset += 1;
+  }
+  return diversified;
+}
