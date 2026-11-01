@@ -299,12 +299,21 @@ async function youtube(q, key, count) {
 }
 async function save(env, rows) {
   if (!rows.length) return 0;
+  const indexedAt = new Date().toISOString();
   const stmts = rows.map(function (r) {
     return env.MEDIA_DB.prepare(
-      "INSERT INTO media_items (kind,source,source_id,title,description,page_url,media_url,thumbnail_url,embed_url,author,license,published_at,duration_seconds,tags,nsfw,indexed_at) " +
-      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,source,page_url) DO UPDATE SET " +
-      "source_id=excluded.source_id,title=excluded.title,description=excluded.description,media_url=excluded.media_url,thumbnail_url=excluded.thumbnail_url,embed_url=excluded.embed_url,author=excluded.author,license=excluded.license,published_at=excluded.published_at,duration_seconds=excluded.duration_seconds,tags=excluded.tags,nsfw=excluded.nsfw,indexed_at=excluded.indexed_at"
-    ).bind(r.kind,r.source,r.source_id,r.title,r.description,r.page_url,r.media_url,r.thumbnail_url,r.embed_url,r.author,r.license,r.published_at,r.duration_seconds,JSON.stringify(r.tags || []),Number(r.nsfw) === 0 ? 0 : 1,new Date().toISOString());
+      "INSERT INTO media_items (kind,source,source_id,title,description,page_url,media_url,thumbnail_url,embed_url,author,license,provider,creator_url,license_url,attribution,width,height,format,published_at,duration_seconds,tags,nsfw,indexed_at) " +
+      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,source,page_url) DO UPDATE SET " +
+      "source_id=excluded.source_id,title=excluded.title,description=excluded.description,media_url=excluded.media_url,thumbnail_url=excluded.thumbnail_url,embed_url=excluded.embed_url,author=excluded.author,license=excluded.license,provider=excluded.provider,creator_url=excluded.creator_url,license_url=excluded.license_url,attribution=excluded.attribution,width=excluded.width,height=excluded.height,format=excluded.format,published_at=excluded.published_at,duration_seconds=excluded.duration_seconds,tags=excluded.tags,nsfw=excluded.nsfw,indexed_at=excluded.indexed_at"
+    ).bind(
+      r.kind,r.source,r.source_id,r.title,r.description,r.page_url,r.media_url,
+      r.thumbnail_url,r.embed_url,r.author,r.license,r.provider || "",
+      r.creator_url || "",r.license_url || "",r.attribution || "",
+      Number.isSafeInteger(Number(r.width)) && Number(r.width) > 0 ? Number(r.width) : null,
+      Number.isSafeInteger(Number(r.height)) && Number(r.height) > 0 ? Number(r.height) : null,
+      r.format || "",r.published_at,r.duration_seconds,JSON.stringify(r.tags || []),
+      Number(r.nsfw) === 0 ? 0 : 1,indexedAt
+    );
   });
   for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));
   return rows.length;
