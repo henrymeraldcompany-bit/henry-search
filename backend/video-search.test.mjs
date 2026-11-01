@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runVideoProviders, rankVideoResults, buildVideoFallbackQuery } from "./video-search.js";
+import { runVideoProviders, rankVideoResults, diversifyVideoResults, buildVideoFallbackQuery } from "./video-search.js";
 
 test("runs independent providers and combines their video results", async () => {
   const result = await runVideoProviders([
