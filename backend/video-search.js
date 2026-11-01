@@ -5,23 +5,46 @@ function safeHttpUrl(value) {
   } catch (_) { return ""; }
 }
 function videoKey(row) {
-  // Canonical page URLs unify the same video returned by different providers
-  // while preserving meaningful query parameters such as YouTube's video ID.
-  try {
-    const url = new URL(row.page_url);
-    url.hash = "";
-    for (const key of Array.from(url.searchParams.keys())) {
-      if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source|feature)$/i.test(key)) url.searchParams.delete(key);
-    }
-    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) url.port = "";
-    url.searchParams.sort();
-    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
-    return url.href;
-  } catch (_) {
-    const id = String(row.source_id || "").trim();
-    return id ? String(row.source || "").toLowerCase() + ":" + id.toLowerCase() : "";
+  // Use the same canonical identity for provider results and indexed rows.
+  // YouTube watch, short, Shorts, live and embed URLs all identify one video.
+  const rawUrl = row && (row.page_url || row.url || row.watch_url || row.watchUrl);
+  const href = safeHttpUrl(rawUrl);
+  if (href) {
+    try {
+      const url = new URL(href);
+      const host = url.hostname.toLowerCase().replace(/^www\\./, "");
+      let videoId = "";
+      if (host === "youtu.be") {
+        videoId = url.pathname.split("/").filter(Boolean)[0] || "";
+      } else if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"].includes(host)) {
+        if (url.pathname === "/watch") videoId = url.searchParams.get("v") || "";
+        else {
+          const match = url.pathname.match(/^\\/(?:embed|shorts|live)\\/([\\w-]+)/i);
+          videoId = match ? match[1] : "";
+        }
+      }
+      if (videoId) {
+        const canonical = new URL("https://youtube.com/watch");
+        canonical.searchParams.set("v", videoId);
+        return canonical.href;
+      }
+
+      url.hostname = host;
+      url.hash = "";
+      for (const key of Array.from(url.searchParams.keys())) {
+        if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source|feature|si)$/i.test(key)) {
+          url.searchParams.delete(key);
+        }
+      }
+      if ((url.protocol === "https:" && url.port === "443") ||
+          (url.protocol === "http:" && url.port === "80")) url.port = "";
+      url.searchParams.sort();
+      if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\\/+$/, "");
+      return url.href;
+    } catch (_) {}
   }
+  const id = String(row && row.source_id || "").trim();
+  return id ? String(row.source || row.provider || "").toLowerCase() + ":" + id.toLowerCase() : "";
 }
 function mergeVideo(existing, incoming) {
   const merged = { ...existing };
@@ -131,6 +154,23 @@ export function rankVideoResults(rows, query, limit = 40) {
     candidates.push({ row, index, score });
   });
   candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+
+  // Deduplicate only after relevance ranking so the strongest matching
+  // provider/indexed variant wins. Merge source attribution and any richer
+  // metadata from the remaining copies instead of silently discarding them.
+  const unique = [];
+  const positions = new Map();
+  for (const candidate of candidates) {
+    const key = videoKey(candidate.row);
+    const position = key ? positions.get(key) : undefined;
+    if (position !== undefined) {
+      unique[position] = mergeVideo(unique[position], candidate.row);
+    } else {
+      if (key) positions.set(key, unique.length);
+      unique.push({ ...candidate.row });
+    }
+  }
+
   const max = Math.max(1, Math.min(100, Number(limit) || 40));
-  return candidates.slice(0, max).map(candidate => candidate.row);
+  return unique.slice(0, max);
 }
