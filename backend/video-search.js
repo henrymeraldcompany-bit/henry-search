@@ -129,7 +129,7 @@ export function buildVideoFallbackQuery(query) {
   if (words.length < 2) return "";
   const focused = words.slice(0, 3).join(" ");
   const original = String(query || "").toLowerCase()
-    .split(/[^\\p{L}\\p{N}]+/u)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter(word => word.length > 1)
     .join(" ");
   return focused !== original ? focused : "";
