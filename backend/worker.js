@@ -481,7 +481,7 @@ function rank(rows,q,limit) {
 function front(r) {
   if (r.kind==="image") return {title:r.title,description:r.description,page:r.page_url,image:r.media_url,thumbnail:r.thumbnail_url,license:r.license,licenseUrl:r.license_url,attribution:r.attribution,author:r.author,creatorUrl:r.creator_url,provider:r.provider,source:r.source,publishedAt:r.published_at||"",width:Number(r.width)||null,height:Number(r.height)||null,format:r.format||""};
   let host="";try{host=new URL(r.page_url).hostname;}catch(_){}
-  return {title:r.title,description:r.description,url:r.page_url,watchUrl:r.page_url,embedUrl:r.embed_url,thumbnailUrl:r.thumbnail_url,thumbnail:r.thumbnail_url,host:host,channel:r.author,duration:r.duration_seconds,publishedAt:r.published_at,source:r.source};
+  return {kind:"video",id:r.source_id,sourceId:r.source_id,title:r.title,description:r.description,url:r.page_url,watchUrl:r.page_url,mediaUrl:r.media_url,embedUrl:r.embed_url,thumbnailUrl:r.thumbnail_url,thumbnail:r.thumbnail_url,host:host,channel:r.author,duration:r.duration_seconds,durationSeconds:r.duration_seconds,publishedAt:r.published_at||"",license:r.license||"",provider:r.provider||r.source,source:r.source,sources:Array.isArray(r.sources)?r.sources:[r.source]};
 }
 function capFlickrResults(rows, limit) {
   const maximum = Math.max(0, Number.isFinite(Number(limit)) ? Number(limit) : 20);

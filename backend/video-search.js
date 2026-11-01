@@ -63,6 +63,10 @@ export async function runVideoProviders(providers, query) {
         thumbnail_url: safeHttpUrl(raw.thumbnail_url || raw.thumbnail),
         embed_url: safeHttpUrl(raw.embed_url),
         author: String(raw.author || "").trim().slice(0, 200),
+        license: String(raw.license || "").trim().slice(0, 100),
+        published_at: typeof raw.published_at === "string" ? raw.published_at.slice(0, 80) : "",
+        duration_seconds: typeof raw.duration_seconds === "number" && Number.isFinite(raw.duration_seconds) && raw.duration_seconds >= 0 ? raw.duration_seconds : null,
+        provider: String(raw.provider || name).slice(0, 120),
         nsfw: 0
       };
       const position = indexes.get(key);
