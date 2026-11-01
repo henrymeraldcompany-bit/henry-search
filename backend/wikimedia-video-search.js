@@ -1,8 +1,8 @@
 function cleanText(value, limit) {
-  return String(value || "").replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, " ")
-    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, " ").replace(/<[^>]*>/g, " ")
+  return String(value || "").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<[^>]*>/g, " ")
     .replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/\\s+/g, " ").trim().slice(0, limit);
+    .replace(/\s+/g, " ").trim().slice(0, limit);
 }
 function safeUrl(value) {
   try {
@@ -27,7 +27,7 @@ export function createWikimediaVideoProvider(options = {}) {
     const pages = Object.values(data && data.query && data.query.pages || {});
     return pages.map(page => {
       const info = page && page.imageinfo && page.imageinfo[0];
-      if (!info || !/^video\\//i.test(String(info.mime || ""))) return null;
+      if (!info || !/^video\//i.test(String(info.mime || ""))) return null;
       const pageUrl = safeUrl(info.descriptionurl);
       const mediaUrl = safeUrl(info.url);
       if (!pageUrl || !mediaUrl) return null;
