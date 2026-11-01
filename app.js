@@ -320,7 +320,7 @@ function renderWebPagination(pageCount, totalCount) {
 
 let imageZoom = 1;
 
-function openImageViewer(imageUrl, title) {
+function openImageViewer(imageUrl, title, sourcePage = "") {
   const safeImageUrl = safeHttpUrl(imageUrl);
   if (!safeImageUrl) return;
 
@@ -340,6 +340,22 @@ function openImageViewer(imageUrl, title) {
   const heading = document.createElement("div");
   heading.className = "image-viewer-heading";
   heading.textContent = title || "Image preview";
+
+  const actions = document.createElement("div");
+  actions.className = "image-viewer-actions";
+  const originalLink = makeLink(safeImageUrl, "Open original image ↗");
+  originalLink.className = "image-viewer-link";
+  originalLink.target = "_blank";
+  originalLink.rel = "noopener noreferrer";
+  actions.appendChild(originalLink);
+  const safeSourcePage = safeHttpUrl(sourcePage);
+  if (safeSourcePage && safeSourcePage !== safeImageUrl) {
+    const sourceLink = makeLink(safeSourcePage, "Visit source page ↗");
+    sourceLink.className = "image-viewer-link";
+    sourceLink.target = "_blank";
+    sourceLink.rel = "noopener noreferrer";
+    actions.appendChild(sourceLink);
+  }
 
   const controls = document.createElement("div");
   controls.className = "image-viewer-controls";
@@ -369,7 +385,7 @@ function openImageViewer(imageUrl, title) {
   close.setAttribute("aria-label", "Close image viewer");
 
   controls.append(zoomOut, zoomLabel, zoomIn, reset, close);
-  toolbar.append(heading, controls);
+  toolbar.append(heading, actions, controls);
 
   const stage = document.createElement("div");
   stage.className = "image-viewer-stage";
@@ -380,7 +396,19 @@ function openImageViewer(imageUrl, title) {
   image.alt = title || "Full-size image";
   image.draggable = false;
 
-  stage.appendChild(image);
+  const imageStatus = document.createElement("p");
+  imageStatus.className = "image-viewer-status";
+  imageStatus.setAttribute("role", "status");
+  imageStatus.textContent = "Loading full-size image…";
+  image.addEventListener("load", () => {
+    imageStatus.textContent = image.naturalWidth && image.naturalHeight
+      ? `${image.naturalWidth} × ${image.naturalHeight} px`
+      : "Full-size image loaded";
+  });
+  image.addEventListener("error", () => {
+    imageStatus.textContent = "The original image could not be loaded. Use Open original image to try the source directly.";
+  });
+  stage.append(imageStatus, image);
   viewer.append(toolbar, stage);
   document.body.appendChild(viewer);
 
@@ -582,7 +610,7 @@ function renderImageGallery(items, query = "") {
     previewButton.appendChild(image);
 
     previewButton.addEventListener("click", () => {
-      openImageViewer(fullImageUrl, item.title || "Image preview");
+      openImageViewer(fullImageUrl, item.title || "Image preview", sourcePage);
     });
 
     const title = document.createElement("p");
