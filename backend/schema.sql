@@ -24,3 +24,8 @@ CREATE TABLE IF NOT EXISTS index_runs (
   failure_count INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '',
   stats_json TEXT NOT NULL DEFAULT '{}'
 );
+
+CREATE INDEX IF NOT EXISTS idx_media_items_image_format
+  ON media_items(kind, format, indexed_at);
+CREATE INDEX IF NOT EXISTS idx_media_items_image_dimensions
+  ON media_items(kind, width, height);

@@ -47,7 +47,7 @@ test("D1 save persists and updates image attribution, dimensions and format", as
   const statements = [];
   const env = { MEDIA_DB: {
     prepare(sql) {
-      return { bind(...values) { statements.push({ sql, values }); return { sql, values }; } };
+      return { bind(...values) { return { sql, values }; } };
     },
     async batch(batch) { statements.push(...batch); }
   }};
