@@ -39,6 +39,7 @@ jobs:
           backend/media-url.test.mjs
           backend/video-filters.test.mjs
           backend/youtube-search.test.mjs
+          backend/wikimedia-video-search.test.mjs
           backend/image-providers.test.mjs
           backend/image-duplicate-detection.test.mjs
           backend/image-filters.test.mjs

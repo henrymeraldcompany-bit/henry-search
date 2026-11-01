@@ -1,5 +1,6 @@
 import { runVideoProviders } from "./video-search.js";
 import { createYouTubeProvider } from "./youtube-search.js";
+import { createWikimediaVideoProvider } from "./wikimedia-video-search.js";
 import { runImageProviders, rankImageResults } from "./image-search.js";
 import { filterImageResults } from "./image-filters.js";
 
@@ -511,7 +512,8 @@ async function search(request,env,kind) {
     }
     const providers=[
       {name:"PeerTube",search:function(searchQuery){return peertube(searchQuery,15);}},
-      {name:"YouTube",search:createYouTubeProvider({apiKey:env.YOUTUBE_API_KEY,requestJson:getJson,cleanText:clean})}
+      {name:"YouTube",search:createYouTubeProvider({apiKey:env.YOUTUBE_API_KEY,requestJson:getJson,cleanText:clean})},
+      {name:"Wikimedia Commons",search:createWikimediaVideoProvider({requestJson:getJson,cleanText:clean})}
     ];
     return await runVideoProviders(providers,query);
   };
