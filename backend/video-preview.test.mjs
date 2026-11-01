@@ -40,7 +40,7 @@ test("videos without permitted in-page playback are labelled as original-site li
 test("missing video thumbnails use a clear fallback label", () => {
   const placeholderStart = source.indexOf("function createVideoThumbnailPlaceholder(");
   assert.notEqual(placeholderStart, -1, "createVideoThumbnailPlaceholder must exist");
-  const placeholderEnd = source.indexOf("\\n}", placeholderStart);
+  const placeholderEnd = source.indexOf("\n}", placeholderStart);
   assert.notEqual(placeholderEnd, -1, "thumbnail placeholder helper must close");
   const placeholderHelper = source.slice(placeholderStart, placeholderEnd + 2);
   const createPlaceholder = vm.runInNewContext(
