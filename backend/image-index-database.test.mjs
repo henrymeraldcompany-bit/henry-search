@@ -66,7 +66,7 @@ test("D1 save persists and updates image attribution, dimensions and format", as
   assert.equal(statements.length, 1);
   const { sql, values } = statements[0];
   assert.match(sql, /provider,creator_url,license_url,attribution,width,height,format/);
-  assert.match(sql, /provider=excluded\.provider/);
+  assert.ok(sql.includes("provider=COALESCE(NULLIF(excluded.provider,''),media_items.provider)"));
   assert.equal(values.length, 23);
   assert.equal(values[11], "catalog-provider");
   assert.equal(values[12], "https://source.example/artist");
@@ -99,4 +99,35 @@ test("D1 save keeps optional image metadata empty and rejects invalid dimensions
   assert.equal(statement.values[15], null);
   assert.equal(statement.values[16], null);
   assert.equal(statement.values[17], "");
+});
+
+test("D1 upsert preserves existing metadata when a later provider response omits it", async () => {
+  const save = vm.runInNewContext("(" + extractSave() + ")", { Date, JSON, Number });
+  let statement;
+  const env = { MEDIA_DB: {
+    prepare(sql) { return { bind(...values) { statement = { sql, values }; return statement; } }; },
+    async batch() {}
+  }};
+  const row = {
+    kind: "image", source: "Flickr public feed", source_id: "3", title: "Untitled image",
+    description: "", page_url: "https://flickr.example/3", media_url: "https://cdn.example/3.jpg",
+    thumbnail_url: "https://cdn.example/3.jpg", embed_url: "", author: "",
+    license: "License information unavailable", published_at: "", duration_seconds: null,
+    tags: [], width: null, height: null, format: "", nsfw: 0
+  };
+  await save(env, [row]);
+  const sql = statement.sql;
+  for (const field of ["title", "description", "author", "provider", "creator_url",
+    "license_url", "attribution", "format", "published_at"]) {
+    assert.ok(sql.includes(field + "=COALESCE(NULLIF(excluded." + field + ",'')"), "preserve blank " + field);
+  }
+  for (const field of ["width", "height", "duration_seconds"]) {
+    assert.ok(sql.includes(field + "=COALESCE(excluded." + field + ",media_items." + field + ")"), "preserve missing " + field);
+  }
+  assert.ok(sql.includes("license=CASE WHEN excluded.license IS NULL"));
+  assert.ok(sql.includes("tags=CASE WHEN excluded.tags IS NULL OR excluded.tags IN"));
+  assert.ok(sql.includes("nsfw=excluded.nsfw"));
+  assert.ok(sql.includes("indexed_at=excluded.indexed_at"));
+  assert.equal(statement.values[20], "[]");
+  assert.equal(statement.values[21], 0);
 });
