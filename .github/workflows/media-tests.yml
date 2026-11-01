@@ -38,6 +38,7 @@ jobs:
           backend/media-ranking.test.mjs
           backend/media-url.test.mjs
           backend/video-filters.test.mjs
+          backend/video-preview.test.mjs
           backend/video-search.test.mjs
           backend/youtube-search.test.mjs
           backend/wikimedia-video-search.test.mjs
