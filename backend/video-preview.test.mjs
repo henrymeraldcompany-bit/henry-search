@@ -96,7 +96,7 @@ function makePlayerHarness() {
     extractFunction("createVideoPlayer"),
     extractFunction("stopActiveVideoPlayer"),
     extractFunction("toggleActiveVideoPlayer")
-  ].join("\\n");
+  ].join("\n");
   const api = vm.runInNewContext(
     "(function(){ " + helpers + "; return {getPlayableEmbedUrl,createVideoPlayer,stopActiveVideoPlayer,toggleActiveVideoPlayer}; })()",
     { URL, document, window: { location: { origin: "https://gozie.example" } } }
