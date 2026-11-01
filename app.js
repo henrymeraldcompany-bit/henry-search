@@ -1115,9 +1115,16 @@ function addFilterOption(select, value, label) {
 function createVideoPreviewIndicator(playable) {
   const indicator = document.createElement("span");
   indicator.className = "video-preview-indicator";
-  indicator.textContent = playable ? "▶ Preview" : "↗ Open video";
+  indicator.textContent = playable ? "▶ Preview here" : "↗ Open original source";
   indicator.setAttribute("aria-hidden", "true");
   return indicator;
+}
+
+function createVideoThumbnailPlaceholder() {
+  const placeholder = document.createElement("span");
+  placeholder.className = "video-thumb-placeholder";
+  placeholder.textContent = "No thumbnail available";
+  return placeholder;
 }
 
 function createVideoPlayer(video) {
@@ -1277,17 +1284,11 @@ function renderVideoResults(items, query) {
         image.referrerPolicy = "no-referrer";
         image.addEventListener("error", () => {
           image.remove();
-          const fallback = document.createElement("span");
-          fallback.className = "video-thumb-placeholder";
-          fallback.textContent = "Video preview unavailable";
-          thumbnailButton.appendChild(fallback);
+          thumbnailButton.appendChild(createVideoThumbnailPlaceholder());
         });
         thumbnailButton.appendChild(image);
       } else {
-        const placeholder = document.createElement("span");
-        placeholder.className = "video-thumb-placeholder";
-        placeholder.textContent = playableEmbedUrl ? "▶ Play video" : "↗ Open original video";
-        thumbnailButton.appendChild(placeholder);
+        thumbnailButton.appendChild(createVideoThumbnailPlaceholder());
       }
 
       thumbnailButton.appendChild(createVideoPreviewIndicator(!!playableEmbedUrl));
