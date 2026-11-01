@@ -27,14 +27,30 @@ const api = vm.runInNewContext(
 test("playable video thumbnails receive a visible preview indicator", () => {
   const indicator = api(true);
   assert.equal(indicator.className, "video-preview-indicator");
-  assert.equal(indicator.textContent, "▶ Preview");
+  assert.equal(indicator.textContent, "▶ Preview here");
   assert.equal(indicator.attributes["aria-hidden"], "true");
 });
 
 test("videos without permitted in-page playback are labelled as original-site links", () => {
   const indicator = api(false);
-  assert.equal(indicator.textContent, "↗ Open video");
+  assert.equal(indicator.textContent, "↗ Open original source");
   assert.equal(indicator.className, "video-preview-indicator");
+});
+
+test("missing video thumbnails use a clear fallback label", () => {
+  const placeholderStart = source.indexOf("function createVideoThumbnailPlaceholder(");
+  assert.notEqual(placeholderStart, -1, "createVideoThumbnailPlaceholder must exist");
+  const placeholderEnd = source.indexOf("\\n}", placeholderStart);
+  assert.notEqual(placeholderEnd, -1, "thumbnail placeholder helper must close");
+  const placeholderHelper = source.slice(placeholderStart, placeholderEnd + 2);
+  const createPlaceholder = vm.runInNewContext(
+    "(function(){ " + placeholderHelper + "; return createVideoThumbnailPlaceholder; })()",
+    { document }
+  );
+  const placeholder = createPlaceholder();
+  assert.equal(placeholder.className, "video-thumb-placeholder");
+  assert.equal(placeholder.textContent, "No thumbnail available");
+  assert.match(source, /thumbnailButton\.appendChild\(createVideoThumbnailPlaceholder\(\)\)/);
 });
 
 test("video result cards attach the preview cue after the thumbnail content", () => {
