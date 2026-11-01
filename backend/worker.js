@@ -655,6 +655,53 @@ function videoSafetySummary(rows) {
     unverified: Number.isSafeInteger(unverified) && unverified >= 0 ? unverified : 0
   };
 }
+function indexFailureSummary(note) {
+  const knownProviders = [
+    "Wikimedia Commons", "Openverse", "Flickr public feed", "PeerTube", "YouTube"
+  ];
+  const grouped = new Map();
+  String(note || "").split(";").forEach(function (raw) {
+    const entry = raw.trim();
+    if (!entry) return;
+    let provider = "";
+    let stage = "request";
+    let message = entry;
+    for (const name of knownProviders) {
+      const savePrefix = name + " database save:";
+      const requestPrefix = name + ":";
+      if (entry.startsWith(savePrefix)) {
+        provider = name;
+        stage = "database-save";
+        message = entry.slice(savePrefix.length).trim();
+        break;
+      }
+      if (entry.startsWith(requestPrefix)) {
+        provider = name;
+        message = entry.slice(requestPrefix.length).trim();
+        break;
+      }
+    }
+    if (!provider) {
+      const separator = entry.indexOf(":");
+      if (separator > 0) {
+        provider = entry.slice(0, separator).trim().slice(0, 48) || "Unknown provider";
+        message = entry.slice(separator + 1).trim();
+      } else {
+        provider = "Unknown provider";
+        stage = "unknown";
+      }
+    }
+    const key = provider + "\u0000" + stage;
+    const current = grouped.get(key) || { provider: provider, stage: stage, count: 0, lastError: "" };
+    current.count += 1;
+    current.lastError = message.slice(0, 120);
+    grouped.set(key, current);
+  });
+  return Array.from(grouped.values()).sort(function (a, b) {
+    return a.provider.localeCompare(b.provider) || a.stage.localeCompare(b.stage);
+  });
+}
+
 export default {
   async fetch(request,env) {
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET, OPTIONS","access-control-allow-headers":"Content-Type"}});
@@ -667,7 +714,7 @@ export default {
       if(p==="/index/status"){
         const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
         const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note FROM index_runs ORDER BY id DESC LIMIT 1").first();
-        return reply({counts:counts.results||[],videoSafety:videoSafetySummary(counts.results),latestRun:latest||null});
+        return reply({counts:counts.results||[],videoSafety:videoSafetySummary(counts.results),latestRun:latest||null,failureSummary:indexFailureSummary(latest&&latest.note)});
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
