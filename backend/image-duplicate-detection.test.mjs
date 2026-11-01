@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 const moduleSource = await readFile(new URL("./image-search.js", import.meta.url), "utf8");
 const metadataSource = await readFile(new URL("./image-metadata.js", import.meta.url), "utf8");
-const bundledSource = metadataSource.replace("export function extractImageMetadata", "function extractImageMetadata") + "\\n" + moduleSource.replace(/^import \\{ extractImageMetadata \} from \\"\\.\\/image-metadata\\.js\\";\\s*/m, "");
+const bundledSource = metadataSource.replace("export function extractImageMetadata", "function extractImageMetadata") + "\n" + moduleSource.slice(moduleSource.indexOf("\n") + 1);
 const moduleUrl = "data:text/javascript;base64," + Buffer.from(bundledSource).toString("base64");
 const { runImageProviders } = await import(moduleUrl);
 
