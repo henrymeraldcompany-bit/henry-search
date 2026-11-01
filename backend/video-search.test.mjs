@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runVideoProviders } from "./video-search.js";
+import { runVideoProviders, rankVideoResults, buildVideoFallbackQuery } from "./video-search.js";
 
 test("runs independent providers and combines their video results", async () => {
   const result = await runVideoProviders([
@@ -273,4 +273,53 @@ test("uses source hosts as a fallback when provider labels are missing", () => {
     {page_url:"https://video-b.example/watch/1",title:"B one"}
   ];
   assert.deepEqual(diversifyVideoResults(rows, 3).map(row => row.title), ["A one","B one","A two"]);
+});
+
+
+test("builds a modest focused fallback query for sparse multiword searches", () => {
+  assert.equal(
+    buildVideoFallbackQuery("how to find free AI video generator online"),
+    "ai generator"
+  );
+  assert.equal(
+    buildVideoFallbackQuery("solar panels and battery storage"),
+    "solar panels battery"
+  );
+  assert.equal(
+    buildVideoFallbackQuery("quantum computing research methods"),
+    "quantum computing research"
+  );
+});
+
+test("does not broaden a one-word or generic-only video query", () => {
+  assert.equal(buildVideoFallbackQuery("science"), "");
+  assert.equal(buildVideoFallbackQuery("the video"), "");
+  assert.equal(buildVideoFallbackQuery("best free videos"), "");
+});
+
+test("keeps the closest original-query matches ahead of broader fallback matches", () => {
+  const rows = [
+    {
+      page_url: "https://videos.example/exact",
+      title: "Solar panels battery storage guide"
+    },
+    {
+      page_url: "https://videos.example/broader",
+      title: "Solar panels battery guide"
+    },
+    {
+      page_url: "https://videos.example/loose",
+      title: "Solar panels explained"
+    },
+    {
+      page_url: "https://videos.example/unrelated",
+      title: "Cooking recipes"
+    }
+  ];
+  const ranked = rankVideoResults(rows, "solar panels and battery storage", 10);
+  assert.deepEqual(ranked.map(row => row.title), [
+    "Solar panels battery storage guide",
+    "Solar panels battery guide",
+    "Solar panels explained"
+  ]);
 });
