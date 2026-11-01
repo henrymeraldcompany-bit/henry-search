@@ -1591,3 +1591,33 @@ input:focus-visible {
 .image-viewer-status{position:absolute;z-index:1;top:12px;left:12px;max-width:calc(100% - 24px);padding:6px 9px;border-radius:8px;background:var(--surface);color:var(--muted);font-size:.78rem;pointer-events:none}
 .image-viewer-stage{position:relative}
 @media(max-width:700px){.image-viewer-toolbar{flex-wrap:wrap;gap:9px}.image-viewer-actions{order:3;width:100%;margin-left:0}.image-viewer-controls{margin-left:auto}}
+
+
+/* Clear, accessible visual cue on every video thumbnail preview. */
+.video-thumb-button {
+  position: relative;
+}
+.video-preview-indicator {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 999px;
+  background: rgba(5, 12, 20, .86);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  pointer-events: none;
+}
+.video-thumb-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
