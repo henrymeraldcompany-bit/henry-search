@@ -202,7 +202,7 @@ test("video previews clearly distinguish in-page preview from original-source op
   const previewHelpers = [
     extract("createVideoPreviewIndicator"),
     extract("createVideoThumbnailPlaceholder")
-  ].join("\\n");
+  ].join("\n");
   const api = vm.runInNewContext(
     "(function(){ " + previewHelpers + "; return {createVideoPreviewIndicator, createVideoThumbnailPlaceholder}; })()",
     {
