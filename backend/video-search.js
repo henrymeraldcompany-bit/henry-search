@@ -127,7 +127,12 @@ export function buildVideoFallbackQuery(query) {
     .filter(word => word.length > 1 && !VIDEO_EXPANSION_STOP_WORDS.has(word))
     .slice(0, 8);
   if (words.length < 2) return "";
-  return words.slice(0, 3).join(" ");
+  const focused = words.slice(0, 3).join(" ");
+  const original = String(query || "").toLowerCase()
+    .split(/[^\\p{L}\\p{N}]+/u)
+    .filter(word => word.length > 1)
+    .join(" ");
+  return focused !== original ? focused : "";
 }
 
 const VIDEO_STOP_WORDS = new Set([
