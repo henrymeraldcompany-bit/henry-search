@@ -292,6 +292,7 @@ test("builds a modest focused fallback query for sparse multiword searches", () 
 
 test("does not broaden a one-word or generic-only video query", () => {
   assert.equal(buildVideoFallbackQuery("science"), "");
+  assert.equal(buildVideoFallbackQuery("quantum computing"), "");
   assert.equal(buildVideoFallbackQuery("the video"), "");
   assert.equal(buildVideoFallbackQuery("best free videos"), "");
 });
