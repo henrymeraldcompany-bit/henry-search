@@ -88,3 +88,31 @@ test("normalizes missing optional metadata to stable empty or null values", asyn
   assert.equal(row.duration_seconds,null);
   assert.deepEqual(row.sources,["Example"]);
 });
+
+test("unifies the same canonical video URL returned by different providers", async () => {
+  const result = await runVideoProviders([
+    {name:"Provider A",search:async()=>[{
+      source:"Provider A",source_id:"a-1",page_url:"https://www.example.com/watch?id=42&utm_source=feed#player",
+      title:"Untitled video",description:"",thumbnail_url:"",author:""
+    }]},
+    {name:"Provider B",search:async()=>[{
+      source:"Provider B",source_id:"b-9",page_url:"https://example.com/watch?id=42",
+      title:"A useful video title",description:"A fuller description",
+      thumbnail_url:"https://cdn.example.com/thumb.jpg",author:"Creator",license:"CC BY"
+    }]}
+  ],"useful video");
+  assert.equal(result.results.length,1);
+  const row=result.results[0];
+  assert.equal(row.title,"A useful video title");
+  assert.equal(row.description,"A fuller description");
+  assert.equal(row.thumbnail_url,"https://cdn.example.com/thumb.jpg");
+  assert.deepEqual(row.sources,["Provider A","Provider B"]);
+});
+
+test("keeps different meaningful video identifiers separate", async () => {
+  const result=await runVideoProviders([{name:"YouTube",search:async()=>[
+    {source_id:"abc123",page_url:"https://youtube.com/watch?v=abc123",title:"First"},
+    {source_id:"xyz789",page_url:"https://youtube.com/watch?v=xyz789",title:"Second"}
+  ]}],"video");
+  assert.equal(result.results.length,2);
+});

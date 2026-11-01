@@ -5,14 +5,23 @@ function safeHttpUrl(value) {
   } catch (_) { return ""; }
 }
 function videoKey(row) {
-  const id = String(row.source_id || "").trim();
-  if (id) return String(row.source || "").toLowerCase() + ":" + id.toLowerCase();
+  // Canonical page URLs unify the same video returned by different providers
+  // while preserving meaningful query parameters such as YouTube's video ID.
   try {
     const url = new URL(row.page_url);
     url.hash = "";
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source|feature)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) url.port = "";
     url.searchParams.sort();
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
     return url.href;
-  } catch (_) { return ""; }
+  } catch (_) {
+    const id = String(row.source_id || "").trim();
+    return id ? String(row.source || "").toLowerCase() + ":" + id.toLowerCase() : "";
+  }
 }
 function mergeVideo(existing, incoming) {
   const merged = { ...existing };

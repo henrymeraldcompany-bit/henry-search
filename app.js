@@ -960,7 +960,12 @@ function normalizeVideoResult(item) {
     duration: formatVideoDuration(rawDuration),
     durationSeconds,
     publishedAt,
-    source: getVideoHost(url)
+    source: typeof item.source === "string" && item.source.trim() ? item.source.trim()
+      : typeof item.provider === "string" && item.provider.trim() ? item.provider.trim() : getVideoHost(url),
+    provider: typeof item.provider === "string" ? item.provider : "",
+    sources: Array.isArray(item.sources) ? item.sources.filter(value => typeof value === "string" && value.trim()).slice(0, 8)
+      : [typeof item.source === "string" && item.source.trim() ? item.source.trim() : getVideoHost(url)],
+    license: typeof item.license === "string" ? item.license.trim().slice(0, 100) : ""
   };
 }
 
@@ -1312,11 +1317,19 @@ function renderVideoResults(items, query) {
       title.className = "video-card-title";
       const source = document.createElement("p");
       source.className = "video-card-source";
+      const sourceNames = Array.isArray(video.sources) && video.sources.length
+        ? video.sources : [video.source || getVideoHost(video.url)];
       source.textContent = video.channel
-        ? `${video.channel} · ${video.source || getVideoHost(video.url)}`
-        : (video.source || getVideoHost(video.url));
+        ? `${video.channel} · ${sourceNames.join(" · ")}`
+        : sourceNames.join(" · ");
 
       card.append(thumbnailButton, playerTarget, title, source);
+      if (video.license) {
+        const license = document.createElement("p");
+        license.className = "video-card-license";
+        license.textContent = `Licence: ${video.license}`;
+        card.appendChild(license);
+      }
       const actions = document.createElement("div");
       actions.className = "video-card-actions";
       actions.append(playerButton, externalLink);
