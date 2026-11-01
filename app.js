@@ -1112,6 +1112,14 @@ function addFilterOption(select, value, label) {
   select.appendChild(option);
 }
 
+function createVideoPreviewIndicator(playable) {
+  const indicator = document.createElement("span");
+  indicator.className = "video-preview-indicator";
+  indicator.textContent = playable ? "▶ Preview" : "↗ Open video";
+  indicator.setAttribute("aria-hidden", "true");
+  return indicator;
+}
+
 function createVideoPlayer(video) {
   const embedUrl = getPlayableEmbedUrl(video);
   if (!embedUrl) return null;
@@ -1281,6 +1289,8 @@ function renderVideoResults(items, query) {
         placeholder.textContent = playableEmbedUrl ? "▶ Play video" : "↗ Open original video";
         thumbnailButton.appendChild(placeholder);
       }
+
+      thumbnailButton.appendChild(createVideoPreviewIndicator(!!playableEmbedUrl));
 
       const playerTarget = document.createElement("div");
       playerTarget.className = "video-player-target";
