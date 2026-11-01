@@ -1,4 +1,4 @@
-import { runVideoProviders, rankVideoResults, diversifyVideoResults } from "./video-search.js";
+import { runVideoProviders, rankVideoResults, diversifyVideoResults, buildVideoFallbackQuery } from "./video-search.js";
 import { createYouTubeProvider } from "./youtube-search.js";
 import { createWikimediaVideoProvider } from "./wikimedia-video-search.js";
 import { runImageProviders, rankImageResults } from "./image-search.js";
@@ -528,7 +528,7 @@ async function search(request,env,kind) {
   // Only spend extra provider requests when the exact search is sparse.
   // Keep the focused query short and merge through the same deduper/ranker.
   if(ranked.length<8) {
-    expandedQuery=fallbackQuery(q);
+    expandedQuery=kind==="video" ? buildVideoFallbackQuery(q) : fallbackQuery(q);
     if(expandedQuery) {
       const expandedLive=await fetchLive(expandedQuery);
       if(expandedLive.results.length) {
