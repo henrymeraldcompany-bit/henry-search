@@ -12,14 +12,14 @@ function videoKey(row) {
   if (href) {
     try {
       const url = new URL(href);
-      const host = url.hostname.toLowerCase().replace(/^www\\./, "");
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
       let videoId = "";
       if (host === "youtu.be") {
         videoId = url.pathname.split("/").filter(Boolean)[0] || "";
       } else if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"].includes(host)) {
         if (url.pathname === "/watch") videoId = url.searchParams.get("v") || "";
         else {
-          const match = url.pathname.match(/^\\/(?:embed|shorts|live)\\/([\\w-]+)/i);
+          const match = url.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]+)/i);
           videoId = match ? match[1] : "";
         }
       }
