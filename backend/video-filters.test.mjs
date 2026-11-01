@@ -196,3 +196,37 @@ test("uses the legacy image endpoint only when the preferred media endpoint fail
   assert.equal(result.results.length, 1);
   assert.deepEqual(calls, ["media.example", "legacy.example"]);
 });
+
+
+test("video previews clearly distinguish in-page preview from original-source opening", () => {
+  const previewHelpers = [
+    extract("createVideoPreviewIndicator"),
+    extract("createVideoThumbnailPlaceholder")
+  ].join("\\n");
+  const api = vm.runInNewContext(
+    "(function(){ " + previewHelpers + "; return {createVideoPreviewIndicator, createVideoThumbnailPlaceholder}; })()",
+    {
+      document: {
+        createElement(tag) {
+          return {
+            tagName: tag,
+            attributes: {},
+            setAttribute(name, value) { this.attributes[name] = value; }
+          };
+        }
+      }
+    }
+  );
+
+  const playable = api.createVideoPreviewIndicator(true);
+  assert.equal(playable.className, "video-preview-indicator");
+  assert.equal(playable.textContent, "▶ Preview here");
+  assert.equal(playable.attributes["aria-hidden"], "true");
+
+  const externalOnly = api.createVideoPreviewIndicator(false);
+  assert.equal(externalOnly.textContent, "↗ Open original source");
+
+  const missingThumbnail = api.createVideoThumbnailPlaceholder();
+  assert.equal(missingThumbnail.className, "video-thumb-placeholder");
+  assert.equal(missingThumbnail.textContent, "No thumbnail available");
+});
