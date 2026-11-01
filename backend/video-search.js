@@ -92,7 +92,7 @@ const VIDEO_STOP_WORDS = new Set([
 ]);
 function videoTerms(value) {
   return String(value || "").toLowerCase()
-    .split(/[^\\p{L}\\p{N}]+/u)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter(word => word.length > 1 && !VIDEO_STOP_WORDS.has(word));
 }
 
@@ -105,7 +105,7 @@ export function rankVideoResults(rows, query, limit = 40) {
   const rawQuery = String(query || "").trim().toLowerCase();
   const queryTokens = videoTerms(rawQuery);
   if (!queryTokens.length || !Array.isArray(rows)) return [];
-  const normalizedPhrase = rawQuery.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+  const normalizedPhrase = rawQuery.split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
   const candidates = [];
   rows.forEach((row, index) => {
     if (!row || typeof row !== "object") return;
@@ -117,7 +117,7 @@ export function rankVideoResults(rows, query, limit = 40) {
       row.title === "Untitled video" ? "" : ""
     ].map(value => Array.isArray(value) ? value.join(" ") : String(value || "")).join(" ");
     const detailSet = new Set(videoTerms(detailText));
-    const titlePhrase = title.split(/[^\\p{L}\\p{N}]+/u).filter(Boolean).join(" ");
+    const titlePhrase = title.split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
     const exactTitlePhrase = !!normalizedPhrase &&
       (" " + titlePhrase + " ").includes(" " + normalizedPhrase + " ");
     const matchedTitle = queryTokens.filter(token => titleSet.has(token)).length;
