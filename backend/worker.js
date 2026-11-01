@@ -1,3 +1,4 @@
+import { runVideoProviders } from "./video-search.js";
 import { runImageProviders, rankImageResults } from "./image-search.js";
 import { filterImageResults } from "./image-filters.js";
 
@@ -507,16 +508,17 @@ async function search(request,env,kind) {
       const outcome=await runImageProviders(imageProviders,query);
       return outcome;
     }
-    const providers=await Promise.all([
-      provider(function(){return peertube(query,15);}),
-      provider(function(){return youtube(query,env.YOUTUBE_API_KEY,10);})
-    ]);
-    return providers.flat();
+    const providers=[
+      {name:"PeerTube",search:function(searchQuery){return peertube(searchQuery,15);}},
+      {name:"YouTube",search:function(searchQuery){return youtube(searchQuery,env.YOUTUBE_API_KEY,10);}}
+    ];
+    return await runVideoProviders(providers,query);
   };
   let live=[];
   let imageProviderState={providers:[],failures:[],attempted:0};
+  let videoProviderState={providers:[],failures:[],attempted:0};
   let liveResult=await fetchLive(q);
-  if(kind==="image"){imageProviderState=liveResult;live=liveResult.results;}else{live=liveResult;}
+  if(kind==="image"){imageProviderState=liveResult;live=liveResult.results;}else{videoProviderState=liveResult;live=liveResult.results;}
   let ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rank(live.concat(saved),q,40);
   let results=capFlickrResults(ranked,20);
   let expandedQuery="";
@@ -526,8 +528,8 @@ async function search(request,env,kind) {
     expandedQuery=fallbackQuery(q);
     if(expandedQuery) {
       const expandedLive=await fetchLive(expandedQuery);
-      if((kind==="image"?expandedLive.results.length:expandedLive.length)) {
-        if(kind==="image"){imageProviderState.providers=Array.from(new Set(imageProviderState.providers.concat(expandedLive.providers)));imageProviderState.failures=imageProviderState.failures.concat(expandedLive.failures);imageProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}else{live=live.concat(expandedLive);}
+      if(expandedLive.results.length) {
+        if(kind==="image"){imageProviderState.providers=Array.from(new Set(imageProviderState.providers.concat(expandedLive.providers)));imageProviderState.failures=imageProviderState.failures.concat(expandedLive.failures);imageProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}else{videoProviderState.providers=Array.from(new Set(videoProviderState.providers.concat(expandedLive.providers)));videoProviderState.failures=videoProviderState.failures.concat(expandedLive.failures);videoProviderState.attempted+=expandedLive.attempted;live=live.concat(expandedLive.results);}
         ranked=kind==="image" ? rankImageResults(live.concat(saved),q,40) : rank(live.concat(saved),q,40);
         results=capFlickrResults(ranked,20);
       }
@@ -542,9 +544,9 @@ async function search(request,env,kind) {
     : kind==="image" ? "Wikimedia Commons + Flickr public feed"
     : env.YOUTUBE_API_KEY ? "PeerTube + YouTube" : "PeerTube; YouTube requires an optional API key";
   return reply({query:q,results:results.map(front),count:results.length,source:source,
-    providers:kind==="image"?imageProviderState.providers:undefined,
-    failedProviders:kind==="image"?imageProviderState.failures:undefined,
-    attemptedProviders:kind==="image"?imageProviderState.attempted:undefined,
+    providers:kind==="image"?imageProviderState.providers:videoProviderState.providers,
+    failedProviders:kind==="image"?imageProviderState.failures:videoProviderState.failures,
+    attemptedProviders:kind==="image"?imageProviderState.attempted:videoProviderState.attempted,
     safeSearch:kind==="video",
     expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
