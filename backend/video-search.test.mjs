@@ -164,3 +164,67 @@ test("supports accented and non-Latin video search terms", () => {
 test("returns no ranked results for generic-only queries", () => {
   assert.deepEqual(rankVideoResults([{title:"A nice video"}],"videos clips watch",10),[]);
 });
+
+test("deduplicates YouTube watch, short, Shorts and embed URLs after ranking", () => {
+  const rows = [
+    {
+      page_url:"https://youtu.be/abc123?si=share",
+      title:"Solar documentary",
+      description:"System facts",
+      source:"Provider A",
+      sources:["Provider A"]
+    },
+    {
+      page_url:"https://www.youtube.com/shorts/abc123?feature=share",
+      title:"Solar system documentary",
+      description:"A detailed explanation of the solar system",
+      thumbnail_url:"https://cdn.example.com/solar.jpg",
+      source:"YouTube",
+      sources:["YouTube"]
+    },
+    {
+      page_url:"https://youtube.com/watch?v=xyz789",
+      title:"Solar system documentary part two",
+      source:"YouTube",
+      sources:["YouTube"]
+    }
+  ];
+
+  const results = rankVideoResults(rows, "solar system", 10);
+  assert.equal(results.length, 2);
+  assert.equal(results[0].page_url, "https://www.youtube.com/shorts/abc123?feature=share");
+  assert.equal(results[0].title, "Solar system documentary");
+  assert.equal(results[0].description, "A detailed explanation of the solar system");
+  assert.equal(results[0].thumbnail_url, "https://cdn.example.com/solar.jpg");
+  assert.deepEqual(results[0].sources, ["YouTube", "Provider A"]);
+  assert.equal(results[1].page_url, "https://youtube.com/watch?v=xyz789");
+});
+
+test("deduplicates equivalent provider URLs after removing tracking parameters", () => {
+  const results = rankVideoResults([
+    {
+      page_url:"https://www.example.com/watch?id=42&utm_source=feed#player",
+      title:"Solar system overview",
+      source:"Provider A"
+    },
+    {
+      page_url:"https://example.com/watch?id=42",
+      title:"Solar system overview",
+      description:"A longer description from the second provider",
+      source:"Provider B"
+    }
+  ], "solar system", 10);
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].description, "A longer description from the second provider");
+  assert.deepEqual(results[0].sources, ["Provider A", "Provider B"]);
+});
+
+test("does not merge different YouTube video IDs", () => {
+  const results = rankVideoResults([
+    {page_url:"https://youtu.be/abc123",title:"Solar system facts"},
+    {page_url:"https://youtube.com/watch?v=xyz789",title:"Solar system facts"}
+  ], "solar system", 10);
+
+  assert.equal(results.length, 2);
+});
