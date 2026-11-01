@@ -123,7 +123,7 @@ const VIDEO_EXPANSION_STOP_WORDS = new Set([
  */
 export function buildVideoFallbackQuery(query) {
   const words = String(query || "").toLowerCase()
-    .split(/[^\\p{L}\\p{N}]+/u)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter(word => word.length > 1 && !VIDEO_EXPANSION_STOP_WORDS.has(word))
     .slice(0, 8);
   if (words.length < 2) return "";
