@@ -1,4 +1,5 @@
-import { extractImageMetadata } from "./image-metadata.js";\n/**
+import { extractImageMetadata } from "./image-metadata.js";
+/**
  * Multi-source image-search orchestration.
  * Provider adapters return normalized image rows; this module isolates failures,
  * merges duplicate originals and reports which sources actually responded.
