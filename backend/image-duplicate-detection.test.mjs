@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 const moduleSource = await readFile(new URL("./image-search.js", import.meta.url), "utf8");
-const moduleUrl = "data:text/javascript;base64," + Buffer.from(moduleSource).toString("base64");
+const metadataSource = await readFile(new URL("./image-metadata.js", import.meta.url), "utf8");
+const bundledSource = metadataSource.replace("export function extractImageMetadata", "function extractImageMetadata") + "\\n" + moduleSource.replace(/^import \\{ extractImageMetadata \} from \\"\\.\\/image-metadata\\.js\\";\\s*/m, "");
+const moduleUrl = "data:text/javascript;base64," + Buffer.from(bundledSource).toString("base64");
 const { runImageProviders } = await import(moduleUrl);
 
 test("deduplicates identical image pages despite tracking parameters and fragments", async () => {
