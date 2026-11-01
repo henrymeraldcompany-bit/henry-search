@@ -36,13 +36,14 @@ const helpers = [
   extract("indexedQuery"),
   extract("indexStatusCountsQuery"),
   extract("videoSafetySummary"),
+  extract("indexFailureSummary"),
   extract("isoDurationSeconds"),
   extractAsync("getJson"),
   extractAsync("youtube")
 ].join("\n");
 
 const api = vm.runInNewContext(
-  "(function(){ " + helpers + "; return {videoRow,peertubeSearchTargets,getDailySeedBatch,shouldIndexYouTubeSeed,createIndexCircuitBreaker,indexedQuery,indexStatusCountsQuery,videoSafetySummary,youtube}; })()",
+  "(function(){ " + helpers + "; return {videoRow,peertubeSearchTargets,getDailySeedBatch,shouldIndexYouTubeSeed,createIndexCircuitBreaker,indexedQuery,indexStatusCountsQuery,videoSafetySummary,indexFailureSummary,youtube}; })()",
   {
     URL,
     Date,
@@ -159,4 +160,23 @@ test("index status reports verified-safe and unverified video counts without cha
     JSON.parse(JSON.stringify(api.videoSafetySummary([{ kind: "image", total: 10 }]))),
     { verifiedSafe: 0, unverified: 0 }
   );
+});
+
+
+test("index status groups repeated provider failures and separates database-save failures", () => {
+  const summary = api.indexFailureSummary(
+    "Openverse: timeout; Openverse: timeout; Flickr public feed database save: D1 write failed; PeerTube: HTTP 503"
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(summary)), [
+    { provider: "Flickr public feed", stage: "database-save", count: 1, lastError: "D1 write failed" },
+    { provider: "Openverse", stage: "request", count: 2, lastError: "timeout" },
+    { provider: "PeerTube", stage: "request", count: 1, lastError: "HTTP 503" }
+  ]);
+});
+
+test("index failure summary safely handles empty and legacy unlabelled notes", () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(api.indexFailureSummary(""))), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(api.indexFailureSummary("unclassified failure"))), [
+    { provider: "Unknown provider", stage: "unknown", count: 1, lastError: "unclassified failure" }
+  ]);
 });
