@@ -45,32 +45,125 @@ async fetch(request, env = {}, ctx = {}) {
    return out({query:q,source:"Wikimedia Commons",results});
   }
   if(route==="/news"){
-   const errors=[];
-   try{const a=new URL("https://api.gdeltproject.org/api/v2/doc/doc");Object.entries({query:q,mode:"artlist",format:"json",maxrecords:"20",sort:"datedesc"}).forEach(([k,v])=>a.searchParams.set(k,v));const d=await json(a.toString(),10000);const results=(Array.isArray(d.articles)?d.articles:[]).map(x=>({title:x.title||x.domain||"News article",url:x.url||x.url_mobile||"",snippet:[x.domain,x.seendate].filter(Boolean).join(" · "),source:x.domain||"",published:x.seendate||""})).filter(x=>/^https?:\/\//i.test(x.url));if(results.length)return out({query:q,source:"GDELT news index",results:rankArticles(results,q)});errors.push("GDELT returned no articles")}catch(e){errors.push("GDELT: "+e.message)}
-   const feeds=[
-    {name:"Google News RSS",url:()=>{const a=new URL("https://news.google.com/rss/search");Object.entries({q,hl:"en-NG",gl:"NG",ceid:"NG:en"}).forEach(([k,v])=>a.searchParams.set(k,v));return a.toString()}},
-    {name:"Bing News RSS",url:()=>{const a=new URL("https://www.bing.com/news/search");Object.entries({q,format:"rss",setlang:"en-ng"}).forEach(([k,v])=>a.searchParams.set(k,v));return a.toString()}}
+   const normalizeDate=value=>{
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    const compact=/^(\\d{4})(\\d{2})(\\d{2})T(\\d{2})(\\d{2})(\\d{2})Z$/.exec(raw);
+    const candidate=compact?compact[1]+"-"+compact[2]+"-"+compact[3]+"T"+compact[4]+":"+compact[5]+":"+compact[6]+"Z":raw;
+    const timestamp=Date.parse(candidate);
+    return Number.isFinite(timestamp)?new Date(timestamp).toISOString():"";
+   };
+   const rssText=value=>String(value||"")
+    .replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g,"$1")
+    .replace(/<[^>]*>/g," ")
+    .replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">")
+    .replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'")
+    .replace(/&#(\\d+);/g,(_,n)=>String.fromCodePoint(+n))
+    .replace(/&#x([\\da-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)))
+    .replace(/\\s+/g," ").trim();
+   const rssTag=(item,name)=>{
+    const match=String(item||"").match(new RegExp("<"+name+"(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)</"+name+">","i"));
+    return match?rssText(match[1]):"";
+   };
+   const parseNewsRss=(xml,provider)=>{
+    const results=[];
+    for(const match of String(xml||"").matchAll(/<item(?:\\s[^>]*)?>([\\s\\S]*?)<\\/item>/gi)){
+     const item=match[1],title=rssTag(item,"title"),url=rssTag(item,"link");
+     const source=rssTag(item,"source")||provider;
+     const published=normalizeDate(rssTag(item,"pubDate"));
+     const description=rssTag(item,"description");
+     if(title&&canonicalizeResultUrl(url))results.push({title:title.slice(0,250),url,snippet:[source,published,description].filter(Boolean).join(" · ").slice(0,1200),source, sources:[source],provider,providers:[provider],published});
+     if(results.length>=20)break;
+    }
+    return results;
+   };
+   const providers=[
+    {
+     name:"GDELT",
+     search:async()=>{
+      const endpoint=new URL("https://api.gdeltproject.org/api/v2/doc/doc");
+      Object.entries({query:q,mode:"artlist",format:"json",maxrecords:"20",sort:"datedesc"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
+      const data=await json(endpoint.toString(),10000);
+      return (Array.isArray(data.articles)?data.articles:[]).map(item=>{
+       const url=String(item.url||item.url_mobile||"").trim();
+       const source=String(item.domain||"GDELT").trim();
+       const published=normalizeDate(item.seendate||item.published||"");
+       return {title:String(item.title||item.domain||"News article").trim().slice(0,250),url,snippet:[source,published].filter(Boolean).join(" · ").slice(0,1200),source,sources:[source],provider:"GDELT",providers:["GDELT"],published};
+      }).filter(item=>item.title.length>=8&&canonicalizeResultUrl(item.url));
+     }
+    },
+    {
+     name:"Google News RSS",
+     search:async()=>{
+      const endpoint=new URL("https://news.google.com/rss/search");
+      Object.entries({q,hl:"en-NG",gl:"NG",ceid:"NG:en"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
+      const response=await fetch(endpoint.toString(),{headers:{"Accept":"application/rss+xml, application/xml, text/xml","User-Agent":"GOZIE-SEARCH/1.0 news-search"},signal:AbortSignal.timeout(10000)});
+      if(!response.ok)throw Error("HTTP "+response.status);
+      return parseNewsRss(await response.text(),"Google News RSS");
+     }
+    },
+    {
+     name:"Bing News RSS",
+     search:async()=>{
+      const endpoint=new URL("https://www.bing.com/news/search");
+      Object.entries({q,format:"rss",setlang:"en-ng"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
+      const response=await fetch(endpoint.toString(),{headers:{"Accept":"application/rss+xml, application/xml, text/xml","User-Agent":"GOZIE-SEARCH/1.0 news-search"},signal:AbortSignal.timeout(10000)});
+      if(!response.ok)throw Error("HTTP "+response.status);
+      return parseNewsRss(await response.text(),"Bing News RSS");
+     }
+    }
    ];
-   for(const feed of feeds){try{const r=await fetch(feed.url(),{headers:{"Accept":"application/rss+xml, application/xml, text/xml","User-Agent":"Mozilla/5.0 (compatible; GOZIESearch/1.3)"},signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error("HTTP "+r.status);const xml=await r.text();const results=parseRss(xml);if(results.length)return out({query:q,source:feed.name,results:rankArticles(results,q)});errors.push(feed.name+": feed returned no readable articles")}catch(e){errors.push(feed.name+": "+e.message)}}
-   // When live news providers are unavailable, use GOZIE's own daily index.
-   // This is a bounded final fallback and never replaces live results.
+   // Query all live news providers in parallel. A healthy source contributes
+   // even when another provider times out, returns an error, or has an empty feed.
+   const settled=await Promise.allSettled(providers.map(provider=>provider.search()));
+   const merged=new Map(),successfulProviders=[],failedProviders=[];
+   for(let index=0;index<settled.length;index++){
+    const outcome=settled[index],provider=providers[index].name;
+    if(outcome.status==="rejected"){
+     failedProviders.push({provider,message:String(outcome.reason?.message||"Provider request failed").slice(0,240)});
+     continue;
+    }
+    successfulProviders.push(provider);
+    for(const item of (Array.isArray(outcome.value)?outcome.value:[])){
+     const canonical=canonicalizeResultUrl(item.url);
+     if(!canonical)continue;
+     const existing=merged.get(canonical);
+     if(!existing){merged.set(canonical,{...item,canonicalUrl:canonical});continue;}
+     existing.sources=[...new Set([...(existing.sources||[]),...(item.sources||[item.source]).filter(Boolean)])];
+     existing.providers=[...new Set([...(existing.providers||[]),...(item.providers||[provider]).filter(Boolean)])];
+     if(String(item.snippet||"").length>String(existing.snippet||"").length)existing.snippet=item.snippet;
+     if(!existing.published||(item.published&&Date.parse(item.published)>Date.parse(existing.published)))existing.published=item.published;
+     if(String(item.title||"").length>String(existing.title||"").length)existing.title=item.title;
+    }
+   }
+   const liveResults=rankArticles([...merged.values()],q);
+   if(liveResults.length)return out({
+    query:q,
+    source:successfulProviders.join(" + ")||"News providers",
+    providers:successfulProviders,
+    attemptedProviders:providers.length,
+    failedProviders,
+    totalResults:liveResults.length,
+    results:liveResults
+   });
+   const errors=failedProviders.map(item=>item.provider+": "+item.message);
+   errors.push(...successfulProviders.filter(name=>!providers.some(provider=>provider.name===name&&settled[providers.indexOf(provider)].status==="fulfilled"&&Array.isArray(settled[providers.indexOf(provider)].value)&&settled[providers.indexOf(provider)].value.length)).map(name=>name+": no readable articles"));
+   // When live sources are unavailable or empty, use GOZIE's bounded daily index.
    try{
     const indexedUrl=new URL("https://gozie-search-media.henrymeraldcompany.workers.dev/index/search");
     indexedUrl.searchParams.set("kind","news");
     indexedUrl.searchParams.set("q",q);
     indexedUrl.searchParams.set("limit","20");
     const indexed=await json(indexedUrl.toString(),6000);
-    const results=(Array.isArray(indexed.results)?indexed.results:[]).map(item=>({
-     title:typeof item?.title==="string"?item.title:"",
-     url:typeof item?.url==="string"?item.url:"",
-     snippet:typeof item?.snippet==="string"?item.snippet:"",
-     source:typeof item?.source==="string"&&item.source?item.source:(item?.domain||""),
-     published:typeof item?.published_at==="string"?item.published_at:""
-    })).filter(item=>item.title.trim().length>=8&&/^https?:\/\//i.test(item.url));
-    if(results.length)return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",results:rankArticles(results,q)});
+    const results=(Array.isArray(indexed.results)?indexed.results:[]).map(item=>{
+     const url=typeof item?.url==="string"?item.url:"";
+     const source=typeof item?.source==="string"&&item.source?item.source:(item?.domain||"");
+     return {title:typeof item?.title==="string"?item.title:"",url,snippet:typeof item?.snippet==="string"?item.snippet:"",source,sources:[source].filter(Boolean),provider:"GOZIE daily news index",providers:["GOZIE daily news index"],published:normalizeDate(item?.published_at||"")};
+    }).filter(item=>item.title.trim().length>=8&&canonicalizeResultUrl(item.url));
+    if(results.length)return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,results:rankArticles(results,q)});
     errors.push("GOZIE daily news index: no indexed articles");
-   }catch(e){errors.push("GOZIE daily news index: "+e.message)}
-   return out({error:"News providers could not return articles. Please try again shortly.",diagnostic:errors},502);
+   }catch(error){errors.push("GOZIE daily news index: "+error.message)}
+   return out({error:"News providers could not return articles. Please try again shortly.",diagnostic:errors,providers:successfulProviders,attemptedProviders:providers.length,failedProviders},502);
   }
   const providers = [
    {
