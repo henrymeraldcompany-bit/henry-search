@@ -38,7 +38,7 @@ flowchart TD
     J --> K[/index/status exposes latest run]
 ```
 
-The Worker invokes the refresh from its `scheduled()` handler and attaches it to the execution context with `ctx.waitUntil()`. A refresh failure is logged. The public `/index/status` route reports indexed counts, safe/unverified video counts, the latest run and grouped failure information.
+The Worker invokes the refresh from its `scheduled()` handler and attaches the returned promise to the execution context with `ctx.waitUntil()`, allowing Cloudflare to keep the background work alive for the invocation. The deployed Cloudflare Worker is configured with the same `0 7 * * *` UTC trigger as `backend/wrangler.toml` (08:00 in Nigeria), and the D1 `index_runs` history is the execution record used to confirm that the schedule is firing. A refresh failure is logged. The public `/index/status` route reports indexed counts, safe/unverified video counts, the latest run and grouped failure information. Regression tests verify both the cron expression and the scheduled-handler-to-`waitUntil` wiring.
 
 ## 3. Schedule and seed rotation
 

@@ -129,3 +129,35 @@ test("freshness summary accounts for invalid timestamps as stale and exposes ref
   assert.match(source, /staleRowsRemainSearchable:true/);
   assert.match(source, /invalidTimestampsCountAsStale:true/);
 });
+
+
+test("Cloudflare cron schedule is configured for 08:00 Nigeria time", async () => {
+  const config = await readFile(new URL("./wrangler.toml", import.meta.url), "utf8");
+  assert.match(config, /^\[triggers\]\s*\n# 07:00 UTC = 08:00 Nigeria time\.\s*\ncrons = \["0 7 \* \* \*"\]/m);
+  assert.match(config, /binding = "MEDIA_DB"/);
+});
+
+test("Cloudflare scheduled handler attaches the daily refresh to waitUntil", async () => {
+  const marker = "  async scheduled(controller,env,ctx) {";
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, "Worker must export a scheduled handler");
+  const open = source.indexOf("{", start);
+  const close = source.indexOf("\n  }", open);
+  assert.ok(open > start && close > open, "Could not isolate scheduled handler");
+  const body = source.slice(open + 1, close);
+  let refreshCalls = 0;
+  let attached = null;
+  const scheduled = vm.runInNewContext(
+    "(async function(controller,env,ctx){" + body + "})",
+    {
+      refresh: async (env) => { refreshCalls += 1; assert.equal(env.marker, "test"); },
+      console
+    }
+  );
+  await scheduled({ cron: "0 7 * * *" }, { marker: "test" }, {
+    waitUntil: (promise) => { attached = promise; }
+  });
+  assert.equal(refreshCalls, 1);
+  assert.ok(attached && typeof attached.then === "function", "Refresh promise must be registered with waitUntil");
+  await attached;
+});
