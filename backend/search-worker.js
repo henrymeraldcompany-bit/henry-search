@@ -244,6 +244,6 @@ async fetch(request, env = {}, ctx = {}) {
    totalResults: allResults.length,
    results
   });
- }catch(e){return out({error:route==="/news"?"News providers are temporarily unavailable. Please try again shortly.":route==="/images"?"Image service is temporarily unavailable. Please try again.":"Search providers are temporarily unavailable. Please try again."},502)}
+ }catch(e){return out({error:route==="/news"?"News providers are temporarily unavailable. Please try again shortly.":route==="/images"?"Image service is temporarily unavailable. Please try again.":"Search providers are temporarily unavailable. Please try again.",diagnostic:route==="/news"?String(e&&e.message||e).slice(0,240):undefined},502)}
 }
 };
