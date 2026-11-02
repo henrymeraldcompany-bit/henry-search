@@ -202,6 +202,28 @@ jobs:
     env:
       SEARCH_API: https://henry-search-api.henrymeraldcompany.workers.dev
     steps:
+      - name: Check news publication-date filter validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for query in "date=invalid" "from=2026-02-30" "from=2026-11-03&to=2026-11-02"; do
+            tmp="$(mktemp)"
+            status="$(curl --silent --show-error --output "$tmp" --write-out '%{http_code}' --max-time 20 "$SEARCH_API/news?q=technology&$query")"
+            if [[ "$status" != "400" ]]; then
+              echo "News date filter validation returned HTTP $status for $query; expected 400"
+              cat "$tmp"
+              rm -f "$tmp"
+              exit 1
+            fi
+            node - "$tmp" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (typeof data.error !== "string" || !data.error) throw new Error("Date filter validation error message is missing");
+          NODE
+            rm -f "$tmp"
+          done
+          echo "News publication-date filter validation: ok"
+
       - name: Check original web-search and news routes
         shell: bash
         run: |
