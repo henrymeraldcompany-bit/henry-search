@@ -1,3 +1,4 @@
+import worker from "./search-worker.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, extractReadableText, retrievePublicPage, extractPublicPage } from "./search-extract.js";
