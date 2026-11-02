@@ -416,7 +416,7 @@ function normalizeSearchIndexRow(kind, item) {
   if (!url || !canonical || title.length < 8) return null;
   let domain = clean(item.domain || "", 180);
   if (!domain) {
-    try { domain = new URL(canonical).hostname.toLowerCase().replace(/^www\\./, ""); } catch (_) {}
+    try { domain = new URL(canonical).hostname.toLowerCase().replace(/^www\./, ""); } catch (_) {}
   }
   const sources = Array.isArray(item.sources) ? item.sources : [item.source || item.provider || ""];
   const providers = Array.isArray(item.providers) ? item.providers : [item.provider || ""];
