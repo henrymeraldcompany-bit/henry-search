@@ -282,7 +282,7 @@ const NEWS_DATE_WINDOWS = Object.freeze({
 function parseNewsDateBoundary(value, endOfDay = false) {
   if (value === undefined || value === null || value === "") return null;
   const raw = String(value).trim();
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) return NaN;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return NaN;
   const timestamp = Date.parse(raw + (endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z"));
   if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== raw) return NaN;
   return timestamp;
@@ -307,7 +307,7 @@ export function filterNewsByDate(articles, filters = {}, now = Date.now()) {
   const windowStart = date === "any" ? null : now - NEWS_DATE_WINDOWS[date];
   const results = (Array.isArray(articles) ? articles : []).filter(article => {
     const published = Date.parse(article?.published || "");
-    if (!Number.isFinite(published) || published > now) return !(date === "any" && !hasFrom && !hasTo);
+    if (!Number.isFinite(published) || published > now) return date === "any" && !hasFrom && !hasTo;
     if (windowStart !== null && published < windowStart) return false;
     if (hasFrom && published < from) return false;
     if (hasTo && published > to) return false;
