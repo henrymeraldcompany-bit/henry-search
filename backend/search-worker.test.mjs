@@ -49,7 +49,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles, deduplicateNewsStories } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -459,4 +459,40 @@ test("news ranking normalizes headline whitespace and rejects repeated-character
  assert.equal(ranked.length,1);
  assert.equal(ranked[0].title,"Solar energy research breakthrough");
  assert.ok(ranked[0].relevanceScore>0);
+});
+
+
+test("detects syndicated duplicate news stories across different URLs and preserves coverage", () => {
+ const stories=deduplicateNewsStories([
+  {title:"Central bank cuts interest rates as inflation slows",url:"https://publisher-a.example/economy/story",snippet:"Short report.",source:"Publisher A",provider:"Feed A",published:"2026-11-02T08:00:00Z"},
+  {title:"Central bank cuts interest rates as inflation slows today",url:"https://publisher-b.example/news/interest-rates",snippet:"A longer report with additional context about the central bank decision.",source:"Publisher B",provider:"Feed B",published:"2026-11-02T09:00:00Z"},
+  {title:"Central bank announces new digital currency rules",url:"https://publisher-c.example/finance/digital-currency",snippet:"A separate central bank story.",source:"Publisher C",provider:"Feed C"}
+ ]);
+ assert.equal(stories.length,2);
+ assert.equal(stories[0].title,"Central bank cuts interest rates as inflation slows today");
+ assert.match(stories[0].snippet,/additional context/);
+ assert.deepEqual(stories[0].sources,["Publisher A","Publisher B"]);
+ assert.deepEqual(stories[0].providers,["Feed A","Feed B"]);
+ assert.deepEqual(stories[0].alternateUrls,["https://publisher-b.example/news/interest-rates"]);
+ assert.equal(stories[0].published,"2026-11-02T09:00:00Z");
+});
+
+test("keeps different stories separate when headlines only share a broad topic", () => {
+ const stories=deduplicateNewsStories([
+  {title:"President announces new education funding programme",url:"https://one.example/policy"},
+  {title:"President announces new security funding programme",url:"https://two.example/policy"},
+  {title:"Local football club wins national championship final",url:"https://three.example/sport"}
+ ]);
+ assert.equal(stories.length,3);
+});
+
+test("news ranking applies cross-publisher story deduplication", () => {
+ const ranked=rankArticles([
+  {title:"Scientists discover new battery material for electric vehicles",url:"https://science-a.example/battery",snippet:"Initial report.",source:"Science A"},
+  {title:"Scientists discover new battery material for electric vehicles today",url:"https://science-b.example/research",snippet:"A more complete report on the battery material discovery.",source:"Science B"},
+  {title:"Scientists publish separate research on battery recycling methods",url:"https://science-c.example/recycling",snippet:"A different research story about recycling."}
+ ],"battery material");
+ assert.equal(ranked.length,2);
+ assert.deepEqual(ranked[0].sources,["Science A","Science B"]);
+ assert.equal(ranked[0].alternateUrls.length,1);
 });
