@@ -167,7 +167,16 @@ async fetch(request, env = {}, ctx = {}) {
      appliedFilters:filteredLiveNews.appliedFilters,
      totalResults:diverseLiveNews.length,
      sourceDiversity:summarizeNewsSourceDiversity(diverseLiveNews),
-     results:diverseLiveNews
+     results:diverseLiveNews.map(item=>({
+      ...item,
+      originalUrl:item.originalUrl||item.url,
+      preview:{
+       publisher:(Array.isArray(item.sources)?item.sources[0]:"")||item.source||item.domain||"",
+       summary:String(item.snippet||"").slice(0,1200),
+       published:item.published||"",
+       url:item.originalUrl||item.url
+      }
+     }))
     });
    }
    const errors=failedProviders.map(item=>item.provider+": "+item.message);
@@ -188,7 +197,16 @@ async fetch(request, env = {}, ctx = {}) {
      const rankedIndexedNews=rankArticles(results,q);
      const filteredIndexedNews=filterNewsByDate(rankedIndexedNews,newsDateFilters);
      const diverseIndexedNews=diversifyNewsSources(filteredIndexedNews.results);
-     return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:diverseIndexedNews.length,sourceDiversity:summarizeNewsSourceDiversity(diverseIndexedNews),results:diverseIndexedNews});
+     return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:diverseIndexedNews.length,sourceDiversity:summarizeNewsSourceDiversity(diverseIndexedNews),results:diverseIndexedNews.map(item=>({
+      ...item,
+      originalUrl:item.originalUrl||item.url,
+      preview:{
+       publisher:(Array.isArray(item.sources)?item.sources[0]:"")||item.source||item.domain||"",
+       summary:String(item.snippet||"").slice(0,1200),
+       published:item.published||"",
+       url:item.originalUrl||item.url
+      }
+     }))});
     }
     errors.push("GOZIE daily news index: no indexed articles");
    }catch(error){errors.push("GOZIE daily news index: "+error.message)}
