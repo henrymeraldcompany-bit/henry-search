@@ -3,6 +3,7 @@ import { createYouTubeProvider } from "./youtube-search.js";
 import { createWikimediaVideoProvider } from "./wikimedia-video-search.js";
 import { runImageProviders, rankImageResults } from "./image-search.js";
 import { filterImageResults } from "./image-filters.js";
+import { createDailyRequestBudget, discoverDailyNews, discoverDailyWeb } from "./daily-search-discovery.js";
 
 /**
  * GOZIE SEARCH Media Worker
@@ -37,16 +38,19 @@ const INDEX_D1_QUERY_LIMIT = 50;
 const INDEX_D1_QUERY_RESERVE = 5;
 const INDEX_D1_BATCH_SIZE = 40;
 const INDEX_RETENTION_PRUNE_BATCH_SIZE = 500;
+const MAX_DAILY_WEB_NEWS_REQUESTS = 5;
+const INDEX_MAX_SEARCH_ROWS_PER_RUN = 40;
 const INDEX_MAX_ROWS_PER_RUN = DAILY_SEED_BATCH_SIZE *
   (12 + 12 + 12 + PEERTUBE_INSTANCES.length * 12) + 8;
-function calculateIndexRetryBudget(limit, reserve, seedCount, peerTubeInstances, youtubeRequests) {
-  const baseline = seedCount * (3 + peerTubeInstances) + youtubeRequests;
+function calculateIndexRetryBudget(limit, reserve, seedCount, peerTubeInstances, youtubeRequests, additionalRequests) {
+  const extra = Math.max(0, Math.floor(Number(additionalRequests) || 0));
+  const baseline = seedCount * (3 + peerTubeInstances) + youtubeRequests + extra;
   const retryFanout = Math.max(1, peerTubeInstances);
   return Math.max(0, Math.floor((limit - reserve - baseline) / retryFanout));
 }
 const MAX_INDEX_RETRIES_PER_RUN = calculateIndexRetryBudget(
   INDEX_EXTERNAL_SUBREQUEST_LIMIT, INDEX_EXTERNAL_SUBREQUEST_RESERVE,
-  DAILY_SEED_BATCH_SIZE, PEERTUBE_INSTANCES.length, 2
+  DAILY_SEED_BATCH_SIZE, PEERTUBE_INSTANCES.length, 2, MAX_DAILY_WEB_NEWS_REQUESTS
 );
 function createIndexD1QueryBudget(limit, reserve) {
   const total = Math.max(0, Math.floor(Number(limit) || 0));
@@ -377,6 +381,88 @@ async function youtube(q, key, count) {
   }
   return rows;
 }
+async function saveSearchIndexRows(env, rows) {
+  if (!Array.isArray(rows) || !rows.length) return 0;
+  const indexedAt = new Date().toISOString();
+  const statements = rows.map(function (row) {
+    return env.MEDIA_DB.prepare(
+      "INSERT INTO search_index_items (kind,canonical_url,title,url,domain,snippet,source,provider,sources_json,providers_json,published_at,indexed_at) " +
+      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,canonical_url) DO UPDATE SET " +
+      "title=CASE WHEN excluded.title<>'' THEN excluded.title ELSE search_index_items.title END," +
+      "url=CASE WHEN excluded.url<>'' THEN excluded.url ELSE search_index_items.url END," +
+      "domain=CASE WHEN excluded.domain<>'' THEN excluded.domain ELSE search_index_items.domain END," +
+      "snippet=CASE WHEN length(excluded.snippet)>length(search_index_items.snippet) THEN excluded.snippet ELSE search_index_items.snippet END," +
+      "source=CASE WHEN excluded.source<>'' THEN excluded.source ELSE search_index_items.source END," +
+      "provider=CASE WHEN excluded.provider<>'' THEN excluded.provider ELSE search_index_items.provider END," +
+      "sources_json=CASE WHEN excluded.sources_json<>'[]' THEN excluded.sources_json ELSE search_index_items.sources_json END," +
+      "providers_json=CASE WHEN excluded.providers_json<>'[]' THEN excluded.providers_json ELSE search_index_items.providers_json END," +
+      "published_at=COALESCE(NULLIF(excluded.published_at,''),search_index_items.published_at)," +
+      "indexed_at=excluded.indexed_at"
+    ).bind(
+      row.kind,row.canonical_url,row.title,row.url,row.domain,row.snippet,row.source,
+      row.provider,row.sources_json,row.providers_json,row.published_at,indexedAt
+    );
+  });
+  for (let index = 0; index < statements.length; index += INDEX_D1_BATCH_SIZE) {
+    await env.MEDIA_DB.batch(statements.slice(index,index + INDEX_D1_BATCH_SIZE));
+  }
+  return rows.length;
+}
+function normalizeSearchIndexRow(kind, item) {
+  if (!item || typeof item !== "object") return null;
+  const url = safeUrl(item.url || item.originalUrl);
+  const canonical = canonicalIndexUrl(item.canonicalUrl || url, "web");
+  const title = clean(item.title || "", 250);
+  if (!url || !canonical || title.length < 8) return null;
+  let domain = clean(item.domain || "", 180);
+  if (!domain) {
+    try { domain = new URL(canonical).hostname.toLowerCase().replace(/^www\\./, ""); } catch (_) {}
+  }
+  const sources = Array.isArray(item.sources) ? item.sources : [item.source || item.provider || ""];
+  const providers = Array.isArray(item.providers) ? item.providers : [item.provider || ""];
+  return {
+    kind: kind,
+    canonical_url: canonical,
+    title: title,
+    url: url,
+    domain: domain,
+    snippet: clean(item.snippet || "", 1200),
+    source: clean(item.source || sources.find(Boolean) || "", 160),
+    provider: clean(item.provider || providers.filter(Boolean).join(", "), 160),
+    sources_json: JSON.stringify(sources.filter(Boolean).map(function (value) { return clean(value,160); }).slice(0,8)),
+    providers_json: JSON.stringify(providers.filter(Boolean).map(function (value) { return clean(value,160); }).slice(0,8)),
+    published_at: clean(item.published || "", 80)
+  };
+}
+function indexedSearchQuery(kind, query, limit) {
+  if (!["web","news"].includes(kind)) return null;
+  const words = terms(query).slice(0,8);
+  if (!words.length) return null;
+  const conditions = words.map(function () {
+    return "(LOWER(title) LIKE ? OR LOWER(snippet) LIKE ?)";
+  }).join(" OR ");
+  const params = [kind];
+  words.forEach(function (word) {
+    const pattern = "%" + word.replace(/[%_]/g,"") + "%";
+    params.push(pattern,pattern);
+  });
+  const requested = Number(limit);
+  const maximum = Number.isFinite(requested) && requested > 0 ? Math.min(50,Math.floor(requested)) : 20;
+  params.push(maximum);
+  return {
+    sql: "SELECT kind,title,url,canonical_url,domain,snippet,source,provider,sources_json,providers_json,published_at,indexed_at " +
+      "FROM search_index_items WHERE kind=? AND (" + conditions + ") " +
+      "ORDER BY CASE WHEN LOWER(title) LIKE ? THEN 0 ELSE 1 END, indexed_at DESC LIMIT ?",
+    params: [kind].concat(params.slice(1,-1), ["%" + String(query || "").trim().toLowerCase() + "%", maximum])
+  };
+}
+async function indexedSearch(env, kind, query, limit) {
+  const built = indexedSearchQuery(kind, query, limit);
+  if (!built) return [];
+  const data = await env.MEDIA_DB.prepare(built.sql).bind(...built.params).all();
+  return data.results || [];
+}
+
 async function save(env, rows) {
   if (!rows.length) return 0;
   const indexedAt = new Date().toISOString();
@@ -851,6 +937,56 @@ async function refresh(env) {
       }
     }
   }
+  const searchRequestBudget = createDailyRequestBudget(MAX_DAILY_WEB_NEWS_REQUESTS);
+  const searchSeed = SEEDS[daySlot % SEEDS.length];
+  const webDiscovery = await discoverDailyWeb(searchSeed, {
+    budget: searchRequestBudget,
+    maxResults: 20
+  });
+  const newsDiscovery = await discoverDailyNews(searchSeed, {
+    budget: searchRequestBudget,
+    maxResults: 20
+  });
+  function recordDiscoveryAttempts(attempts) {
+    for (const attempt of attempts || []) {
+      const metric = metricsFor(attempt.name);
+      metric.attempted += 1;
+      metric.rowsReceived += Number(attempt.rowsReceived) || 0;
+      if (attempt.ok) metric.succeeded += 1;
+      else {
+        metric.failed += 1;
+        failures.push(indexFailure(attempt.name, new Error(attempt.error || "provider request failed")));
+      }
+    }
+  }
+  recordDiscoveryAttempts(webDiscovery.attempts);
+  recordDiscoveryAttempts(newsDiscovery.attempts);
+  const searchRows = webDiscovery.results.map(function (item) {
+    return normalizeSearchIndexRow("web", item);
+  }).concat(newsDiscovery.results.map(function (item) {
+    return normalizeSearchIndexRow("news", item);
+  })).filter(Boolean);
+  const boundedSearchRows = searchRows.slice(0, INDEX_MAX_SEARCH_ROWS_PER_RUN);
+  const searchRowsSkipped = searchRows.length - boundedSearchRows.length;
+  let searchRowsSaved = 0;
+  if (boundedSearchRows.length) {
+    try {
+      const batchesNeeded = Math.ceil(boundedSearchRows.length / INDEX_D1_BATCH_SIZE);
+      if (!reserveIndexD1QueryBudget(d1QueryBudget, batchesNeeded)) {
+        throw new Error("D1 search-index query budget exhausted");
+      }
+      searchRowsSaved = await saveSearchIndexRows(env, boundedSearchRows);
+      saved += searchRowsSaved;
+      for (const row of boundedSearchRows) {
+        const providerNames = JSON.parse(row.providers_json || "[]");
+        const metricName = providerNames[0] || row.provider || "Search index";
+        metricsFor(metricName).rowsSaved += 1;
+      }
+    } catch (error) {
+      metricsFor("Search index database save").databaseSaveFailures += 1;
+      failures.push(indexFailure("Search index database save", error));
+    }
+  }
   const disabledProviders = circuit.disabledProviders();
   if (disabledProviders.length) {
     console.warn("Daily index disabled repeatedly failing providers for this run:", disabledProviders.join(", "));
@@ -887,9 +1023,18 @@ async function refresh(env) {
       d1QueriesReserved: d1QueryBudget.reserved,
       indexRowsQueued: indexRowsQueued,
       indexRowsLimit: INDEX_MAX_ROWS_PER_RUN,
+      searchRowsQueued: boundedSearchRows.length,
+      searchRowsSaved: searchRowsSaved,
+      searchRowsSkipped: searchRowsSkipped,
+      searchRowsLimit: INDEX_MAX_SEARCH_ROWS_PER_RUN,
+      webNewsRequests: searchRequestBudget.snapshot(),
       retentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE
     }
   }));
+}
+function searchIndexCountsQuery() {
+  return "SELECT kind,COUNT(*) AS total,COUNT(DISTINCT domain) AS domains,MAX(indexed_at) AS newestIndexedAt " +
+    "FROM search_index_items GROUP BY kind";
 }
 function indexStatusCountsQuery() {
   return "SELECT kind,COUNT(*) AS total," +
@@ -919,7 +1064,9 @@ function videoSafetySummary(rows) {
 }
 function indexFailureSummary(note) {
   const knownProviders = [
-    "Wikimedia Commons", "Openverse", "Flickr public feed", "PeerTube", "YouTube"
+    "Wikimedia Commons", "Openverse", "Flickr public feed", "PeerTube", "YouTube",
+    "DuckDuckGo", "Wikipedia", "GDELT news index", "Google News RSS", "Bing News RSS",
+    "Search index database save"
   ];
   const grouped = new Map();
   String(note || "").split(";").forEach(function (raw) {
@@ -973,14 +1120,25 @@ export default {
       if(p==="/"||p==="/health")return reply({name:"GOZIE SEARCH Media API",status:"ok"});
       if(p==="/images")return await search(request,env,"image");
       if(p==="/videos")return await search(request,env,"video");
+      if(p==="/index/search"){
+        const params=new URL(request.url).searchParams;
+        const kind=(params.get("kind")||"").trim().toLowerCase();
+        const query=(params.get("q")||"").trim().slice(0,180);
+        const limit=Number(params.get("limit"))||20;
+        if(!["web","news"].includes(kind))return reply({error:"Choose kind=web or kind=news."},400);
+        if(!query)return reply({error:"Provide a search query."},400);
+        const results=await indexedSearch(env,kind,query,limit);
+        return reply({kind,query,count:results.length,results});
+      }
       if(p==="/index/status"){
         const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
         const freshness=await env.MEDIA_DB.prepare(indexFreshnessSummaryQuery()).all();
+        const searchCounts=await env.MEDIA_DB.prepare(searchIndexCountsQuery()).all();
         const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1").first();
         const latestRun=latest?{finished_at:latest.finished_at,rows_processed:latest.rows_processed,failure_count:latest.failure_count,note:latest.note,stats:parseIndexRunStats(latest.stats_json)}:null;
-        return reply({counts:counts.results||[],freshness: freshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
+        return reply({counts:counts.results||[],searchCounts:searchCounts.results||[],freshness: freshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
       }
-      return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/status"]},404);
+      return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
   },
   async scheduled(controller,env,ctx) {
