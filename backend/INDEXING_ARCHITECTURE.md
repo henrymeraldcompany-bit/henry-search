@@ -176,3 +176,24 @@ preserving existing creator links, provider labels, playback URLs, publication
 dates, tags, and known duration when the new response omits them. Safety
 classification is deliberately refreshed on every update so an item no longer
 explicitly marked safe cannot retain a verified-safe status.
+
+
+## 5C. Canonical index deduplication
+
+The persistent media index applies a canonical identity before each write.
+Video records use a normalized canonical watch/page URL; YouTube short, watch,
+embed and Shorts variants resolve to the same YouTube watch identity. Image
+records use the normalized original media URL rather than the containing page,
+because one gallery page may legitimately contain multiple different images.
+Normalization removes URL fragments and common tracking parameters, normalizes
+host casing and `www.`, sorts meaningful query parameters, and removes default
+ports/trailing slashes. Meaningful query parameters are retained.
+
+D1 partial unique indexes enforce the canonical identity independently of the
+provider/source label. A conflict updates the existing row's available metadata
+instead of creating a second row. Existing source/page uniqueness remains as a
+compatibility guard. The index does not merge images solely because they share
+a page, nor does it use title similarity as proof that two different media files
+are identical. Canonical identity fields are populated as records are refreshed
+after the migration; older untouched rows retain their legacy identity until
+they are rediscovered.

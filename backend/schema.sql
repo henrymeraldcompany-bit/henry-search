@@ -29,3 +29,16 @@ CREATE INDEX IF NOT EXISTS idx_media_items_image_format
   ON media_items(kind, format, indexed_at);
 CREATE INDEX IF NOT EXISTS idx_media_items_image_dimensions
   ON media_items(kind, width, height);
+
+-- Canonical identities prevent repeated discoveries across providers from
+-- creating duplicate indexed media. Images key on original media URL (not page,
+-- because a gallery page may contain multiple distinct images); videos key on
+-- canonical watch/page URL (including normalized YouTube URL variants).
+ALTER TABLE media_items ADD COLUMN canonical_page_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE media_items ADD COLUMN canonical_media_url TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_items_video_canonical_page
+  ON media_items(canonical_page_url)
+  WHERE kind='video' AND canonical_page_url<>'';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_items_image_canonical_media
+  ON media_items(canonical_media_url)
+  WHERE kind='image' AND canonical_media_url<>'';

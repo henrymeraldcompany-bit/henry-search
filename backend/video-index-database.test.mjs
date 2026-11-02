@@ -74,7 +74,9 @@ test("D1 save persists safe video identity, playback metadata and duration", asy
   assert.equal(statements.length, 1);
   const { sql, values } = statements[0];
   assert.match(sql, /INSERT INTO media_items/);
-  assert.match(sql, /ON CONFLICT\(kind,source,page_url\) DO UPDATE SET/);
+  assert.match(sql, /ON CONFLICT DO UPDATE SET/);
+  assert.equal(values[23], "https://youtube.com/watch?v=abc12345678");
+  assert.equal(values[24], "");
   assert.match(sql, /duration_seconds=COALESCE\(excluded.duration_seconds,media_items.duration_seconds\)/);
   assert.equal(values[0], "video");
   assert.equal(values[1], "youtube.com");

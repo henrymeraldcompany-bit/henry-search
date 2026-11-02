@@ -308,13 +308,45 @@ async function youtube(q, key, count) {
   }
   return rows;
 }
+function canonicalIndexUrl(value, kind) {
+  const href = safeUrl(value);
+  if (!href) return "";
+  if (kind === "video") return canonicalMediaKey({ page_url: href });
+  try {
+    const url = new URL(href);
+    url.hostname = url.hostname.toLowerCase().replace(/^www\\./, "");
+    url.hash = "";
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source)$/i.test(key)) url.searchParams.delete(key);
+    }
+    if ((url.protocol === "https:" && url.port === "443") ||
+        (url.protocol === "http:" && url.port === "80")) url.port = "";
+    url.searchParams.sort();
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\\/+$/, "");
+    return url.href;
+  } catch (_) { return ""; }
+}
+function indexDedupKeys(row) {
+  const kind = row && row.kind;
+  if (kind === "video") return {
+    canonical_page_url: canonicalIndexUrl(row.page_url || row.media_url, "video"),
+    canonical_media_url: ""
+  };
+  if (kind === "image") return {
+    canonical_page_url: "",
+    canonical_media_url: canonicalIndexUrl(row.media_url, "image")
+  };
+  return { canonical_page_url: "", canonical_media_url: "" };
+}
+
 async function save(env, rows) {
   if (!rows.length) return 0;
   const indexedAt = new Date().toISOString();
   const stmts = rows.map(function (r) {
     return env.MEDIA_DB.prepare(
-      "INSERT INTO media_items (kind,source,source_id,title,description,page_url,media_url,thumbnail_url,embed_url,author,license,provider,creator_url,license_url,attribution,width,height,format,published_at,duration_seconds,tags,nsfw,indexed_at) " +
-      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kind,source,page_url) DO UPDATE SET " +
+      "INSERT INTO media_items (kind,source,source_id,title,description,page_url,media_url,thumbnail_url,embed_url,author,license,provider,creator_url,license_url,attribution,width,height,format,published_at,duration_seconds,tags,nsfw,indexed_at,canonical_page_url,canonical_media_url) " +
+      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO UPDATE SET " +
+      "canonical_page_url=COALESCE(NULLIF(excluded.canonical_page_url,''),media_items.canonical_page_url),canonical_media_url=COALESCE(NULLIF(excluded.canonical_media_url,''),media_items.canonical_media_url),"
       "source_id=COALESCE(NULLIF(excluded.source_id,''),media_items.source_id),title=COALESCE(NULLIF(excluded.title,''),media_items.title),description=COALESCE(NULLIF(excluded.description,''),media_items.description),media_url=COALESCE(NULLIF(excluded.media_url,''),media_items.media_url),thumbnail_url=COALESCE(NULLIF(excluded.thumbnail_url,''),media_items.thumbnail_url),embed_url=COALESCE(NULLIF(excluded.embed_url,''),media_items.embed_url),author=COALESCE(NULLIF(excluded.author,''),media_items.author),license=CASE WHEN excluded.license IS NULL OR excluded.license='' OR excluded.license LIKE 'License %unavailable%' OR excluded.license LIKE 'License details %' THEN media_items.license ELSE excluded.license END,provider=COALESCE(NULLIF(excluded.provider,''),media_items.provider),creator_url=COALESCE(NULLIF(excluded.creator_url,''),media_items.creator_url),license_url=COALESCE(NULLIF(excluded.license_url,''),media_items.license_url),attribution=COALESCE(NULLIF(excluded.attribution,''),media_items.attribution),width=COALESCE(excluded.width,media_items.width),height=COALESCE(excluded.height,media_items.height),format=COALESCE(NULLIF(excluded.format,''),media_items.format),published_at=COALESCE(NULLIF(excluded.published_at,''),media_items.published_at),duration_seconds=COALESCE(excluded.duration_seconds,media_items.duration_seconds),tags=CASE WHEN excluded.tags IS NULL OR excluded.tags IN ('','[]') THEN media_items.tags ELSE excluded.tags END,nsfw=excluded.nsfw,indexed_at=excluded.indexed_at"
     ).bind(
       r.kind,r.source,r.source_id,r.title,r.description,r.page_url,r.media_url,
@@ -327,7 +359,8 @@ async function save(env, rows) {
         Number.isFinite(Number(r.duration_seconds)) && Number(r.duration_seconds) >= 0
         ? Number(r.duration_seconds) : null,
       JSON.stringify(r.tags || []),
-      r.nsfw === 0 ? 0 : 1,indexedAt
+      r.nsfw === 0 ? 0 : 1,indexedAt,
+      indexDedupKeys(r).canonical_page_url,indexDedupKeys(r).canonical_media_url
     );
   });
   for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));
