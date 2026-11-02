@@ -81,7 +81,7 @@ test("D1 save persists and updates image attribution, dimensions and format", as
 });
 
 test("D1 save keeps optional image metadata empty and rejects invalid dimensions", async () => {
-  const save = vm.runInNewContext("(" + extractSave() + ")", { Date, JSON, Number });
+  const save = vm.runInNewContext("(" + extractSave() + ")", { Date, JSON, Number, indexDedupKeys: row => ({ canonical_page_url: row.kind === "video" ? row.page_url : "", canonical_media_url: row.kind === "image" ? row.media_url : "" }) });
   let statement;
   const env = { MEDIA_DB: {
     prepare(sql) { return { bind(...values) { statement = { sql, values }; return statement; } }; },
@@ -104,7 +104,7 @@ test("D1 save keeps optional image metadata empty and rejects invalid dimensions
 });
 
 test("D1 upsert preserves existing metadata when a later provider response omits it", async () => {
-  const save = vm.runInNewContext("(" + extractSave() + ")", { Date, JSON, Number });
+  const save = vm.runInNewContext("(" + extractSave() + ")", { Date, JSON, Number, indexDedupKeys: row => ({ canonical_page_url: row.kind === "video" ? row.page_url : "", canonical_media_url: row.kind === "image" ? row.media_url : "" }) });
   let statement;
   const env = { MEDIA_DB: {
     prepare(sql) { return { bind(...values) { statement = { sql, values }; return statement; } }; },
