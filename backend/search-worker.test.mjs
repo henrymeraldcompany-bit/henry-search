@@ -49,7 +49,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles, deduplicateNewsStories, filterNewsByDate } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles, deduplicateNewsStories, filterNewsByDate, diversifyNewsSources, summarizeNewsSourceDiversity } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -195,6 +195,37 @@ test('date filtering excludes unknown and future dates but any-time preserves al
  assert.equal(filterSearchResults(items,{date:'invalid'},now).length,0);
 });
 
+
+
+test("news source diversity round-robins publishers while preserving relevance order within each source", () => {
+ const ranked=[
+  {title:"A1",source:"Publisher A",relevanceScore:20},
+  {title:"A2",source:"Publisher A",relevanceScore:19},
+  {title:"A3",source:"Publisher A",relevanceScore:18},
+  {title:"B1",source:"Publisher B",relevanceScore:17},
+  {title:"B2",source:"Publisher B",relevanceScore:16},
+  {title:"C1",source:"Publisher C",relevanceScore:15}
+ ];
+ const diverse=diversifyNewsSources(ranked);
+ assert.deepEqual(diverse.map(item=>item.title),["A1","B1","C1","A2","B2","A3"]);
+ assert.deepEqual(diverse.filter(item=>item.source==="Publisher A").map(item=>item.title),["A1","A2","A3"]);
+ assert.deepEqual(summarizeNewsSourceDiversity(diverse),{
+  uniqueSources:3,
+  distribution:{"Publisher A":3,"Publisher B":2,"Publisher C":1}
+ });
+});
+
+test("news source diversity uses merged lead publisher and does not duplicate syndicated coverage", () => {
+ const stories=[
+  {title:"Shared story",source:"Publisher A",sources:["Publisher A","Publisher B","Publisher C"]},
+  {title:"Other A story",source:"Publisher A",sources:["Publisher A"]},
+  {title:"Publisher B exclusive",source:"Publisher B",sources:["Publisher B"]}
+ ];
+ const diverse=diversifyNewsSources(stories);
+ assert.deepEqual(diverse.map(item=>item.title),["Shared story","Publisher B exclusive","Other A story"]);
+ assert.deepEqual(diverse[0].sources,["Publisher A","Publisher B","Publisher C"]);
+ assert.equal(diverse.length,3);
+});
 
 test("news publication-date filters support presets and inclusive UTC date ranges", () => {
  const now=Date.parse("2026-11-02T12:00:00.000Z");
