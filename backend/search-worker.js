@@ -42,6 +42,10 @@ async fetch(request, env = {}, ctx = {}) {
    const cached=await caches.default.match(cacheRequest);
    if(cached){
     const headers=new Headers(cached.headers);
+    // Cache entries may outlive the request that populated them. Rebuild
+    // origin-dependent security headers for the current caller on every hit.
+    for(const [name,value] of Object.entries(cors))headers.set(name,value);
+    if(!Object.prototype.hasOwnProperty.call(cors,"Access-Control-Allow-Origin"))headers.delete("Access-Control-Allow-Origin");
     headers.set("X-GOZIE-Cache","HIT");
     return new Response(cached.body,{status:cached.status,statusText:cached.statusText,headers});
    }
