@@ -48,9 +48,8 @@ try {
   // return zero results for a broad query, which tests provider availability
   // rather than the published player's controls. The dedicated Worker routes
   // are covered independently by the live API smoke job.
-  await page.route("**/videos?*", async (route) => {
+  await page.route((url) => url.pathname === "/videos" && url.searchParams.has("q"), async (route) => {
     const url = new URL(route.request().url());
-    if (!url.searchParams.has("q")) return route.continue();
     return route.fulfill({
       status: 200,
       contentType: "application/json",
