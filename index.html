@@ -19,23 +19,7 @@
       </a>
 
       <div class="top-actions">
-        <button
-          id="theme-toggle"
-          class="theme-toggle"
-          type="button"
-          aria-label="Switch to light theme"
-          title="Switch theme"
-        >
-          <span id="theme-icon" aria-hidden="true">☀</span>
-          <span class="theme-label">Light mode</span>
-        </button>
-
-        <button
-          id="menu-toggle"
-          class="icon-button"
-          type="button"
-          aria-label="Open menu"
-        >☰</button>
+        <button id="menu-toggle" class="icon-button" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button>
       </div>
     </header>
 
@@ -131,25 +115,6 @@
         Ask a question. Discover something new.
       </p>
 
-      <div class="quick-links" aria-label="Popular search ideas">
-        <span class="quick-label">EXPLORE</span>
-
-        <button type="button" class="quick-chip" data-query="Technology">
-          Technology
-        </button>
-
-        <button type="button" class="quick-chip" data-query="Science">
-          Science
-        </button>
-
-        <button type="button" class="quick-chip" data-query="Education">
-          Education
-        </button>
-
-        <button type="button" class="quick-chip" data-query="World news">
-          World news
-        </button>
-      </div>
     </section>
 
     <section
@@ -171,26 +136,21 @@
       <div id="results-list" class="results-list"></div>
     </section>
 
-    <section class="feature-grid" aria-label="Search features">
-      <article class="feature-card">
-        <div class="feature-icon">✦</div>
-        <h2>Discover more</h2>
-        <p>Explore subjects and find useful information for your next idea.</p>
-      </article>
-
-      <article class="feature-card">
-        <div class="feature-icon">↗</div>
-        <h2>Keep exploring</h2>
-        <p>Move from one question to another with a simple search experience.</p>
-      </article>
-
-      <article class="feature-card">
-        <div class="feature-icon">◎</div>
-        <h2>Made for you</h2>
-        <p>A clean, responsive interface designed for phones and computers.</p>
-      </article>
+    <section id="settings-view" class="utility-view" hidden aria-labelledby="settings-title">
+      <div class="utility-heading"><button class="back-home-button" type="button" data-return-home>← Back</button><p class="eyebrow">BROWSER PREFERENCES</p><h1 id="settings-title">Settings</h1><p>Personalise how GOZIE SEARCH works on this device.</p></div>
+      <div class="settings-group">
+        <label class="setting-row"><span><strong>Open results in a new tab</strong><small>Keep your search page open when visiting a result.</small></span><input id="setting-new-tab" type="checkbox" checked></label>
+        <label class="setting-row"><span><strong>Reduce motion</strong><small>Use simpler transitions and respect accessibility preferences.</small></span><input id="setting-reduced-motion" type="checkbox"></label>
+        <label class="setting-row"><span><strong>Default search category</strong><small>Choose the category selected when you open GOZIE SEARCH.</small></span><select id="setting-default-category"><option value="all">All</option><option value="images">Images</option><option value="news">News</option><option value="videos">Videos</option></select></label>
+        <label class="setting-row"><span><strong>Results per page</strong><small>Choose how many web results appear on each page.</small></span><select id="setting-results-count"><option value="10">10 results</option><option value="20">20 results</option></select></label>
+      </div>
+      <div class="settings-group"><h2>Privacy and data</h2><p class="settings-note">Search history is stored only in this browser on this device.</p><button id="clear-search-history" class="settings-action danger-action" type="button">Clear search history</button></div>
+      <p id="settings-status" class="settings-status" role="status" aria-live="polite"></p>
     </section>
-
+    <section id="history-view" class="utility-view" hidden aria-labelledby="history-title">
+      <div class="utility-heading"><button class="back-home-button" type="button" data-return-home>← Back</button><p class="eyebrow">YOUR ACTIVITY</p><h1 id="history-title">Search history</h1><p>Recent searches saved on this device.</p></div>
+      <div id="history-list" class="history-list"></div>
+    </section>
     <footer class="footer">
       <a class="footer-brand" href="./">GOZIE SEARCH</a>
       <span>Explore beyond limits.</span>
@@ -203,6 +163,17 @@
     </footer>
 
   </main>
+
+  <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+  <aside id="app-sidebar" class="app-sidebar" aria-label="Main sidebar" aria-hidden="true">
+    <div class="sidebar-header"><a class="brand-small" href="./"><span class="brand-mark">G</span><span>GOZIE <span class="brand-accent">SEARCH</span></span></a><button id="sidebar-close" class="icon-button" type="button" aria-label="Close sidebar">×</button></div>
+    <button id="sidebar-new-search" class="sidebar-item primary-sidebar-item" type="button"><span>＋</span> New search</button>
+    <button id="sidebar-history" class="sidebar-item" type="button"><span>◷</span> Search history</button>
+    <button id="sidebar-settings" class="sidebar-item" type="button"><span>⚙</span> Settings</button>
+    <div class="sidebar-divider"></div>
+    <button id="theme-toggle" class="sidebar-item theme-sidebar-item" type="button" aria-label="Switch to light mode"><span id="theme-icon">☀</span><span class="theme-label">Light mode</span></button>
+    <div class="sidebar-bottom"><span>GOZIE SEARCH</span><small>Explore beyond limits.</small></div>
+  </aside>
 
   <script src="app.js"></script>
 </body>
