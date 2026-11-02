@@ -254,6 +254,48 @@ export function diversifySearchResults(results) {
   return diversified;
 }
 
+/**
+ * Interleave news articles by publisher after relevance ranking. The first
+ * credited publisher is the lead source; merged syndication credits remain
+ * attached to the story and are not counted as separate articles.
+ */
+export function diversifyNewsSources(articles) {
+  if (!Array.isArray(articles) || articles.length < 2) return Array.isArray(articles) ? articles : [];
+  const buckets = new Map();
+  for (const article of articles) {
+    const credited = Array.isArray(article?.sources) ? article.sources : [];
+    const source = String(credited[0] || article?.source || article?.domain || "").trim().toLowerCase();
+    const key = source || "__unknown__";
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(article);
+  }
+  const output = [];
+  let added = true;
+  while (added) {
+    added = false;
+    for (const bucket of buckets.values()) {
+      if (bucket.length) {
+        output.push(bucket.shift());
+        added = true;
+      }
+    }
+  }
+  return output;
+}
+
+/** Summarize distinct publisher representation without inflating syndicated stories. */
+export function summarizeNewsSourceDiversity(articles) {
+  const distribution = {};
+  for (const article of Array.isArray(articles) ? articles : []) {
+    const source = String((Array.isArray(article?.sources) ? article.sources[0] : "") || article?.source || article?.domain || "Unknown").trim() || "Unknown";
+    distribution[source] = (distribution[source] || 0) + 1;
+  }
+  return {
+    uniqueSources: Object.keys(distribution).length,
+    distribution
+  };
+}
+
 /** Filter normalized web results by domain, publisher and publication age. */
 export function filterSearchResults(results, filters = {}, now = Date.now()) {
   const items = Array.isArray(results) ? results : [];
