@@ -111,7 +111,21 @@ async fetch(request, env = {}, ctx = {}) {
       if(!response.ok)throw Error("HTTP "+response.status);
       return parseNewsRss(await response.text(),"Bing News RSS");
      }
-    }
+    },
+    ...[
+     {name:"BBC News World",url:"https://feeds.bbci.co.uk/news/world/rss.xml"},
+     {name:"Al Jazeera English",url:"https://www.aljazeera.com/xml/rss/all.xml"},
+     {name:"The Guardian World",url:"https://www.theguardian.com/world/rss"},
+     {name:"NPR News",url:"https://feeds.npr.org/1001/rss.xml"}
+    ].map(feed=>({
+     name:feed.name,
+     search:async()=>{
+      const response=await fetch(feed.url,{headers:{"Accept":"application/rss+xml, application/xml, text/xml","User-Agent":"GOZIE-SEARCH/1.0 news-search"},signal:AbortSignal.timeout(8000)});
+      if(!response.ok)throw Error("HTTP "+response.status);
+      // These publisher feeds are broad, so the query ranker filters unrelated headlines.
+      return parseNewsRss(await response.text(),feed.name);
+     }
+    }))
    ];
    // Query all live news providers in parallel. A healthy source contributes
    // even when another provider times out, returns an error, or has an empty feed.
@@ -136,7 +150,7 @@ async fetch(request, env = {}, ctx = {}) {
      if(String(item.title||"").length>String(existing.title||"").length)existing.title=item.title;
     }
    }
-   const liveResults=rankArticles([...merged.values()],q);
+   const liveResults=rankArticles([...merged.values()],q).filter(item=>item.relevanceScore>0);
    if(liveResults.length)return out({
     query:q,
     source:successfulProviders.join(" + ")||"News providers",
