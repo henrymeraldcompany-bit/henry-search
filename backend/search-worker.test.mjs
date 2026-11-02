@@ -718,3 +718,136 @@ test("validates webpage URL input before extraction", () => {
   assert.equal(validateApiRequest(new URL("https://api.example/extract?url=https%3A%2F%2Fuser%3Apass%40example.com")).valid, false);
   assert.equal(validateApiRequest(new URL("https://api.example/extract?url=https%3A%2F%2Fexample.com%2F%2500")).valid, true);
 });
+
+
+import { checkApiRateLimit, API_RATE_LIMIT_POLICY } from "./api-rate-limit.js";
+
+test("defines separate general and webpage-extraction rate-limit policies", () => {
+  assert.deepEqual(API_RATE_LIMIT_POLICY, {
+    general: { limit: 120, period: 60 },
+    extract: { limit: 12, period: 60 }
+  });
+});
+
+test("rate limits by Cloudflare client IP and ignores spoofable forwarding headers", async () => {
+  const keys = [];
+  const env = {
+    API_RATE_LIMITER: { limit: async value => { keys.push(value.key); return { success: true }; } },
+    API_EXTRACT_RATE_LIMITER: { limit: async value => { keys.push(value.key); return { success: true }; } }
+  };
+  const request = new Request("https://api.example/search?q=solar", {
+    headers: {
+      "cf-connecting-ip": "203.0.113.8",
+      "x-forwarded-for": "198.51.100.7"
+    }
+  });
+  const result = await checkApiRateLimit(request, env, "/search");
+  assert.equal(result.allowed, true);
+  assert.equal(result.configured, true);
+  assert.deepEqual(keys, ["client:203.0.113.8"]);
+});
+
+test("applies the additional extraction limit using the same client identity", async () => {
+  const keys = [];
+  const env = {
+    API_RATE_LIMITER: { limit: async value => { keys.push("general:" + value.key); return { success: true }; } },
+    API_EXTRACT_RATE_LIMITER: { limit: async value => { keys.push("extract:" + value.key); return { success: true }; } }
+  };
+  const request = new Request("https://api.example/extract?url=https%3A%2F%2Fexample.com", {
+    headers: { "cf-connecting-ip": "203.0.113.9" }
+  });
+  const result = await checkApiRateLimit(request, env, "/extract");
+  assert.equal(result.allowed, true);
+  assert.equal(result.configured, true);
+  assert.deepEqual(keys, ["general:client:203.0.113.9", "extract:client:203.0.113.9"]);
+});
+
+test("stops requests when the general API limit is exceeded", async () => {
+  let extractionCalls = 0;
+  const env = {
+    API_RATE_LIMITER: { limit: async () => ({ success: false }) },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => { extractionCalls++; return { success: true }; } }
+  };
+  const request = new Request("https://api.example/extract?url=https%3A%2F%2Fexample.com", {
+    headers: { "cf-connecting-ip": "203.0.113.10" }
+  });
+  const result = await checkApiRateLimit(request, env, "/extract");
+  assert.deepEqual(result, {
+    allowed: false, configured: true, scope: "api", limit: 120, period: 60
+  });
+  assert.equal(extractionCalls, 0);
+});
+
+test("rejects webpage extraction after its separate lower limit is exceeded", async () => {
+  const env = {
+    API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: false }) }
+  };
+  const request = new Request("https://api.example/extract?url=https%3A%2F%2Fexample.com", {
+    headers: { "cf-connecting-ip": "203.0.113.11" }
+  });
+  const result = await checkApiRateLimit(request, env, "/extract");
+  assert.deepEqual(result, {
+    allowed: false, configured: true, scope: "extract", limit: 12, period: 60
+  });
+});
+
+test("fails open but reports degraded status if the rate-limit service errors", async () => {
+  const env = {
+    API_RATE_LIMITER: { limit: async () => { throw new Error("temporary binding failure"); } },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: true }) }
+  };
+  const request = new Request("https://api.example/search?q=solar", {
+    headers: { "cf-connecting-ip": "203.0.113.12" }
+  });
+  const result = await checkApiRateLimit(request, env, "/search");
+  assert.equal(result.allowed, true);
+  assert.equal(result.configured, false);
+  assert.equal(result.error, true);
+});
+
+test("returns HTTP 429 with Retry-After when the general API limit is exceeded", async () => {
+  const env = {
+    API_RATE_LIMITER: { limit: async () => ({ success: false }) },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: true }) }
+  };
+  const response = await worker.fetch(new Request("https://api.example/search?q=solar", {
+    headers: { "cf-connecting-ip": "203.0.113.13" }
+  }), env);
+  const payload = await response.json();
+  assert.equal(response.status, 429);
+  assert.equal(payload.error, "Too many requests. Please wait before trying again.");
+  assert.equal(response.headers.get("Retry-After"), "60");
+  assert.equal(response.headers.get("RateLimit-Limit"), "120");
+  assert.equal(response.headers.get("RateLimit-Policy"), "120;w=60");
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(response.headers.get("X-GOZIE-RateLimit"), "active");
+});
+
+test("returns HTTP 429 with the stricter policy for webpage extraction", async () => {
+  const env = {
+    API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: false }) }
+  };
+  const response = await worker.fetch(new Request("https://api.example/extract?url=https%3A%2F%2Fexample.com", {
+    headers: { "cf-connecting-ip": "203.0.113.14" }
+  }), env);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("Retry-After"), "60");
+  assert.equal(response.headers.get("RateLimit-Limit"), "12");
+  assert.equal(response.headers.get("RateLimit-Policy"), "12;w=60");
+});
+
+test("does not count CORS preflight requests against API rate limits", async () => {
+  let calls = 0;
+  const env = {
+    API_RATE_LIMITER: { limit: async () => { calls++; return { success: true }; } },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => { calls++; return { success: true }; } }
+  };
+  const response = await worker.fetch(new Request("https://api.example/search", {
+    method: "OPTIONS",
+    headers: { Origin: "https://henrymeraldcompany-bit.github.io" }
+  }), env);
+  assert.equal(response.status, 204);
+  assert.equal(calls, 0);
+});
