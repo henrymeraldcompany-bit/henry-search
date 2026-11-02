@@ -100,6 +100,7 @@ const freshnessEnd = source.indexOf("\n}", freshnessStart);
 assert.notEqual(freshnessStart, -1, "indexFreshnessSummaryQuery must exist");
 assert.notEqual(freshnessEnd, -1, "freshness query function must close");
 const freshnessQuery = vm.runInNewContext("(" + source.slice(freshnessStart, freshnessEnd + 2) + ")", { INDEX_FRESH_DAYS: 30 });
+const freshnessSql = freshnessQuery();
 test("freshness policy separates fresh and stale records without hiding stale fallback rows", () => {
   const sql = freshnessQuery();
   assert.match(sql, /julianday\(indexed_at\)/);
@@ -113,6 +114,6 @@ test("freshness policy separates fresh and stale records without hiding stale fa
   assert.match(source, /DELETE FROM media_items WHERE indexed_at < \?/);
 });
 test("freshness is measured from indexed_at and legacy rows are included in the status breakdown", () => {
-  assert.match(sql, /FROM media_items GROUP BY kind/);
+  assert.match(freshnessSql, /FROM media_items GROUP BY kind/);
   assert.match(source, /indexed_at=excluded\.indexed_at/);
 });
