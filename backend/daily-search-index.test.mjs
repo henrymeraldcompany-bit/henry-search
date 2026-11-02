@@ -10,15 +10,20 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
 function database() {
   const rows = [];
   const runs = [];
+  const retentionDeletes = [];
   return {
     rows,
     runs,
+    retentionDeletes,
     prepare(sql) {
       const statement = {
         sql,
         values: [],
         bind(...values) { this.values = values; return this; },
         async run() {
+          if (sql.startsWith("DELETE FROM media_items") || sql.startsWith("DELETE FROM search_index_items")) {
+            retentionDeletes.push({ table: sql.startsWith("DELETE FROM media_items") ? "media_items" : "search_index_items", cutoff: this.values[0], limit: this.values[1] });
+          }
           if (sql.startsWith("INSERT INTO index_runs")) {
             runs.push({
               rowsProcessed: this.values[1],
@@ -112,6 +117,9 @@ test("scheduled refresh stores webpage and news metadata separately from media r
     assert.equal(db.runs[0].stats.providers["Bing News RSS"].rowsContributed, 1);
     assert.equal(db.runs[0].stats.rowsSaved, 3);
     assert.equal(db.runs[0].stats.rowsContributed, 5);
+    assert.deepEqual(db.retentionDeletes.map(item => item.table), ["media_items", "search_index_items"]);
+    assert.ok(db.retentionDeletes.every(item => Number.isFinite(Date.parse(item.cutoff))));
+    assert.ok(db.retentionDeletes.every(item => item.limit === 500));
 
     const response = await worker.fetch(new Request(
       "https://media.example/index/search?kind=web&q=daily"
