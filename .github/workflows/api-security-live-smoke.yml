@@ -8,6 +8,7 @@ on:
       - "backend/search-worker.js"
       - "backend/api-security.js"
       - "backend/api-validation.js"
+      - "backend/search-extract.js"
   workflow_dispatch:
 
 permissions:
@@ -55,7 +56,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in             '/search'             '/search?q=solar&unexpected=1'             '/search?q=one&q=two'             '/search?q=solar%00energy'             '/search?q=solar&domain=bad_domain'             '/news?q=technology&from=2026-02-30'             '/news?q=technology&from=2026-11-03&to=2026-11-02'             '/extract?url=javascript%3Aalert%281%29'; do
+          for path in             '/search'             '/search?q=solar&unexpected=1'             '/search?q=one&q=two'             '/search?q=solar%00energy'             '/search?q=solar&domain=bad_domain'             '/news?q=technology&from=2026-02-30'             '/news?q=technology&from=2026-11-03&to=2026-11-02'             '/extract?url=javascript%3Aalert%281%29' \
+            '/extract?url=http%3A%2F%2Flocalhost.%2F' \
+            '/extract?url=http%3A%2F%2Fmetadata.google.internal.%2F' \
+            '/extract?url=http%3A%2F%2F169.254.169.254.nip.io%2F' \
+            '/extract?url=https%3A%2F%2Fhenry-search-api.henrymeraldcompany.workers.dev%2Fhealth'; do
             tmp="$(mktemp)"
             status="$(curl --silent --show-error --output "$tmp" --write-out '%{http_code}' --max-time 15 "$API$path")"
             if [[ "$status" != "400" ]]; then
