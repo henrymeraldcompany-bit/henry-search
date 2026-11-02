@@ -338,11 +338,23 @@ function renderResults(items) {
     if (!url) continue;
 
     const card = document.createElement("article");
-    card.className = "result-card";
+    card.className = "result-card web-result-card";
 
     const urlLine = document.createElement("div");
-    urlLine.className = "result-url";
-    urlLine.textContent = new URL(url).hostname;
+    urlLine.className = "result-url-line";
+    const rank = document.createElement("span");
+    rank.className = "result-rank";
+    rank.textContent = String(pageStart + validCount + 1);
+    rank.setAttribute("aria-label", "Result " + (pageStart + validCount + 1));
+    const siteMark = document.createElement("span");
+    siteMark.className = "result-site-mark";
+    const hostName = new URL(url).hostname.replace(/^www\\./i, "");
+    siteMark.textContent = (hostName.replace(/^m\\./i, "").charAt(0) || "W").toUpperCase();
+    siteMark.setAttribute("aria-hidden", "true");
+    const siteName = document.createElement("span");
+    siteName.className = "result-url";
+    siteName.textContent = hostName;
+    urlLine.append(rank, siteMark, siteName);
 
     const title = makeLink(url, item.title || url);
     title.className = "result-title";
