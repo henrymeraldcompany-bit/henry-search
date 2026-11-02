@@ -2074,24 +2074,65 @@ const page = document.querySelector(".page");
 const settingsView = document.querySelector("#settings-view");
 const historyView = document.querySelector("#history-view");
 const historyList = document.querySelector("#history-list");
+let sidebarOpener = null;
+function getSidebarFocusableItems() {
+  if (!sidebar) return [];
+  return [...sidebar.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.getAttribute("aria-hidden") !== "true");
+}
 function openSidebar() {
-  sidebar?.classList.add("is-open");
-  sidebar?.setAttribute("aria-hidden", "false");
+  if (!sidebar || sidebar.classList.contains("is-open")) return;
+  sidebarOpener = document.activeElement;
+  sidebar.classList.add("is-open");
+  sidebar.setAttribute("aria-hidden", "false");
   if (sidebarBackdrop) sidebarBackdrop.hidden = false;
   menuToggle?.setAttribute("aria-expanded", "true");
+  menuToggle?.setAttribute("aria-label", "Close navigation menu");
   document.body.classList.add("sidebar-visible");
+  requestAnimationFrame(() => (getSidebarFocusableItems()[0] || sidebar).focus());
 }
 function closeSidebar() {
-  sidebar?.classList.remove("is-open");
-  sidebar?.setAttribute("aria-hidden", "true");
+  if (!sidebar || !sidebar.classList.contains("is-open")) return;
+  sidebar.classList.remove("is-open");
+  sidebar.setAttribute("aria-hidden", "true");
   if (sidebarBackdrop) sidebarBackdrop.hidden = true;
   menuToggle?.setAttribute("aria-expanded", "false");
+  menuToggle?.setAttribute("aria-label", "Open navigation menu");
   document.body.classList.remove("sidebar-visible");
+  const returnTarget = sidebarOpener && document.contains(sidebarOpener) ? sidebarOpener : menuToggle;
+  requestAnimationFrame(() => returnTarget?.focus());
 }
-menuToggle?.addEventListener("click", openSidebar);
+menuToggle?.addEventListener("click", () => {
+  if (sidebar?.classList.contains("is-open")) closeSidebar();
+  else openSidebar();
+});
 document.querySelector("#sidebar-close")?.addEventListener("click", closeSidebar);
 sidebarBackdrop?.addEventListener("click", closeSidebar);
-document.addEventListener("keydown", event => { if (event.key === "Escape") closeSidebar(); });
+document.addEventListener("keydown", event => {
+  if (!sidebar?.classList.contains("is-open")) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSidebar();
+    return;
+  }
+  if (event.key === "Tab") {
+    const items = getSidebarFocusableItems();
+    if (!items.length) {
+      event.preventDefault();
+      sidebar.focus();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === sidebar)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+});
 
 function showUtilityView(view) {
   closeSidebar();
