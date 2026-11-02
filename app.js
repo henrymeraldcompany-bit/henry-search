@@ -144,6 +144,9 @@ ttsPauseButton?.addEventListener("click", () => {
 });
 ttsStopButton?.addEventListener("click", stopReadAloud);
 
+// Release queued speech and its retained text chunks when the page is discarded.
+window.addEventListener("pagehide", stopReadAloud, { once: true });
+
 
 const themeToggle = document.querySelector("#theme-toggle");
 const themeIcon = document.querySelector("#theme-icon");
@@ -846,6 +849,7 @@ function renderImageGallery(items, query = "") {
     image.alt = item.title || "Image search result";
     image.loading = "lazy";
     image.decoding = "async";
+    image.fetchPriority = "low";
     image.referrerPolicy = "no-referrer";
     image.title = item.title || "Open full-size image";
 
@@ -1532,6 +1536,7 @@ function renderVideoResults(items, query) {
         image.alt = `Thumbnail for ${video.title}`;
         image.loading = "lazy";
         image.decoding = "async";
+        image.fetchPriority = "low";
         image.referrerPolicy = "no-referrer";
         image.addEventListener("error", () => {
           image.remove();
@@ -2121,19 +2126,31 @@ if (voiceButton) {
 
 // DEVICE PREFERENCES, SIDEBAR AND VIEWS
 // ========================================
+// Cache the small preference object in memory. Result rendering can create many
+// links; reparsing localStorage for every link adds avoidable work on mobile CPUs.
+let preferenceCache = null;
 function readPreferences() {
-  try { return JSON.parse(localStorage.getItem("gozie-preferences") || "{}"); }
-  catch { return {}; }
+  if (preferenceCache) return preferenceCache;
+  try {
+    const parsed = JSON.parse(localStorage.getItem("gozie-preferences") || "{}");
+    preferenceCache = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    preferenceCache = {};
+  }
+  return preferenceCache;
 }
 function getPreference(key, fallback) {
   const value = readPreferences()[key];
   return value === undefined ? fallback : value;
 }
 function savePreference(key, value) {
-  const prefs = readPreferences();
-  prefs[key] = value;
+  const prefs = { ...readPreferences(), [key]: value };
+  preferenceCache = prefs;
   try { localStorage.setItem("gozie-preferences", JSON.stringify(prefs)); } catch {}
 }
+window.addEventListener("storage", event => {
+  if (event.key === "gozie-preferences" || event.key === null) preferenceCache = null;
+});
 function readSearchHistory() {
   try {
     const value = JSON.parse(localStorage.getItem("gozie-search-history") || "[]");

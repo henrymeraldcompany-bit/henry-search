@@ -2532,3 +2532,18 @@ select:disabled {
     transition: none;
   }
 }
+
+
+/* Task 72 — keep long result lists inexpensive on mobile devices. */
+.result-card,
+.image-card,
+.video-card,
+.news-preview-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
+
+.image-preview-button img,
+.video-thumb-link img {
+  content-visibility: auto;
+}
