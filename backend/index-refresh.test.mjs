@@ -73,14 +73,14 @@ test("provider retry stops at shared budget and does not retry permanent errors"
   await assert.rejects(retryApi.runIndexProviderWithRetry(async () => {
     attempts += 1;
     throw { status: 503, message: "unavailable" };
-  }, budget, async () => {}), /unavailable/);
+  }, budget, async () => {}), error => error.status === 503);
   assert.equal(attempts, 2);
   assert.equal(budget.remaining, 0);
   attempts = 0;
   await assert.rejects(retryApi.runIndexProviderWithRetry(async () => {
     attempts += 1;
     throw { status: 400, message: "bad request" };
-  }, { remaining: 3 }, async () => {}), /bad request/);
+  }, { remaining: 3 }, async () => {}), error => error.status === 400);
   assert.equal(attempts, 1);
 });
 test("retry budget is globally bounded to three additional attempts", () => {
