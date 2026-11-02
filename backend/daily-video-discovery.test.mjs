@@ -12,6 +12,9 @@ function empty(url){
   if(url.hostname==="commons.wikimedia.org")return json({query:{pages:{}}});
   if(url.hostname==="api.openverse.org")return json({results:[]});
   if(url.hostname==="www.flickr.com")return json({items:[]});
+  if(url.hostname==="api.duckduckgo.com")return json({});
+  if(url.hostname==="en.wikipedia.org")return json({query:{search:[]}});
+  if(url.hostname==="api.gdeltproject.org")return json({articles:[{title:"Daily news discovery fixture report",url:"https://news-fixture.example/daily-report",domain:"news-fixture.example",seendate:"20261102T080000Z"}]});
   if(["peertube.tv","peer.tube","spectra.video"].includes(url.hostname))return json({data:[]});
   throw Error("Unexpected endpoint "+url.href);
 }
