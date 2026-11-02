@@ -585,3 +585,28 @@ test("news ranking applies cross-publisher story deduplication", () => {
  assert.deepEqual(ranked[0].sources,["Science A","Science B"]);
  assert.equal(ranked[0].alternateUrls.length,1);
 });
+
+import { buildApiSecurityHeaders, isAllowedApiOrigin } from "./api-security.js";
+
+test("API CORS allows only the production frontend and explicitly configured origins", () => {
+  assert.equal(isAllowedApiOrigin("https://henrymeraldcompany-bit.github.io"), true);
+  assert.equal(isAllowedApiOrigin("https://evil.example"), false);
+  assert.equal(isAllowedApiOrigin("null"), false);
+  assert.equal(isAllowedApiOrigin("https://henrymeraldcompany-bit.github.io.attacker.example"), false);
+  assert.equal(isAllowedApiOrigin("https://preview.example", { ALLOWED_ORIGINS: "https://preview.example,https://other.example" }), true);
+  assert.equal(isAllowedApiOrigin("http://192.168.1.5"), false);
+  assert.equal(isAllowedApiOrigin("http://localhost:5173"), true);
+});
+
+test("API security headers are present without granting wildcard browser access", () => {
+  const allowed = buildApiSecurityHeaders("https://henrymeraldcompany-bit.github.io");
+  assert.equal(allowed["Access-Control-Allow-Origin"], "https://henrymeraldcompany-bit.github.io");
+  assert.equal(allowed["X-Content-Type-Options"], "nosniff");
+  assert.equal(allowed["X-Frame-Options"], "DENY");
+  assert.equal(allowed["Referrer-Policy"], "no-referrer");
+  assert.match(allowed["Strict-Transport-Security"], /max-age=31536000/);
+  assert.equal(allowed.Vary, "Origin");
+  const denied = buildApiSecurityHeaders("https://attacker.example");
+  assert.equal(denied["Access-Control-Allow-Origin"], undefined);
+  assert.equal(denied["Access-Control-Allow-Methods"], "GET, OPTIONS");
+});
