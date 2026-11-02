@@ -448,3 +448,15 @@ test("news route falls back to the daily indexed news when live providers are un
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("news ranking normalizes headline whitespace and rejects repeated-character placeholders", () => {
+ const ranked=rankArticles([
+  {title:"Solar   energy   research   breakthrough",url:"https://science.example/solar",snippet:"A useful report about solar energy research."},
+  {title:"xxxxxxxxxxxxxxxx",url:"https://junk.example/repeated",snippet:"Solar energy"},
+  {title:"   ",url:"https://junk.example/blank",snippet:"Solar energy"}
+ ],"solar energy");
+ assert.equal(ranked.length,1);
+ assert.equal(ranked[0].title,"Solar energy research breakthrough");
+ assert.ok(ranked[0].relevanceScore>0);
+});
