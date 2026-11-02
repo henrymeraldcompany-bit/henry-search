@@ -102,8 +102,8 @@ function extractFunction(name) {
   assert.fail("Could not isolate " + name);
 }
 const budgetApi = vm.runInNewContext(
-  "(function(){ " + ["calculateIndexRetryBudget","createIndexD1QueryBudget","consumeIndexD1QueryBudget"].map(extractFunction).join("\n") +
-  "; return {calculateIndexRetryBudget,createIndexD1QueryBudget,consumeIndexD1QueryBudget}; })()",
+  "(function(){ " + ["calculateIndexRetryBudget","createIndexD1QueryBudget","reserveIndexD1QueryBudget"].map(extractFunction).join("\n") +
+  "; return {calculateIndexRetryBudget,createIndexD1QueryBudget,reserveIndexD1QueryBudget}; })()",
   { Math, Number }
 );
 test("indexing request budget stays below the Workers Free 50-subrequest ceiling with reserve", () => {
@@ -122,8 +122,9 @@ test("daily indexed rows and retention cleanup have hard per-run caps", () => {
 test("D1 query budget reserves capacity for retention cleanup and run summary", () => {
   const budget = budgetApi.createIndexD1QueryBudget(50, 5);
   assert.equal(budget.remaining, 45);
-  for (let i = 0; i < 45; i++) assert.equal(budgetApi.consumeIndexD1QueryBudget(budget), true);
-  assert.equal(budgetApi.consumeIndexD1QueryBudget(budget), false);
+  assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 40), true);
+  assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 5), true);
+  assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 1), false);
   assert.equal(budget.used, 45);
   assert.equal(budget.reserved, 5);
 });

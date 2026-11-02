@@ -53,10 +53,11 @@ function createIndexD1QueryBudget(limit, reserve) {
   const held = Math.max(0, Math.min(total, Math.floor(Number(reserve) || 0)));
   return { remaining: total - held, used: 0, reserved: held };
 }
-function consumeIndexD1QueryBudget(budget) {
-  if (!budget || budget.remaining <= 0) return false;
-  budget.remaining -= 1;
-  budget.used += 1;
+function reserveIndexD1QueryBudget(budget, count) {
+  const requested = Math.max(0, Math.floor(Number(count) || 0));
+  if (!budget || requested > budget.remaining) return false;
+  budget.remaining -= requested;
+  budget.used += requested;
   return true;
 }
 
@@ -376,7 +377,7 @@ async function youtube(q, key, count) {
   }
   return rows;
 }
-async function save(env, rows, queryBudget) {
+async function save(env, rows) {
   if (!rows.length) return 0;
   const indexedAt = new Date().toISOString();
   const stmts = rows.map(function (r) {
@@ -401,9 +402,6 @@ async function save(env, rows, queryBudget) {
     );
   });
   for (let i=0;i<stmts.length;i+=INDEX_D1_BATCH_SIZE) {
-    if (queryBudget && !consumeIndexD1QueryBudget(queryBudget)) {
-      throw new Error("D1 indexing query budget exhausted");
-    }
     await env.MEDIA_DB.batch(stmts.slice(i,i+INDEX_D1_BATCH_SIZE));
   }
   return rows.length;
@@ -700,9 +698,7 @@ function indexFailure(provider, error) {
   return (name + ": " + message).slice(0, 150);
 }
 
-// A shared retry budget keeps worst-case scheduled fan-out below the Workers Free 50-subrequest ceiling.
-// PeerTube retries can fan out to three instances; three retries add at most nine requests to the normal maximum of 38.
-const MAX_INDEX_RETRIES_PER_RUN = 3;
+// Retry count is derived from the provider fan-out and reserved request headroom above.
 function isRetryableIndexError(error) {
   const status = Number(error && error.status);
   if ([408, 425, 429].includes(status) || (status >= 500 && status <= 599)) return true;
@@ -842,7 +838,11 @@ async function refresh(env) {
       indexRowsQueued += boundedRows.length;
       if (!boundedRows.length) continue;
       try {
-        const savedCount = await save(env, boundedRows, d1QueryBudget);
+        const batchesNeeded = Math.ceil(boundedRows.length / INDEX_D1_BATCH_SIZE);
+        if (!reserveIndexD1QueryBudget(d1QueryBudget, batchesNeeded)) {
+          throw new Error("D1 indexing query budget exhausted");
+        }
+        const savedCount = await save(env, boundedRows);
         saved += savedCount;
         metric.rowsSaved += savedCount;
       } catch (error) {
@@ -856,7 +856,7 @@ async function refresh(env) {
     console.warn("Daily index disabled repeatedly failing providers for this run:", disabledProviders.join(", "));
   }
   // Keep stale rows searchable as a fallback, but remove records beyond the retention horizon.
-  if (!consumeIndexD1QueryBudget(d1QueryBudget)) {
+  if (!reserveIndexD1QueryBudget(d1QueryBudget, 1)) {
     throw new Error("D1 indexing query budget exhausted before retention cleanup");
   }
   await env.MEDIA_DB.prepare(
@@ -864,7 +864,7 @@ async function refresh(env) {
   ).bind(new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString(),
     INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
   const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
-  if (!consumeIndexD1QueryBudget(d1QueryBudget)) {
+  if (!reserveIndexD1QueryBudget(d1QueryBudget, 1)) {
     throw new Error("D1 indexing query budget exhausted before run summary");
   }
   await env.MEDIA_DB.prepare(
