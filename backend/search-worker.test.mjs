@@ -349,7 +349,7 @@ test("news route integrates search and publisher feeds, merging duplicates and f
     assert.equal(payload.results.length, 1);
     assert.deepEqual(payload.results[0].providers, [
       "GDELT", "Google News RSS", "Bing News RSS",
-      "BBC Publisher", "Al Jazeera Publisher", "Guardian Publisher", "NPR Publisher"
+      "BBC News World", "Al Jazeera English", "The Guardian World", "NPR News"
     ]);
     assert.ok(payload.results[0].sources.includes("Publisher Google"));
     assert.ok(payload.results[0].sources.includes("Publisher Bing"));
