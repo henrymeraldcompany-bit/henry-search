@@ -5,10 +5,10 @@ const ROUTE_PARAMETERS = {
   "/news": new Set(["q", "date", "from", "to"]),
   "/extract": new Set(["url"])
 };
-const CONTROL_CHARACTERS = /[\\u0000-\\u001f\\u007f]/;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
 function validCalendarDate(value) {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
@@ -30,7 +30,7 @@ export function validateApiRequest(url) {
   if (route === "/extract") {
     const target = url.searchParams.get("url") || "";
     if (!target) return { valid: false, error: "Provide a webpage URL using the url parameter." };
-    if (target.length > 2048 || /\\s/.test(target)) return { valid: false, error: "The webpage URL is invalid or too long." };
+    if (target.length > 2048 || /\s/.test(target)) return { valid: false, error: "The webpage URL is invalid or too long." };
     let parsed;
     try { parsed = new URL(target); } catch { return { valid: false, error: "The webpage URL must be a valid absolute URL." }; }
     if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) {
@@ -44,7 +44,7 @@ export function validateApiRequest(url) {
   if (query.trim() !== query) return { valid: false, error: "Remove leading or trailing spaces from the search query." };
   if (route === "/search") {
     const domain = url.searchParams.get("domain") || "";
-    if (domain && (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/i.test(domain) || domain.length > 253)) {
+    if (domain && (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain) || domain.length > 253)) {
       return { valid: false, error: "The domain filter must be a valid hostname." };
     }
     const source = url.searchParams.get("source") || "";
