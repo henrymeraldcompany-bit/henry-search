@@ -1662,3 +1662,11 @@ input:focus-visible {
 .page.utility-open .hero,.page.utility-open .search-area,.page.utility-open .results-section,.page.utility-open .footer{display:none}
 html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}
 @media(max-width:600px){.utility-view{margin:22px auto 40px}.settings-group{padding:4px 13px}.setting-row{gap:10px}.setting-row strong{font-size:13px}.setting-row select{max-width:125px}}
+
+/* Voice language and live recognition feedback */
+.voice-controls{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:10px auto 24px}
+.voice-controls .hint{margin:0;min-height:18px}
+.voice-language-label{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:11px}
+.voice-language-label select{max-width:155px;min-height:32px;padding:5px 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit}
+.search-form .voice-button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:480px){.voice-controls{gap:8px}.voice-language-label{font-size:10px}.voice-language-label select{max-width:140px}}
