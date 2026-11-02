@@ -183,7 +183,7 @@ test("YouTube adapter stores provider and channel metadata while enriching durat
   const clean = value => String(value || "").trim();
   const safeUrl = value => { try { const u = new URL(value); return ["http:", "https:"].includes(u.protocol) ? u.href : ""; } catch { return ""; } };
   const isoDurationSeconds = value => {
-    const m = /^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/.exec(value || "");
+    const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(value || "");
     return m ? Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0) : null;
   };
   const youtube = extractWorkerFunction("async function youtube(q, key, count) {", "async function save(env, rows)", {
