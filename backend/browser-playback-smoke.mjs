@@ -43,6 +43,16 @@ try {
     deviceScaleFactor: 1
   });
   page.setDefaultTimeout(60_000);
+  page.on("pageerror", error => console.error("BROWSER PAGE ERROR:", error.stack || error.message));
+  page.on("console", message => {
+    if (message.type() === "error" || message.type() === "warning") {
+      console.error("BROWSER CONSOLE " + message.type().toUpperCase() + ":", message.text());
+    }
+  });
+  page.on("requestfailed", request => console.error("BROWSER REQUEST FAILED:", request.url(), request.failure()?.errorText));
+  page.on("response", response => {
+    if (response.url().includes("/videos")) console.log("VIDEO API RESPONSE:", response.status(), response.url());
+  });
 
   // Keep this UI/player test deterministic: live video indexes can legitimately
   // return zero results for a broad query, which tests provider availability
@@ -97,7 +107,14 @@ try {
   await page.locator('[data-category="videos"]').click();
   await page.locator("#query").fill("solar system");
   await page.locator("#search-form button[type='submit']").click();
-  await page.locator(".video-card").first().waitFor({ state: "visible", timeout: 60_000 });
+  try {
+    await page.locator(".video-card").first().waitFor({ state: "visible", timeout: 15_000 });
+  } catch (error) {
+    console.error("VIDEO DEBUG STATE:", await page.locator("body").innerText());
+    console.error("VIDEO CARDS:", await page.locator(".video-card").count());
+    console.error("RESULT STATUS:", await page.locator("#result-status").innerText().catch(() => ""));
+    throw error;
+  }
   await page.waitForFunction(
     () => document.querySelectorAll(".video-play-button:not([disabled])").length > 0,
     null,
