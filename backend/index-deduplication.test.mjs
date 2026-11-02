@@ -6,6 +6,7 @@ import vm from "node:vm";
 const worker = await readFile(new URL("./worker.js", import.meta.url), "utf8");
 const schema = await readFile(new URL("./schema.sql", import.meta.url), "utf8");
 const migration = await readFile(new URL("./migrations/20261102_index_deduplication.sql", import.meta.url), "utf8");
+const backfillMigration = await readFile(new URL("./migrations/20261102_backfill_video_canonical_keys.sql", import.meta.url), "utf8");
 
 function extract(name, next, context) {
   const start = worker.indexOf(name);
@@ -70,4 +71,19 @@ test("D1 schema and migration enforce separate canonical video and image identit
   assert.match(worker, /ON CONFLICT DO UPDATE SET/);
   assert.match(worker, /canonical_page_url=COALESCE/);
   assert.match(worker, /canonical_media_url=COALESCE/);
+});
+
+
+test("legacy video canonical-key backfill only updates already-normalized HTTPS watch URLs", () => {
+  assert.match(backfillMigration, /UPDATE media_items/i);
+  assert.match(backfillMigration, /SET canonical_page_url\s*=\s*lower\(trim\(page_url\)\)/i);
+  assert.match(backfillMigration, /kind\s*=\s*'video'/i);
+  assert.match(backfillMigration, /canonical_page_url\s*=\s*''/i);
+  assert.match(backfillMigration, /page_url\s*=\s*lower\(trim\(page_url\)\)/i);
+  assert.match(backfillMigration, /instr\(page_url, '\?'\)\s*=\s*0/i);
+  assert.match(backfillMigration, /instr\(page_url, '#'\)\s*=\s*0/i);
+  assert.match(backfillMigration, /substr\(page_url, 9, 4\)\s*<>\s*'www\.'/i);
+  assert.match(backfillMigration, /substr\(page_url, -1\)\s*<>\s*'\/'/i);
+  assert.doesNotMatch(backfillMigration, /DELETE\s+FROM\s+media_items/i);
+  assert.doesNotMatch(backfillMigration, /SET\s+nsfw\s*=/i);
 });

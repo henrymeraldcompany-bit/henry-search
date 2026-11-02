@@ -42,6 +42,11 @@ The D1 lookup considers up to 100 stored candidates per query (hard cap 120). Th
 
 The daily refresh rotates six seeds per day from a 24-topic discovery bank, completing a four-day cycle; it is not a crawler of the whole internet. It stores metadata, source links, licenses when supplied, and index timestamps. Each selected seed is searched across Wikimedia Commons, Openverse, Flickr, and all three configured PeerTube instances. This uses at most 36 provider requests per normal daily run (plus two optional YouTube calls), leaving headroom below Cloudflare Workers Free's 50 external-subrequest-per-invocation ceiling; an optional YouTube API key adds one strict-safe search and one duration lookup for a rotating seed. A provider is disabled for the remainder of that daily run after two consecutive request failures, preventing repeated timeouts from consuming the full run. Live video searches still query all three PeerTube instances and optional YouTube for each user query. Old records older than 180 days are removed during refresh. The index does not store video or image files.
 
+
+## Legacy video canonical-key backfill
+
+The migration `migrations/20261102_backfill_video_canonical_keys.sql` fills missing canonical identities for legacy video rows only when the original watch URL is already a normalized HTTPS URL. It deliberately skips URLs with query strings, fragments, a `www.` prefix, credentials, or a trailing slash so it cannot silently collapse distinct provider URLs. It does not alter the safe/unverified `nsfw` classification or delete media rows. New discoveries continue to receive canonical keys through the Worker save path.
+
 ## Regression tests
 
 Run the regression suites with Node.js 22:
