@@ -1,5 +1,5 @@
 
-import { runSearchProviders, filterSearchResults, rankArticles, canonicalizeResultUrl } from "./search-providers.js";
+import { runSearchProviders, filterSearchResults, rankArticles, canonicalizeResultUrl, filterNewsByDate } from "./search-providers.js";
 import { buildSearchCacheKey, isCacheableSearchRoute } from "./search-cache.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
@@ -45,6 +45,9 @@ async fetch(request, env = {}, ctx = {}) {
    return out({query:q,source:"Wikimedia Commons",results});
   }
   if(route==="/news"){
+   const newsDateFilters={date:u.searchParams.get("date")||"any",from:u.searchParams.get("from")||"",to:u.searchParams.get("to")||""};
+   const validatedNewsDates=filterNewsByDate([],newsDateFilters);
+   if(!validatedNewsDates.valid)return out({error:validatedNewsDates.error},400);
    const normalizeDate=value=>{
     const raw=String(value||"").trim();
     if(!raw)return "";
@@ -151,14 +154,17 @@ async fetch(request, env = {}, ctx = {}) {
     }
    }
    const liveResults=rankArticles([...merged.values()],q).filter(item=>item.relevanceScore>0);
+   const filteredLiveNews=filterNewsByDate(liveResults,newsDateFilters);
    if(liveResults.length)return out({
     query:q,
     source:successfulProviders.join(" + ")||"News providers",
     providers:successfulProviders,
     attemptedProviders:providers.length,
     failedProviders,
-    totalResults:liveResults.length,
-    results:liveResults
+    availableDateFilters:["any","day","week","month","year"],
+    appliedFilters:filteredLiveNews.appliedFilters,
+    totalResults:filteredLiveNews.results.length,
+    results:filteredLiveNews.results
    });
    const errors=failedProviders.map(item=>item.provider+": "+item.message);
    errors.push(...successfulProviders.filter(name=>!providers.some(provider=>provider.name===name&&settled[providers.indexOf(provider)].status==="fulfilled"&&Array.isArray(settled[providers.indexOf(provider)].value)&&settled[providers.indexOf(provider)].value.length)).map(name=>name+": no readable articles"));
@@ -174,7 +180,11 @@ async fetch(request, env = {}, ctx = {}) {
      const source=typeof item?.source==="string"&&item.source?item.source:(item?.domain||"");
      return {title:typeof item?.title==="string"?item.title:"",url,snippet:typeof item?.snippet==="string"?item.snippet:"",source,sources:[source].filter(Boolean),provider:"GOZIE daily news index",providers:["GOZIE daily news index"],published:normalizeDate(item?.published_at||"")};
     }).filter(item=>item.title.trim().length>=8&&canonicalizeResultUrl(item.url));
-    if(results.length)return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,results:rankArticles(results,q)});
+    if(results.length){
+     const rankedIndexedNews=rankArticles(results,q);
+     const filteredIndexedNews=filterNewsByDate(rankedIndexedNews,newsDateFilters);
+     return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:filteredIndexedNews.results.length,results:filteredIndexedNews.results});
+    }
     errors.push("GOZIE daily news index: no indexed articles");
    }catch(error){errors.push("GOZIE daily news index: "+error.message)}
    return out({error:"News providers could not return articles. Please try again shortly.",diagnostic:errors,providers:successfulProviders,attemptedProviders:providers.length,failedProviders},502);
