@@ -433,7 +433,7 @@ function indexedQuery(kind, q, limit) {
       "CASE WHEN title_words LIKE ? THEN 0 ELSE 1 END AS phrase_rank " +
       "FROM normalized WHERE (" + conditions + ") " +
       "ORDER BY phrase_rank ASC, relevance_score DESC, " +
-      "CASE WHEN julianday(indexed_at) >= julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 0 ELSE 1 END ASC, indexed_at DESC LIMIT ?", 
+      "CASE WHEN julianday(indexed_at) >= julianday('now','-30 days') THEN 0 ELSE 1 END ASC, indexed_at DESC LIMIT ?", 
     params: [kind].concat(scoreArgs, [phrase], conditionArgs, [rowLimit])
   };
 }
