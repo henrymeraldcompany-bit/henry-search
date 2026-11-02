@@ -64,8 +64,8 @@ test("D1 schema and migration enforce separate canonical video and image identit
   for (const source of [schema, migration]) {
     assert.match(source, /canonical_page_url TEXT NOT NULL DEFAULT ''/);
     assert.match(source, /canonical_media_url TEXT NOT NULL DEFAULT ''/);
-    assert.match(source, /idx_media_items_video_canonical_page[\\s\\S]*WHERE kind='video'/);
-    assert.match(source, /idx_media_items_image_canonical_media[\\s\\S]*WHERE kind='image'/);
+    assert.match(source, /idx_media_items_video_canonical_page[\s\S]*WHERE kind='video'/);
+    assert.match(source, /idx_media_items_image_canonical_media[\s\S]*WHERE kind='image'/);
   }
   assert.match(worker, /ON CONFLICT DO UPDATE SET/);
   assert.match(worker, /canonical_page_url=COALESCE/);
