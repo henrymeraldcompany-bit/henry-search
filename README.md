@@ -13,7 +13,10 @@ A phone-friendly search website with category tabs for web search, images, news,
 **Main search Worker:** https://henry-search-api.henrymeraldcompany.workers.dev
 
 - `/search?q=...` — ordinary web search.
-- `/news?q=...` — news search.
+- `/news?q=...` — news search with publication-date filters.
+  - `date=any|day|week|month|year` — any time, past 24 hours, past 7 days, past 30 days, or past 365 days.
+  - `from=YYYY-MM-DD` and/or `to=YYYY-MM-DD` — optional inclusive UTC calendar-date bounds; combine them for a custom date range.
+  - Invalid presets, malformed dates, and reversed ranges return HTTP 400. Date-constrained searches exclude undated and future-dated articles. Responses include `availableDateFilters`, `appliedFilters`, and the filtered `totalResults`.
 
 **Media Worker:** https://gozie-search-media.henrymeraldcompany.workers.dev
 
