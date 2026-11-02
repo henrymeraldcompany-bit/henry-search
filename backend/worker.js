@@ -675,7 +675,7 @@ function isRetryableIndexError(error) {
   if (name === "AbortError" || name === "TimeoutError") return true;
   if (error instanceof TypeError) return true;
   const message = String(error && error.message || error || "");
-  return /(?:^|\\s)Provider HTTP (?:408|425|429|5\\d\\d)(?:\\s|$)/i.test(message) ||
+  return /(?:^|\s)Provider HTTP (?:408|425|429|5\d\d)(?:\s|$)/i.test(message) ||
     /timed? ?out|network error|fetch failed|connection reset|temporarily unavailable/i.test(message);
 }
 async function runIndexProviderWithRetry(run, budget, pause) {
@@ -683,7 +683,7 @@ async function runIndexProviderWithRetry(run, budget, pause) {
   while (true) {
     try { return { value: await run(), retries: retries }; }
     catch (error) {
-      if (!isRetryableIndexError(error) || !budget || budget.remaining <= 0) throw error;
+      if (!isRetryableIndexError(error) || !budget || budget.remaining <= 0) { if (retries) { try { error.indexRetries = retries; } catch (_) { error = new Error(String(error)); error.indexRetries = retries; } } throw error; }
       budget.remaining -= 1;
       retries += 1;
       const delay = 200 + Math.floor(Math.random() * 100);
@@ -785,6 +785,7 @@ async function refresh(env) {
       const outcome = settled[callIndex], providerName = calls[callIndex].name;
       const metric = metricsFor(providerName);
       if (outcome.status === "rejected") {
+        metric.retries += Number(outcome.reason && outcome.reason.indexRetries) || 0;
         metric.failed += 1;
         circuit.recordFailure(providerName);
         failures.push(indexFailure(providerName, outcome.reason));
