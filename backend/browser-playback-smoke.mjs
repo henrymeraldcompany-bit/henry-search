@@ -73,7 +73,7 @@ try {
           count: 2,
           results: [
             {
-              title: "GOZIE playback smoke fixture one",
+              title: "Solar system planets and astronomy playback fixture one",
               url: "https://peertube.tv/videos/watch/fixture-one",
               embedUrl: "https://peertube.tv/videos/embed/fixture-one",
               source: "PeerTube fixture",
@@ -82,7 +82,7 @@ try {
               nsfw: false
             },
             {
-              title: "GOZIE playback smoke fixture two",
+              title: "Solar system exploration and planetary science playback fixture two",
               url: "https://peertube.tv/videos/watch/fixture-two",
               embedUrl: "https://peertube.tv/videos/embed/fixture-two",
               source: "PeerTube fixture",
