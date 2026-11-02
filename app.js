@@ -1569,7 +1569,8 @@ if (form && queryInput && resultsList) {
       return;
     }
 
-    saveSearchHistory(query, currentCategory);\n    if (hero) hero.hidden = true;
+    saveSearchHistory(query, currentCategory);
+    if (hero) hero.hidden = true;
     if (resultsSection) resultsSection.hidden = false;
 
     if (resultsTitle) resultsTitle.textContent = query;
