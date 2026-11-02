@@ -1731,55 +1731,64 @@ document.querySelectorAll("[data-query]").forEach((button) => {
 // VOICE SEARCH
 // ========================================
 
-function setVoiceListening(listening) {
-  isListening = listening;
+const voiceLanguageSelect = document.querySelector("#voice-language");
 
+function getVoiceLanguage() {
+  const saved = getPreference("voiceLanguage", "en-NG");
+  const supportedChoices = ["en-NG", "en-GB", "en-US", "ig-NG", "yo-NG", "ha-NG"];
+  return supportedChoices.includes(saved) ? saved : "en-NG";
+}
+
+if (voiceLanguageSelect) {
+  voiceLanguageSelect.value = getVoiceLanguage();
+  voiceLanguageSelect.addEventListener("change", () => {
+    savePreference("voiceLanguage", voiceLanguageSelect.value);
+    if (searchHint && !isListening) {
+      searchHint.textContent = "Voice language set to " +
+        voiceLanguageSelect.options[voiceLanguageSelect.selectedIndex].text +
+        ". Browser support for individual languages may vary.";
+    }
+  });
+}
+
+function setVoiceListening(listening, message) {
+  isListening = listening;
   if (!voiceButton) return;
 
   voiceButton.classList.toggle("listening", listening);
-
-  voiceButton.setAttribute(
-    "aria-label",
-    listening ? "Stop voice search" : "Search by voice"
-  );
-
-  voiceButton.title = listening
-    ? "Listening…"
-    : "Search by voice";
+  voiceButton.setAttribute("aria-pressed", String(listening));
+  voiceButton.setAttribute("aria-label", listening ? "Stop voice search" : "Start voice search");
+  voiceButton.title = listening ? "Stop voice search" : "Start voice search";
 
   const icon = voiceButton.querySelector("span");
+  if (icon) icon.textContent = listening ? "■" : "🎙";
 
-  if (icon) {
-    icon.textContent = listening ? "🔴" : "🎙";
-  }
-
-  if (searchHint && listening) {
-    searchHint.textContent = "Listening… Speak your search now.";
-  } else if (searchHint) {
-    searchHint.textContent = categoryDetails[currentCategory].hint;
-  }
+  if (searchHint && message) searchHint.textContent = message;
+  else if (searchHint && !listening) searchHint.textContent = categoryDetails[currentCategory].hint;
 }
 
 function stopVoiceSearch() {
   if (recognition && isListening) {
-    recognition.stop();
+    try { recognition.stop(); } catch {}
   }
+  setVoiceListening(false, "Voice search stopped.");
+}
 
-  setVoiceListening(false);
+function submitVoiceQuery(transcript) {
+  const cleaned = transcript.trim().replace(/\\s+/g, " ");
+  if (!cleaned || !queryInput || !form) return false;
+  queryInput.value = cleaned;
+  if (typeof form.requestSubmit === "function") form.requestSubmit();
+  else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  return true;
 }
 
 function startVoiceSearch() {
-  const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    if (searchHint) {
-      searchHint.textContent =
-        "Voice search is not supported in this browser. " +
-        "Try an up-to-date version of Chrome.";
-    }
-
+    setVoiceListening(false,
+      "Voice input is not available in this browser. Try an updated browser that supports speech recognition.");
     return;
   }
 
@@ -1788,71 +1797,85 @@ function startVoiceSearch() {
     return;
   }
 
+  if (!window.isSecureContext && location.hostname !== "localhost") {
+    setVoiceListening(false, "Voice search requires a secure HTTPS connection.");
+    return;
+  }
+
   try {
     recognition = new SpeechRecognition();
-
-    recognition.lang = "en-NG";
+    recognition.lang = voiceLanguageSelect?.value || getVoiceLanguage();
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
+    let finalTranscript = "";
+    let submitted = false;
+
     recognition.onstart = () => {
-      setVoiceListening(true);
+      setVoiceListening(true, "Listening… Speak clearly. Tap the microphone to stop.");
     };
 
     recognition.onresult = (event) => {
-      const transcript =
-        event.results[0][0].transcript.trim();
-
-      if (transcript && queryInput && form) {
-        queryInput.value = transcript;
-
-        if (typeof form.requestSubmit === "function") {
-          form.requestSubmit();
-        } else {
-          form.dispatchEvent(
-            new Event("submit", {
-              bubbles: true,
-              cancelable: true
-            })
-          );
-        }
+      let interimTranscript = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const text = result[0]?.transcript || "";
+        if (result.isFinal) finalTranscript += " " + text;
+        else interimTranscript += " " + text;
       }
+
+      const preview = (finalTranscript + " " + interimTranscript).trim();
+      if (preview && queryInput) queryInput.value = preview;
+
+      if (searchHint) {
+        searchHint.textContent = interimTranscript.trim()
+          ? "Hearing: " + preview
+          : "Speech captured. Preparing your search…";
+      }
+
+      if (finalTranscript.trim() && !submitted) {
+        submitted = submitVoiceQuery(finalTranscript);
+      }
+    };
+
+    recognition.onnomatch = () => {
+      setVoiceListening(false, "I couldn't recognise those words. Please try again or choose another voice language.");
     };
 
     recognition.onerror = (event) => {
       const messages = {
-        "not-allowed":
-          "Microphone permission was denied. Allow microphone access in your browser settings.",
-        "no-speech":
-          "No speech was detected. Tap the microphone and try again.",
-        "network":
-          "Voice recognition needs a network connection in this browser. Please try again.",
-        "audio-capture":
-          "No microphone was detected. Check your phone's microphone permission."
+        "not-allowed": "Microphone access was blocked. Allow microphone permission in your browser settings.",
+        "service-not-allowed": "The browser's speech service is unavailable or blocked.",
+        "no-speech": "No speech was detected. Tap the microphone and try again.",
+        "network": "Speech recognition needs an internet connection in this browser.",
+        "audio-capture": "No microphone was detected. Check your device microphone permission.",
+        "aborted": "Voice search was cancelled."
       };
-
-      if (searchHint) {
-        searchHint.textContent =
-          messages[event.error] ||
-          "Voice search could not start. Please try again.";
-      }
-
-      setVoiceListening(false);
+      setVoiceListening(false, messages[event.error] || "Voice input encountered an error. Please try again.");
     };
 
     recognition.onend = () => {
-      setVoiceListening(false);
+      isListening = false;
+      if (voiceButton) {
+        voiceButton.classList.remove("listening");
+        voiceButton.setAttribute("aria-pressed", "false");
+        voiceButton.setAttribute("aria-label", "Start voice search");
+        voiceButton.title = "Start voice search";
+        const icon = voiceButton.querySelector("span");
+        if (icon) icon.textContent = "🎙";
+      }
+      if (!submitted && !finalTranscript.trim() && searchHint) {
+        searchHint.textContent = "No complete speech was captured. Tap the microphone and try again.";
+      }
     };
 
     recognition.start();
-  } catch {
-    setVoiceListening(false);
-
-    if (searchHint) {
-      searchHint.textContent =
-        "Could not start voice search. Please try again.";
-    }
+  } catch (error) {
+    const message = error?.name === "NotAllowedError"
+      ? "Microphone access was denied. Allow microphone permission and try again."
+      : "Could not start voice input. Check microphone permission and try again.";
+    setVoiceListening(false, message);
   }
 }
 
@@ -1861,6 +1884,7 @@ if (voiceButton) {
 }
 
 // ========================================
+
 // DEVICE PREFERENCES, SIDEBAR AND VIEWS
 // ========================================
 function readPreferences() {
