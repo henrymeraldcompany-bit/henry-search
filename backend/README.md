@@ -80,19 +80,24 @@ Enter the secret interactively. Never commit it or include it in frontend code. 
 
 ### Daily webpage and news indexing
 
-The daily Media Worker also indexes a rotating webpage/news topic into the same D1 database, in a separate `search_index_items` table. It uses DuckDuckGo Instant Answer and Wikipedia for webpage metadata, then GDELT with Google News RSS and Bing News RSS fallbacks for news. This adds a hard maximum of five external requests and 40 stored webpage/news rows per scheduled run, and the overall retry allowance is recalculated to preserve Workers Free request headroom.
+The daily Media Worker indexes one rotating webpage/news topic into the same D1 database, in a separate `search_index_items` table. DuckDuckGo Instant Answer and Wikipedia provide webpage metadata. News discovery queries GDELT, Google News RSS and Bing News RSS independently and concurrently; a provider failure or empty response does not prevent the other providers from contributing. The merger canonicalizes article URLs, removes cross-provider duplicates, and retains publisher and provider attribution plus the strongest available snippet and publication metadata. This path has a hard maximum of five external requests and 40 stored webpage/news rows per scheduled run, and the overall retry allowance preserves Workers Free request headroom.
 
-Apply the new migration before deploying the updated Worker:
+The migration `backend/migrations/20261102_search_index_items.sql` is included for reproducible setup. The production D1 database was inspected before the Task 52 deployment and already contained the expected empty table and supporting indexes, so it was preserved rather than recreated. For a new database, apply the migration once after the base schema and before deploying the Worker:
 
 ```sh
 npx wrangler d1 execute gozie-search-media --remote --file=backend/migrations/20261102_search_index_items.sql --config backend/wrangler.toml
 ```
 
-Use `GET /index/search?kind=web&q=...` or `GET /index/search?kind=news&q=...` to inspect indexed records. `GET /index/status` now includes `searchCounts`.
+Use `GET /index/search?kind=web&q=...` or `GET /index/search?kind=news&q=...` to inspect indexed records. `GET /index/status` includes `searchCounts`.
 
 
 ### Task 52 deployment record — 2 November 2026
 
-The webpage/news indexing Worker was uploaded successfully on 2 November 2026 at 08:51:37 UTC. Cloudflare deployment ID: `102b64ea4557473cb5288f655031f8fc`; script tag: `b4b2b7e73ad6492fa342d5584f976fff`. The upload retained the existing `MEDIA_DB` binding and the daily `0 7 * * *` UTC trigger (08:00 Nigeria time). Cloudflare confirmed the Worker entry point and both `fetch` and `scheduled` handlers.
+The webpage/news indexing Worker was uploaded successfully on 2 November 2026 at 08:51:37 UTC. Cloudflare version ID: `102b64ea-4557-473c-b528-8f655031f8fc`; script tag: `b4b2b7e73ad6492fa342d5584f976fff`. The upload retained the existing `MEDIA_DB` binding and the daily `0 7 * * *` UTC trigger (08:00 Nigeria time). Cloudflare confirmed the Worker entry point and both `fetch` and `scheduled` handlers.
 
-Before deployment, the production D1 database was inspected: `search_index_items` and its three supporting indexes already existed with the expected schema and contained no records. The migration is included in the repository for reproducible setup; the existing production table was preserved. The next scheduled refresh will begin populating webpage/news records. The deployment API accepted the complete module graph; external HTTP smoke testing was unavailable from the deployment environment, so live route responses remain to be independently confirmed.
+Before deployment, the production D1 database was inspected: `search_index_items` and its three supporting indexes already existed with the expected schema and contained no records, so the existing table was preserved. The deployment API accepted the complete module graph; external HTTP smoke testing was unavailable from the deployment environment, so live route responses remained to be independently confirmed.
+
+
+### Task 53 deployment record — 2 November 2026
+
+The Worker was updated with concurrent multi-source news discovery and deployed to 100% of traffic. Cloudflare deployment ID: `01bf2be0-b168-4581-b242-557ac70fe87c`; version ID: `cb6da970-87b6-4bdb-adb9-a164a23ca172`. The existing `MEDIA_DB` binding, compatibility date and daily `0 7 * * *` UTC schedule were verified after upload. The live HTTP smoke-test URLs were inaccessible from the management environment, and GitHub reported no commit status checks for this commit; therefore runtime endpoint responses and automated test execution remain unverified.
