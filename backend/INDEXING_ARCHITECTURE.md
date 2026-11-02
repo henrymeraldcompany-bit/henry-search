@@ -64,7 +64,7 @@ For each selected seed, the current implementation queries:
 
 The normal maximum is approximately 36 provider HTTP requests per run: six seeds multiplied by six requests (one Wikimedia, one Openverse, one Flickr, and three PeerTube instances). Optional YouTube adds its search and duration lookup for the selected seed. This is the planned request budget, not a guarantee that every provider request succeeds.
 
-Provider calls for a seed are settled independently with `Promise.allSettled`. One rejected provider does not discard successful results from the others. External requests use the shared bounded JSON-fetch helper and its eight-second timeout.
+Provider calls for a seed are settled independently with `Promise.allSettled`. One rejected provider does not discard successful results from the others. External requests use the shared bounded JSON-fetch helper and its eight-second timeout. A single run-wide retry budget permits at most three additional provider attempts, with one retry maximum per logical provider/seed call. Retries apply only to transient network failures, request timeouts, HTTP 408/425/429, and HTTP 5xx responses. Each retry waits for a short 200–299 ms jittered delay. Permanent HTTP 4xx responses and malformed JSON are not retried. The budget is shared across all providers and seeds; it is exhausted after three retries, so worst-case fan-out remains bounded (at most nine extra external requests if all three retries repeat the three-instance PeerTube call). Provider attempt metrics include retries; final provider failure counts remain one per logical call that ultimately fails. D1 writes are not retried: a failed batch is recorded separately, and canonical upserts prevent duplicate rows if a later scheduled run rediscovers the same media.
 
 A per-run provider circuit breaker disables a provider after two consecutive request failures during that run. A success resets that provider's failure streak. The breaker is in-memory and resets on the next scheduled invocation; it is not a persistent cross-day circuit breaker.
 
@@ -120,7 +120,9 @@ The metrics include seeds processed, provider calls, request failures, database-
 
 ## 7. Failure boundaries and recovery characteristics
 
-- **Provider request failure:** record the provider failure, apply the per-run circuit breaker and continue with other providers/seeds.
+- **Provider request failure:** retry only transient network/timeout and HTTP 408/425/429/5xx failures within a shared three-retry run budget, then record any final provider failure, apply the per-run circuit breaker and continue with other providers/seeds.
+- **Permanent provider response:** do not retry malformed JSON or non-retryable HTTP 4xx responses.
+- **Retry exhaustion:** stop retrying when the shared run budget is empty; record the final failure once for that logical provider/seed call.
 - **D1 save failure:** record a database-save failure separately from a provider request failure; continue processing other settled provider results where possible.
 - **Individual PeerTube instance failure:** preserve results from successful instances; fail the PeerTube provider call only when all configured instances fail.
 - **Refresh-level failure:** log the scheduled refresh failure. The next cron invocation is the next automatic attempt.

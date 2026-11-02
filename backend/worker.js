@@ -68,7 +68,11 @@ async function getJson(url) {
     headers: { accept: "application/json", "user-agent": "GOZIE-SEARCH/1.0 metadata-index" },
     signal: AbortSignal.timeout(8000)
   });
-  if (!r.ok) throw new Error("Provider HTTP " + r.status);
+  if (!r.ok) {
+    const error = new Error("Provider HTTP " + r.status);
+    error.status = r.status;
+    throw error;
+  }
   return r.json();
 }
 function imageRow(p) {
@@ -661,6 +665,32 @@ function indexFailure(provider, error) {
   return (name + ": " + message).slice(0, 150);
 }
 
+// A shared retry budget keeps worst-case scheduled fan-out below the Workers Free 50-subrequest ceiling.
+// PeerTube retries can fan out to three instances; three retries add at most nine requests to the normal maximum of 38.
+const MAX_INDEX_RETRIES_PER_RUN = 3;
+function isRetryableIndexError(error) {
+  const status = Number(error && error.status);
+  if ([408, 425, 429].includes(status) || (status >= 500 && status <= 599)) return true;
+  const name = String(error && error.name || "");
+  if (name === "AbortError" || name === "TimeoutError") return true;
+  if (error instanceof TypeError) return true;
+  const message = String(error && error.message || error || "");
+  return /(?:^|\\s)Provider HTTP (?:408|425|429|5\\d\\d)(?:\\s|$)/i.test(message) ||
+    /timed? ?out|network error|fetch failed|connection reset|temporarily unavailable/i.test(message);
+}
+async function runIndexProviderWithRetry(run, budget, pause) {
+  let retries = 0;
+  while (true) {
+    try { return { value: await run(), retries: retries }; }
+    catch (error) {
+      if (!isRetryableIndexError(error) || !budget || budget.remaining <= 0) throw error;
+      budget.remaining -= 1;
+      retries += 1;
+      const delay = 200 + Math.floor(Math.random() * 100);
+      await (pause || function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); })(delay);
+    }
+  }
+}
 function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, durationMs) {
   const providers = {};
   let providerCalls = 0, providerFailures = 0, databaseSaveFailures = 0;
@@ -674,6 +704,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
     };
     const metric = {
       attempted: count(raw.attempted),
+      retries: count(raw.retries),
       succeeded: count(raw.succeeded),
       failed: count(raw.failed),
       databaseSaveFailures: count(raw.databaseSaveFailures),
@@ -681,7 +712,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
       rowsSaved: count(raw.rowsSaved)
     };
     providers[String(name).slice(0, 48)] = metric;
-    providerCalls += metric.attempted;
+    providerCalls += metric.attempted + metric.retries;
     providerFailures += metric.failed;
     databaseSaveFailures += metric.databaseSaveFailures;
     rowsReceived += metric.rowsReceived;
@@ -721,7 +752,7 @@ async function refresh(env) {
   function metricsFor(name) {
     if (!providerStats[name]) {
       providerStats[name] = {
-        attempted: 0, succeeded: 0, failed: 0,
+        attempted: 0, retries: 0, succeeded: 0, failed: 0,
         databaseSaveFailures: 0, rowsReceived: 0, rowsSaved: 0
       };
     }
@@ -730,6 +761,7 @@ async function refresh(env) {
   const daySlot = Math.floor(Date.now() / 86400000);
   const dailySeeds = getDailySeedBatch(daySlot, SEEDS, DAILY_SEED_BATCH_SIZE);
   const circuit = createIndexCircuitBreaker(2);
+  const retryBudget = { remaining: MAX_INDEX_RETRIES_PER_RUN };
   for (let index = 0; index < dailySeeds.length; index++) {
     const q = dailySeeds[index];
     const calls = [
@@ -746,7 +778,9 @@ async function refresh(env) {
       calls.push({ name: "YouTube", run: () => youtube(q, env.YOUTUBE_API_KEY, 8) });
     }
     calls.forEach(function (call) { metricsFor(call.name).attempted += 1; });
-    const settled = await Promise.allSettled(calls.map(function (call) { return call.run(); }));
+    const settled = await Promise.allSettled(calls.map(function (call) {
+      return runIndexProviderWithRetry(call.run, retryBudget);
+    }));
     for (let callIndex = 0; callIndex < settled.length; callIndex++) {
       const outcome = settled[callIndex], providerName = calls[callIndex].name;
       const metric = metricsFor(providerName);
@@ -756,8 +790,9 @@ async function refresh(env) {
         failures.push(indexFailure(providerName, outcome.reason));
         continue;
       }
+      metric.retries += outcome.value.retries;
       metric.succeeded += 1;
-      const rows = Array.isArray(outcome.value) ? outcome.value : [];
+      const rows = Array.isArray(outcome.value.value) ? outcome.value.value : [];
       metric.rowsReceived += rows.length;
       circuit.recordSuccess(providerName);
       try {

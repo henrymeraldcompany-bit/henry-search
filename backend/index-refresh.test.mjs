@@ -41,6 +41,52 @@ test("collapses multiline and repeated whitespace in provider failure notes", ()
 });
 
 
+const retryStart = source.indexOf("function isRetryableIndexError(");
+const retryEnd = source.indexOf("\\nfunction buildIndexRunStats(", retryStart);
+assert.notEqual(retryStart, -1, "retry classification must exist");
+assert.notEqual(retryEnd, -1, "retry helper must precede run stats");
+const retryApi = vm.runInNewContext("(function(){ " + source.slice(retryStart, retryEnd) + "; return {isRetryableIndexError,runIndexProviderWithRetry}; })()", { Number, String, TypeError, Math, Promise });
+test("index retries classify transient errors and reject permanent client errors", () => {
+  assert.equal(retryApi.isRetryableIndexError({ status: 429 }), true);
+  assert.equal(retryApi.isRetryableIndexError({ status: 503 }), true);
+  assert.equal(retryApi.isRetryableIndexError({ name: "TimeoutError" }), true);
+  assert.equal(retryApi.isRetryableIndexError(new TypeError("fetch failed")), true);
+  assert.equal(retryApi.isRetryableIndexError({ status: 404 }), false);
+  assert.equal(retryApi.isRetryableIndexError(new SyntaxError("invalid JSON")), false);
+});
+test("provider retry succeeds after a transient failure and records the retry", async () => {
+  let attempts = 0, pauses = [];
+  const result = await retryApi.runIndexProviderWithRetry(async () => {
+    attempts += 1;
+    if (attempts === 1) throw { status: 503, message: "unavailable" };
+    return ["row"];
+  }, { remaining: 3 }, async ms => { pauses.push(ms); });
+  assert.deepEqual(Array.from(result.value), ["row"]);
+  assert.equal(result.retries, 1);
+  assert.equal(attempts, 2);
+  assert.equal(pauses.length, 1);
+  assert.equal(pauses[0] >= 200 && pauses[0] < 300, true);
+});
+test("provider retry stops at shared budget and does not retry permanent errors", async () => {
+  const budget = { remaining: 1 };
+  let attempts = 0;
+  await assert.rejects(retryApi.runIndexProviderWithRetry(async () => {
+    attempts += 1;
+    throw { status: 503, message: "unavailable" };
+  }, budget, async () => {}), /unavailable/);
+  assert.equal(attempts, 2);
+  assert.equal(budget.remaining, 0);
+  attempts = 0;
+  await assert.rejects(retryApi.runIndexProviderWithRetry(async () => {
+    attempts += 1;
+    throw { status: 400, message: "bad request" };
+  }, { remaining: 3 }, async () => {}), /bad request/);
+  assert.equal(attempts, 1);
+});
+test("retry budget is globally bounded to three additional attempts", () => {
+  assert.match(source, /MAX_INDEX_RETRIES_PER_RUN = 3/);
+  assert.match(source, /const retryBudget = \\{ remaining: MAX_INDEX_RETRIES_PER_RUN \\}/);
+});
 const statsStart = source.indexOf("function buildIndexRunStats(");
 const statsEnd = source.indexOf("\nfunction parseIndexRunStats(", statsStart);
 assert.notEqual(statsStart, -1, "buildIndexRunStats must exist in worker.js");
@@ -55,12 +101,13 @@ const statsApi = vm.runInNewContext(
 
 test("index-run metrics aggregate provider attempts, failures and saved rows", () => {
   const stats = statsApi.buildIndexRunStats({
-    "Openverse": { attempted: 3, succeeded: 1, failed: 2, rowsReceived: 12, rowsSaved: 10 },
+    "Openverse": { attempted: 3, retries: 1, succeeded: 1, failed: 2, rowsReceived: 12, rowsSaved: 10 },
     "PeerTube": { attempted: 6, succeeded: 6, failed: 0, rowsReceived: 80, rowsSaved: 42, databaseSaveFailures: 1 }
   }, 6, ["Openverse"], 12500);
   assert.equal(stats.version, 1);
   assert.equal(stats.seedsProcessed, 6);
-  assert.equal(stats.providerCalls, 9);
+  assert.equal(stats.providerCalls, 10);
+  assert.equal(stats.providers.Openverse.retries, 1);
   assert.equal(stats.providerFailures, 2);
   assert.equal(stats.databaseSaveFailures, 1);
   assert.equal(stats.rowsReceived, 92);
