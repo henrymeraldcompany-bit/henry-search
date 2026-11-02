@@ -595,7 +595,7 @@ test("API CORS allows only the production frontend and explicitly configured ori
   assert.equal(isAllowedApiOrigin("https://henrymeraldcompany-bit.github.io.attacker.example"), false);
   assert.equal(isAllowedApiOrigin("https://preview.example", { ALLOWED_ORIGINS: "https://preview.example,https://other.example" }), true);
   assert.equal(isAllowedApiOrigin("http://192.168.1.5"), false);
-  assert.equal(isAllowedApiOrigin("http://localhost:5173"), true);
+  assert.equal(isAllowedApiOrigin("http://localhost:5173"), false);
 });
 
 test("API security headers are present without granting wildcard browser access", () => {
