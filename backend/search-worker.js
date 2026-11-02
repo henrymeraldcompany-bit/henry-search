@@ -1,5 +1,5 @@
 
-import { runSearchProviders, filterSearchResults, rankArticles, canonicalizeResultUrl, filterNewsByDate } from "./search-providers.js";
+import { runSearchProviders, filterSearchResults, rankArticles, canonicalizeResultUrl, filterNewsByDate, diversifyNewsSources, summarizeNewsSourceDiversity } from "./search-providers.js";
 import { buildSearchCacheKey, isCacheableSearchRoute } from "./search-cache.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
@@ -155,17 +155,21 @@ async fetch(request, env = {}, ctx = {}) {
    }
    const liveResults=rankArticles([...merged.values()],q).filter(item=>item.relevanceScore>0);
    const filteredLiveNews=filterNewsByDate(liveResults,newsDateFilters);
-   if(liveResults.length)return out({
-    query:q,
-    source:successfulProviders.join(" + ")||"News providers",
-    providers:successfulProviders,
-    attemptedProviders:providers.length,
-    failedProviders,
-    availableDateFilters:["any","day","week","month","year"],
-    appliedFilters:filteredLiveNews.appliedFilters,
-    totalResults:filteredLiveNews.results.length,
-    results:filteredLiveNews.results
-   });
+   if(liveResults.length){
+    const diverseLiveNews=diversifyNewsSources(filteredLiveNews.results);
+    return out({
+     query:q,
+     source:successfulProviders.join(" + ")||"News providers",
+     providers:successfulProviders,
+     attemptedProviders:providers.length,
+     failedProviders,
+     availableDateFilters:["any","day","week","month","year"],
+     appliedFilters:filteredLiveNews.appliedFilters,
+     totalResults:diverseLiveNews.length,
+     sourceDiversity:summarizeNewsSourceDiversity(diverseLiveNews),
+     results:diverseLiveNews
+    });
+   }
    const errors=failedProviders.map(item=>item.provider+": "+item.message);
    errors.push(...successfulProviders.filter(name=>!providers.some(provider=>provider.name===name&&settled[providers.indexOf(provider)].status==="fulfilled"&&Array.isArray(settled[providers.indexOf(provider)].value)&&settled[providers.indexOf(provider)].value.length)).map(name=>name+": no readable articles"));
    // When live sources are unavailable or empty, use GOZIE's bounded daily index.
@@ -183,7 +187,8 @@ async fetch(request, env = {}, ctx = {}) {
     if(results.length){
      const rankedIndexedNews=rankArticles(results,q);
      const filteredIndexedNews=filterNewsByDate(rankedIndexedNews,newsDateFilters);
-     return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:filteredIndexedNews.results.length,results:filteredIndexedNews.results});
+     const diverseIndexedNews=diversifyNewsSources(filteredIndexedNews.results);
+     return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:diverseIndexedNews.length,sourceDiversity:summarizeNewsSourceDiversity(diverseIndexedNews),results:diverseIndexedNews});
     }
     errors.push("GOZIE daily news index: no indexed articles");
    }catch(error){errors.push("GOZIE daily news index: "+error.message)}
