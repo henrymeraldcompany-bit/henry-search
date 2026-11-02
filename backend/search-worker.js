@@ -4,13 +4,15 @@ import { buildSearchCacheKey, isCacheableSearchRoute } from "./search-cache.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 import { buildApiSecurityHeaders, isAllowedApiOrigin } from "./api-security.js";
 import { validateApiRequest } from "./api-validation.js";
+import { checkApiRateLimit } from "./api-rate-limit.js";
 export default {
 async fetch(request, env = {}, ctx = {}) {
  const origin=request.headers.get("Origin")||"";
  const cors=buildApiSecurityHeaders(origin,env);
  let cacheRequest=null;
- const out=(data,status=200)=>{
-  const response=new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=UTF-8","Cache-Control":status>=400?"no-store":"public, max-age=60, s-maxage=60, stale-while-revalidate=300","X-GOZIE-Cache":cacheRequest?"MISS":"BYPASS"}});
+ let rateLimitState="not-checked";
+ const out=(data,status=200,extraHeaders={})=>{
+  const response=new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=UTF-8","Cache-Control":status>=400?"no-store":"public, max-age=60, s-maxage=60, stale-while-revalidate=300","X-GOZIE-Cache":cacheRequest?"MISS":"BYPASS","X-GOZIE-RateLimit":rateLimitState,...extraHeaders}});
   if(status===200&&cacheRequest&&typeof caches!=="undefined"&&caches.default){
    const write=caches.default.put(cacheRequest,response.clone()).catch(()=>{});
    if(typeof ctx.waitUntil==="function")ctx.waitUntil(write);
@@ -22,6 +24,12 @@ async fetch(request, env = {}, ctx = {}) {
  const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
  if(route==="/")return out({name:"GOZIE SEARCH API",status:"online",endpoints:["/search?q=technology","/images?q=cats","/news?q=technology"]});
  if(!["/search","/images","/news","/extract"].includes(route))return out({error:"Not found."},404);
+ const rateLimit=await checkApiRateLimit(request,env,route);
+ rateLimitState=rateLimit.configured?"active":"degraded";
+ if(!rateLimit.allowed){
+  const policy=String(rateLimit.limit)+";w="+String(rateLimit.period);
+  return out({error:"Too many requests. Please wait before trying again."},429,{"Retry-After":String(rateLimit.period),"RateLimit-Limit":String(rateLimit.limit),"RateLimit-Policy":policy});
+ }
  const validation=validateApiRequest(u);
  if(!validation.valid)return out({error:validation.error},400);
  if(route==="/extract"){const target=u.searchParams.get("url")||"";if(!target)return out({error:"Provide a webpage URL using the url parameter."},400);const result=await extractPublicPage(target);return out(result.data,result.status);}
