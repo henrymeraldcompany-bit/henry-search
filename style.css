@@ -1670,3 +1670,11 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
 .voice-language-label select{max-width:155px;min-height:32px;padding:5px 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit}
 .search-form .voice-button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:480px){.voice-controls{gap:8px}.voice-language-label{font-size:10px}.voice-language-label select{max-width:140px}}
+
+/* Accessible browser-native read-aloud controls */
+.results-heading-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.tts-control{min-height:36px;padding:7px 11px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+.tts-control:first-child{border-color:var(--accent);color:var(--accent)}
+.tts-control:disabled{opacity:.42;cursor:not-allowed}
+.tts-control:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:560px){.results-heading{align-items:flex-start;gap:10px}.results-heading-actions{max-width:155px}.tts-control{font-size:11px;padding:6px 8px}}
