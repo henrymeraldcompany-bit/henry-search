@@ -136,7 +136,7 @@ test("video writes are batched within the D1 statement limit", async () => {
 function extractWorkerFunction(name, nextName, context) {
   const start = worker.indexOf(name);
   assert.notEqual(start, -1, name + " must exist");
-  const end = worker.indexOf("\\n" + nextName, start);
+  const end = worker.indexOf("\n" + nextName, start);
   assert.notEqual(end, -1, "Could not find end of " + name);
   const source = worker.slice(start, end);
   return vm.runInNewContext("(" + source + ")", context);
@@ -221,6 +221,6 @@ test("video upserts preserve known metadata when refreshed provider fields are e
     "published_at=COALESCE(NULLIF(excluded.published_at,''),media_items.published_at)",
     "duration_seconds=COALESCE(excluded.duration_seconds,media_items.duration_seconds)"
   ]) assert.ok(sql.includes(field), "Missing metadata-preserving upsert: " + field);
-  assert.match(sql, /tags=CASE WHEN excluded\.tags IS NULL OR excluded\.tags IN \('','\\[\\]'\) THEN media_items\.tags ELSE excluded\.tags END/);
+  assert.ok(sql.includes("tags=CASE WHEN excluded.tags IS NULL OR excluded.tags IN ('','[]') THEN media_items.tags ELSE excluded.tags END"));
   assert.match(sql, /nsfw=excluded\.nsfw/);
 });
