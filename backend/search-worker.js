@@ -1,5 +1,5 @@
 
-import { runSearchProviders, filterSearchResults, rankArticles } from "./search-providers.js";
+import { runSearchProviders, filterSearchResults, rankArticles, canonicalizeResultUrl } from "./search-providers.js";
 import { buildSearchCacheKey, isCacheableSearchRoute } from "./search-cache.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 export default {
