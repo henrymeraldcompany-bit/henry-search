@@ -23,3 +23,17 @@ test("only search, news and image routes are cacheable", () => {
   assert.equal(isCacheableSearchRoute("/extract"), false);
   assert.equal(isCacheableSearchRoute("/"), false);
 });
+
+test("normalizes tabs, newlines and repeated whitespace in search queries", () => {
+  const first = buildSearchCacheKey("https://api.example/search?q=Solar%09%20%20Energy%0AResearch");
+  const second = buildSearchCacheKey("https://api.example/search?q=solar%20energy%20research");
+  assert.equal(first, second);
+});
+
+test("keeps different route filters isolated while sorting parameter order", () => {
+  const first = buildSearchCacheKey("https://api.example/news?q=world&date=week&from=2026-10-01");
+  const second = buildSearchCacheKey("https://api.example/news?from=2026-10-01&q=world&date=week");
+  const different = buildSearchCacheKey("https://api.example/news?q=world&date=month&from=2026-10-01");
+  assert.equal(first, second);
+  assert.notEqual(first, different);
+});
