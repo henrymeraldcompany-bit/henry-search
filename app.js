@@ -26,8 +26,8 @@ function getReadableSearchText() {
   const clone = resultsList.cloneNode(true);
   clone.querySelectorAll("button, input, select, textarea, nav, .image-filter-bar, .video-filter-bar, .web-filter-bar").forEach(node => node.remove());
   return (clone.innerText || clone.textContent || "")
-    .replace(/https?:\\/\\/\\S+/g, "")
-    .replace(/\\s+/g, " ")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 12000);
 }
