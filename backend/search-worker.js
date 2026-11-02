@@ -48,26 +48,26 @@ async fetch(request, env = {}, ctx = {}) {
    const normalizeDate=value=>{
     const raw=String(value||"").trim();
     if(!raw)return "";
-    const compact=/^(\\d{4})(\\d{2})(\\d{2})T(\\d{2})(\\d{2})(\\d{2})Z$/.exec(raw);
+    const compact=/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(raw);
     const candidate=compact?compact[1]+"-"+compact[2]+"-"+compact[3]+"T"+compact[4]+":"+compact[5]+":"+compact[6]+"Z":raw;
     const timestamp=Date.parse(candidate);
     return Number.isFinite(timestamp)?new Date(timestamp).toISOString():"";
    };
    const rssText=value=>String(value||"")
-    .replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g,"$1")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1")
     .replace(/<[^>]*>/g," ")
     .replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">")
     .replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'")
-    .replace(/&#(\\d+);/g,(_,n)=>String.fromCodePoint(+n))
-    .replace(/&#x([\\da-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)))
-    .replace(/\\s+/g," ").trim();
+    .replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(+n))
+    .replace(/&#x([\da-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)))
+    .replace(/\s+/g," ").trim();
    const rssTag=(item,name)=>{
-    const match=String(item||"").match(new RegExp("<"+name+"(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)</"+name+">","i"));
+    const match=String(item||"").match(new RegExp("<"+name+"(?:\\s[^>]*)?>([\\s\\S]*?)</"+name+">","i"));
     return match?rssText(match[1]):"";
    };
    const parseNewsRss=(xml,provider)=>{
     const results=[];
-    for(const match of String(xml||"").matchAll(/<item(?:\\s[^>]*)?>([\\s\\S]*?)<\\/item>/gi)){
+    for(const match of String(xml||"").matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)){
      const item=match[1],title=rssTag(item,"title"),url=rssTag(item,"link");
      const source=rssTag(item,"source")||provider;
      const published=normalizeDate(rssTag(item,"pubDate"));
