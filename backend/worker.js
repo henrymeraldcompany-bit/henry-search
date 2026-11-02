@@ -30,6 +30,36 @@ const PEERTUBE_INSTANCES = [
   "https://spectra.video"
 ];
 
+// Explicit Workers Free / D1 resource envelope for one scheduled refresh.
+const INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50;
+const INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3;
+const INDEX_D1_QUERY_LIMIT = 50;
+const INDEX_D1_QUERY_RESERVE = 5;
+const INDEX_D1_BATCH_SIZE = 40;
+const INDEX_RETENTION_PRUNE_BATCH_SIZE = 500;
+const INDEX_MAX_ROWS_PER_RUN = DAILY_SEED_BATCH_SIZE *
+  (12 + 12 + 12 + PEERTUBE_INSTANCES.length * 12) + 8;
+function calculateIndexRetryBudget(limit, reserve, seedCount, peerTubeInstances, youtubeRequests) {
+  const baseline = seedCount * (3 + peerTubeInstances) + youtubeRequests;
+  const retryFanout = Math.max(1, peerTubeInstances);
+  return Math.max(0, Math.floor((limit - reserve - baseline) / retryFanout));
+}
+const MAX_INDEX_RETRIES_PER_RUN = calculateIndexRetryBudget(
+  INDEX_EXTERNAL_SUBREQUEST_LIMIT, INDEX_EXTERNAL_SUBREQUEST_RESERVE,
+  DAILY_SEED_BATCH_SIZE, PEERTUBE_INSTANCES.length, 2
+);
+function createIndexD1QueryBudget(limit, reserve) {
+  const total = Math.max(0, Math.floor(Number(limit) || 0));
+  const held = Math.max(0, Math.min(total, Math.floor(Number(reserve) || 0)));
+  return { remaining: total - held, used: 0, reserved: held };
+}
+function consumeIndexD1QueryBudget(budget) {
+  if (!budget || budget.remaining <= 0) return false;
+  budget.remaining -= 1;
+  budget.used += 1;
+  return true;
+}
+
 function reply(data, status) {
   return new Response(JSON.stringify(data), { status: status || 200, headers: {
     "content-type": "application/json; charset=utf-8",
@@ -346,7 +376,7 @@ async function youtube(q, key, count) {
   }
   return rows;
 }
-async function save(env, rows) {
+async function save(env, rows, queryBudget) {
   if (!rows.length) return 0;
   const indexedAt = new Date().toISOString();
   const stmts = rows.map(function (r) {
@@ -370,7 +400,12 @@ async function save(env, rows) {
       indexDedupKeys(r).canonical_page_url,indexDedupKeys(r).canonical_media_url
     );
   });
-  for (let i=0;i<stmts.length;i+=40) await env.MEDIA_DB.batch(stmts.slice(i,i+40));
+  for (let i=0;i<stmts.length;i+=INDEX_D1_BATCH_SIZE) {
+    if (queryBudget && !consumeIndexD1QueryBudget(queryBudget)) {
+      throw new Error("D1 indexing query budget exhausted");
+    }
+    await env.MEDIA_DB.batch(stmts.slice(i,i+INDEX_D1_BATCH_SIZE));
+  }
   return rows.length;
 }
 function sqlWordText(column) {
@@ -694,7 +729,7 @@ async function runIndexProviderWithRetry(run, budget, pause) {
 function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, durationMs) {
   const providers = {};
   let providerCalls = 0, providerFailures = 0, databaseSaveFailures = 0;
-  let rowsReceived = 0, rowsSaved = 0;
+  let rowsReceived = 0, rowsSaved = 0, rowsSkipped = 0;
   const source = providerStats && typeof providerStats === "object" ? providerStats : {};
   Object.keys(source).sort().forEach(function (name) {
     const raw = source[name] && typeof source[name] === "object" ? source[name] : {};
@@ -709,7 +744,8 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
       failed: count(raw.failed),
       databaseSaveFailures: count(raw.databaseSaveFailures),
       rowsReceived: count(raw.rowsReceived),
-      rowsSaved: count(raw.rowsSaved)
+      rowsSaved: count(raw.rowsSaved),
+      rowsSkipped: count(raw.rowsSkipped)
     };
     providers[String(name).slice(0, 48)] = metric;
     providerCalls += metric.attempted + metric.retries;
@@ -717,6 +753,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
     databaseSaveFailures += metric.databaseSaveFailures;
     rowsReceived += metric.rowsReceived;
     rowsSaved += metric.rowsSaved;
+    rowsSkipped += metric.rowsSkipped;
   });
   const seeds = Number(seedsProcessed);
   const duration = Number(durationMs);
@@ -728,6 +765,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
     databaseSaveFailures: databaseSaveFailures,
     rowsReceived: rowsReceived,
     rowsSaved: rowsSaved,
+    rowsSkipped: rowsSkipped,
     disabledProviders: Array.from(new Set((Array.isArray(disabledProviders) ? disabledProviders : [])
       .map(function (name) { return String(name || "").trim().slice(0, 48); })
       .filter(Boolean))).slice(0, 12),
@@ -753,7 +791,7 @@ async function refresh(env) {
     if (!providerStats[name]) {
       providerStats[name] = {
         attempted: 0, retries: 0, succeeded: 0, failed: 0,
-        databaseSaveFailures: 0, rowsReceived: 0, rowsSaved: 0
+        databaseSaveFailures: 0, rowsReceived: 0, rowsSaved: 0, rowsSkipped: 0
       };
     }
     return providerStats[name];
@@ -762,6 +800,8 @@ async function refresh(env) {
   const dailySeeds = getDailySeedBatch(daySlot, SEEDS, DAILY_SEED_BATCH_SIZE);
   const circuit = createIndexCircuitBreaker(2);
   const retryBudget = { remaining: MAX_INDEX_RETRIES_PER_RUN };
+  const d1QueryBudget = createIndexD1QueryBudget(INDEX_D1_QUERY_LIMIT, INDEX_D1_QUERY_RESERVE);
+  let indexRowsQueued = 0;
   for (let index = 0; index < dailySeeds.length; index++) {
     const q = dailySeeds[index];
     const calls = [
@@ -796,8 +836,13 @@ async function refresh(env) {
       const rows = Array.isArray(outcome.value.value) ? outcome.value.value : [];
       metric.rowsReceived += rows.length;
       circuit.recordSuccess(providerName);
+      const availableRows = Math.max(0, INDEX_MAX_ROWS_PER_RUN - indexRowsQueued);
+      const boundedRows = rows.slice(0, availableRows);
+      metric.rowsSkipped += rows.length - boundedRows.length;
+      indexRowsQueued += boundedRows.length;
+      if (!boundedRows.length) continue;
       try {
-        const savedCount = await save(env, rows);
+        const savedCount = await save(env, boundedRows, d1QueryBudget);
         saved += savedCount;
         metric.rowsSaved += savedCount;
       } catch (error) {
@@ -811,9 +856,17 @@ async function refresh(env) {
     console.warn("Daily index disabled repeatedly failing providers for this run:", disabledProviders.join(", "));
   }
   // Keep stale rows searchable as a fallback, but remove records beyond the retention horizon.
-  await env.MEDIA_DB.prepare("DELETE FROM media_items WHERE indexed_at < ?")
-    .bind(new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString()).run();
+  if (!consumeIndexD1QueryBudget(d1QueryBudget)) {
+    throw new Error("D1 indexing query budget exhausted before retention cleanup");
+  }
+  await env.MEDIA_DB.prepare(
+    "DELETE FROM media_items WHERE rowid IN (SELECT rowid FROM media_items WHERE indexed_at < ? ORDER BY indexed_at ASC LIMIT ?)"
+  ).bind(new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString(),
+    INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
   const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
+  if (!consumeIndexD1QueryBudget(d1QueryBudget)) {
+    throw new Error("D1 indexing query budget exhausted before run summary");
+  }
   await env.MEDIA_DB.prepare(
     "INSERT INTO index_runs (finished_at,rows_processed,failure_count,note,stats_json) VALUES (?,?,?,?,?)"
   ).bind(new Date().toISOString(), saved, failures.length,
@@ -824,7 +877,18 @@ async function refresh(env) {
     failures: failures.length,
     seedsProcessed: dailySeeds.length,
     disabledProviders: disabledProviders,
-    stats: stats
+    stats: stats,
+    resourceBudget: {
+      externalSubrequestLimit: INDEX_EXTERNAL_SUBREQUEST_LIMIT,
+      externalSubrequestReserve: INDEX_EXTERNAL_SUBREQUEST_RESERVE,
+      retryBudgetRemaining: retryBudget.remaining,
+      d1QueryLimit: INDEX_D1_QUERY_LIMIT,
+      d1QueriesUsed: d1QueryBudget.used,
+      d1QueriesReserved: d1QueryBudget.reserved,
+      indexRowsQueued: indexRowsQueued,
+      indexRowsLimit: INDEX_MAX_ROWS_PER_RUN,
+      retentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE
+    }
   }));
 }
 function indexStatusCountsQuery() {

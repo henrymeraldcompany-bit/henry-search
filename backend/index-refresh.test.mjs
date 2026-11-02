@@ -87,6 +87,46 @@ test("retry budget is globally bounded to three additional attempts", () => {
   assert.match(source, /MAX_INDEX_RETRIES_PER_RUN = 3/);
   assert.match(source, /const retryBudget = \{ remaining: MAX_INDEX_RETRIES_PER_RUN \}/);
 });
+function extractFunction(name) {
+  const start = source.indexOf("function " + name + "(");
+  assert.notEqual(start, -1, name + " must exist");
+  const open = source.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    if (source[i] === "}") {
+      depth--;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  assert.fail("Could not isolate " + name);
+}
+const budgetApi = vm.runInNewContext(
+  "(function(){ " + ["calculateIndexRetryBudget","createIndexD1QueryBudget","consumeIndexD1QueryBudget"].map(extractFunction).join("\n") +
+  "; return {calculateIndexRetryBudget,createIndexD1QueryBudget,consumeIndexD1QueryBudget}; })()",
+  { Math, Number }
+);
+test("indexing request budget stays below the Workers Free 50-subrequest ceiling with reserve", () => {
+  assert.equal(budgetApi.calculateIndexRetryBudget(50, 3, 6, 3, 2), 3);
+  assert.equal(6 * (3 + 3) + 2 + 3 * 3, 47);
+  assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50/);
+  assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3/);
+});
+test("daily indexed rows and retention cleanup have hard per-run caps", () => {
+  assert.match(source, /INDEX_MAX_ROWS_PER_RUN = DAILY_SEED_BATCH_SIZE/);
+  assert.match(source, /INDEX_RETENTION_PRUNE_BATCH_SIZE = 500/);
+  assert.match(source, /rows\.slice\(0, availableRows\)/);
+  assert.match(source, /LIMIT \?/);
+  assert.match(source, /INDEX_D1_BATCH_SIZE = 40/);
+});
+test("D1 query budget reserves capacity for retention cleanup and run summary", () => {
+  const budget = budgetApi.createIndexD1QueryBudget(50, 5);
+  assert.equal(budget.remaining, 45);
+  for (let i = 0; i < 45; i++) assert.equal(budgetApi.consumeIndexD1QueryBudget(budget), true);
+  assert.equal(budgetApi.consumeIndexD1QueryBudget(budget), false);
+  assert.equal(budget.used, 45);
+  assert.equal(budget.reserved, 5);
+});
 const statsStart = source.indexOf("function buildIndexRunStats(");
 const statsEnd = source.indexOf("\nfunction parseIndexRunStats(", statsStart);
 assert.notEqual(statsStart, -1, "buildIndexRunStats must exist in worker.js");
@@ -101,7 +141,7 @@ const statsApi = vm.runInNewContext(
 
 test("index-run metrics aggregate provider attempts, failures and saved rows", () => {
   const stats = statsApi.buildIndexRunStats({
-    "Openverse": { attempted: 3, retries: 1, succeeded: 1, failed: 2, rowsReceived: 12, rowsSaved: 10 },
+    "Openverse": { attempted: 3, retries: 1, succeeded: 1, failed: 2, rowsReceived: 14, rowsSaved: 10, rowsSkipped: 4 },
     "PeerTube": { attempted: 6, succeeded: 6, failed: 0, rowsReceived: 80, rowsSaved: 42, databaseSaveFailures: 1 }
   }, 6, ["Openverse"], 12500);
   assert.equal(stats.version, 1);
@@ -110,8 +150,9 @@ test("index-run metrics aggregate provider attempts, failures and saved rows", (
   assert.equal(stats.providers.Openverse.retries, 1);
   assert.equal(stats.providerFailures, 2);
   assert.equal(stats.databaseSaveFailures, 1);
-  assert.equal(stats.rowsReceived, 92);
+  assert.equal(stats.rowsReceived, 94);
   assert.equal(stats.rowsSaved, 52);
+  assert.equal(stats.rowsSkipped, 4);
   assert.deepEqual(JSON.parse(JSON.stringify(stats.disabledProviders)), ["Openverse"]);
   assert.equal(stats.durationMs, 12500);
   assert.equal(stats.providers.PeerTube.rowsSaved, 42);
@@ -161,7 +202,7 @@ test("freshness policy separates fresh and stale records without hiding stale fa
   assert.match(source, /INDEX_RETENTION_DAYS = 180/);
   assert.match(source, /freshnessPolicy:\{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true\}/);
   assert.match(source, /relevance_score DESC,[\s\S]*julianday\(indexed_at\)/);
-  assert.match(source, /DELETE FROM media_items WHERE indexed_at < \?/);
+  assert.match(source, /DELETE FROM media_items WHERE rowid IN \(SELECT rowid FROM media_items WHERE indexed_at < \? ORDER BY indexed_at ASC LIMIT \?\)/);
 });
 test("freshness is measured from indexed_at and legacy rows are included in the status breakdown", () => {
   assert.match(freshnessSql, /FROM media_items GROUP BY kind/);

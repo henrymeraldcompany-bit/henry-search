@@ -62,7 +62,7 @@ For each selected seed, the current implementation queries:
 | PeerTube | Videos | Three configured instances queried independently |
 | YouTube | Videos | Optional; one rotating seed when the API secret is configured |
 
-The normal maximum is approximately 36 provider HTTP requests per run: six seeds multiplied by six requests (one Wikimedia, one Openverse, one Flickr, and three PeerTube instances). Optional YouTube adds its search and duration lookup for the selected seed. This is the planned request budget, not a guarantee that every provider request succeeds.
+The normal maximum is 36 provider HTTP requests per run: six seeds multiplied by six requests (one Wikimedia, one Openverse, one Flickr, and three PeerTube instances). Optional YouTube adds at most its search and duration-lookup requests for the selected seed, giving a baseline maximum of 38. The Worker explicitly reserves three of the Workers Free plan's 50 external subrequests and derives the run-wide retry allowance from the remaining headroom. With the current three-instance PeerTube fan-out, no more than three retries are allowed; even if every retry repeats all three PeerTube requests, the calculated maximum is 47 external subrequests, leaving the three-request reserve intact. Changing the seed count, provider fan-out, or YouTube enrichment must update the derived budget tests rather than silently increasing usage.
 
 Provider calls for a seed are settled independently with `Promise.allSettled`. One rejected provider does not discard successful results from the others. External requests use the shared bounded JSON-fetch helper and its eight-second timeout. A single run-wide retry budget permits at most three additional provider attempts, with one retry maximum per logical provider/seed call. Retries apply only to transient network failures, request timeouts, HTTP 408/425/429, and HTTP 5xx responses. Each retry waits for a short 200–299 ms jittered delay. Permanent HTTP 4xx responses and malformed JSON are not retried. The budget is shared across all providers and seeds; it is exhausted after three retries, so worst-case fan-out remains bounded (at most nine extra external requests if all three retries repeat the three-instance PeerTube call). Provider attempt metrics include retries; final provider failure counts remain one per logical call that ultimately fails. D1 writes are not retried: a failed batch is recorded separately, and canonical upserts prevent duplicate rows if a later scheduled run rediscovers the same media.
 
@@ -76,7 +76,7 @@ A per-run provider circuit breaker disables a provider after two consecutive req
 4. Openverse requests exclude mature content. Optional YouTube uses `safeSearch=strict`.
 5. Rows are written to D1 table `media_items` using an upsert keyed by `(kind, source, page_url)`. Repeated discoveries refresh metadata and `indexed_at` instead of creating duplicate rows.
 6. Prepared statements are sent in D1 batches of up to 40.
-7. Records older than 180 days by `indexed_at` are deleted after the provider loop.
+7. Records older than 180 days by `indexed_at` are pruned in batches of at most 500 rows per daily run, so a large backlog cannot create an unbounded delete operation.
 8. A record is considered fresh for 30 days after its last successful metadata refresh. Freshness is based on `indexed_at` (not the original publication date). Missing or unparsable indexing timestamps are counted as stale, so the per-kind freshness totals always reconcile with the indexed-row total. The status summary also reports the oldest and newest stored indexing timestamps for each kind. Stale rows remain searchable as a fallback until the 180-day retention cutoff; freshness is a ranking signal, not a hard search filter.
 
 The index stores titles, descriptions, source identifiers, original page/media/thumbnail/embed URLs, attribution or license metadata where available, publication dates, duration, tags, safety classification and indexing timestamps. It does not store media binaries.
@@ -114,7 +114,7 @@ Each completed refresh writes one row to `index_runs` containing:
 - failure count and a bounded provider-labelled note;
 - versioned `stats_json` metrics.
 
-The metrics include seeds processed, provider calls, request failures, database-save failures, rows received/saved, disabled providers, duration, and per-provider attempts/successes/failures/row counts. Freshness summaries report fresh/stale counts and the oldest/newest indexed timestamps per media kind; invalid timestamps are included in stale counts rather than disappearing from the breakdown. The metrics column was added compatibly by `20261101_index_run_metrics.sql`; older run rows may have no detailed metrics and are parsed as `null`.
+The metrics include seeds processed, provider calls, request failures, database-save failures, rows received/saved/skipped by the run-wide indexing cap, disabled providers, duration, and per-provider attempts/successes/failures/row counts. Freshness summaries report fresh/stale counts and the oldest/newest indexed timestamps per media kind; invalid timestamps are included in stale counts rather than disappearing from the breakdown. The metrics column was added compatibly by `20261101_index_run_metrics.sql`; older run rows may have no detailed metrics and are parsed as `null`.
 
 `GET /index/status` is the operational read surface. It returns per-kind totals, fresh/stale counts, the freshness and retention policy, verified-safe and unverified video totals, the latest run and grouped failure summaries. Search ordering preserves phrase and relevance ranking first, then prefers fresh records when relevance is tied. It should be used to distinguish a successful schedule invocation from a run in which individual providers failed or returned no records.
 
@@ -131,6 +131,20 @@ The metrics include seeds processed, provider calls, request failures, database-
 - **Retention:** records older than 180 days are pruned after a refresh.
 
 The current design does not persist per-seed checkpoints, resume a partially completed run, or maintain a distributed lock. The rotation is date-derived rather than advanced by a mutable cursor. Those are explicit characteristics of the present baseline, not guarantees of exactly-once processing.
+
+## 7A. Free-tier resource protection
+
+The daily indexer applies explicit per-invocation limits rather than relying only on provider defaults:
+
+- External provider requests: 50 is the Workers Free hard ceiling; three are reserved. The derived retry allowance currently caps the worst-case planned run at 47.
+- Discovery: at most six rotating seeds per day.
+- Indexed metadata: at most 440 rows are queued for D1 writes per run (432 possible image/PeerTube rows plus up to eight optional YouTube rows). Excess provider results are counted as skipped, not written.
+- D1 writes: prepared statements are sent in batches of at most 40. A shared D1 query budget permits at most 45 non-reserved query calls, holding five for cleanup/summary headroom.
+- Retention cleanup: at most 500 expired rows are deleted per daily run; a larger backlog is drained gradually.
+- Under the current fan-out, at most 30 provider-save batches plus one bounded cleanup and one run-summary write are expected (32 D1 query calls). The five-query reserve leaves room for operational variation.
+- Cloudflare Workers Free currently documents 100,000 Worker requests/day and 10 ms CPU per Cron invocation. D1 Free documents 5 million rows read/day, 100,000 rows written/day, and 500 MB maximum database size. The indexer limits only its own workload; these are account-level quotas shared with other Workers and D1 activity, not guaranteed dedicated capacity.
+
+The row and request limits are regression-tested. If providers, seed counts, response caps, or enrichment calls change, update the calculated budgets and tests together.
 
 ## 8. Data model and configuration
 
