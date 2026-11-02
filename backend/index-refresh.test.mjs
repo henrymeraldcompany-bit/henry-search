@@ -99,7 +99,7 @@ const freshnessStart = source.indexOf("function indexFreshnessSummaryQuery()");
 const freshnessEnd = source.indexOf("\n}", freshnessStart);
 assert.notEqual(freshnessStart, -1, "indexFreshnessSummaryQuery must exist");
 assert.notEqual(freshnessEnd, -1, "freshness query function must close");
-const freshnessQuery = vm.runInNewContext("(" + source.slice(freshnessStart, freshnessEnd + 2) + ")", {});
+const freshnessQuery = vm.runInNewContext("(" + source.slice(freshnessStart, freshnessEnd + 2) + ")", { INDEX_FRESH_DAYS: 30 });
 test("freshness policy separates fresh and stale records without hiding stale fallback rows", () => {
   const sql = freshnessQuery();
   assert.match(sql, /julianday\(indexed_at\)/);
