@@ -67,7 +67,9 @@ test("D1 save persists and updates image attribution, dimensions and format", as
   const { sql, values } = statements[0];
   assert.match(sql, /provider,creator_url,license_url,attribution,width,height,format/);
   assert.ok(sql.includes("provider=COALESCE(NULLIF(excluded.provider,''),media_items.provider)"));
-  assert.equal(values.length, 23);
+  assert.equal(values.length, 25);
+  assert.equal(values[23], "");
+  assert.equal(values[24], "https://cdn.example/image.jpg");
   assert.equal(values[11], "catalog-provider");
   assert.equal(values[12], "https://source.example/artist");
   assert.equal(values[13], "https://creativecommons.org/licenses/by/4.0/");
