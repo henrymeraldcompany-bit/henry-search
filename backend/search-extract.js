@@ -1,12 +1,30 @@
+const BLOCKED_HOST_SUFFIXES = [
+  ".localhost", ".local", ".internal", ".onion", ".test", ".example",
+  ".invalid", ".arpa", ".lan", ".intranet", ".corp", ".private",
+  ".nip.io", ".sslip.io", ".xip.io", ".traefik.me", ".localtest.me",
+  ".lvh.me", ".vcap.me"
+];
+const BLOCKED_EXACT_HOSTS = new Set([
+  "localhost",
+  // Prevent the page reader from recursively calling its own public API.
+  "henry-search-api.henrymeraldcompany.workers.dev"
+]);
+
 export function safePublicUrl(value, base) {
   try {
     const url = base ? new URL(value, base) : new URL(value);
     const host = url.hostname.toLowerCase();
+    // A trailing DNS root dot must not bypass local/reserved-host checks.
+    const normalizedHost = host.replace(/\.+$/, "");
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
     if (url.port && !((url.protocol === "http:" && url.port === "80") || (url.protocol === "https:" && url.port === "443"))) return null;
-    if (!host.includes(".") || host === "localhost" || host.endsWith(".localhost") ||
-        host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".onion") ||
-        host.includes(":") || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return null;
+    if (!normalizedHost || !normalizedHost.includes(".") ||
+        BLOCKED_EXACT_HOSTS.has(normalizedHost) ||
+        BLOCKED_HOST_SUFFIXES.some(suffix => normalizedHost.endsWith(suffix)) ||
+        normalizedHost.includes(":") ||
+        /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalizedHost)) return null;
+    // Normalize the hostname before it is used for robots.txt, redirects or fetch.
+    url.hostname = normalizedHost;
     return url;
   } catch { return null; }
 }
