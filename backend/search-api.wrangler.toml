@@ -1,0 +1,20 @@
+name = "henry-search-api"
+main = "search-worker.js"
+compatibility_date = "2026-10-19"
+
+# Cloudflare-native approximate limits, scoped to each edge location.
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "760001"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
+name = "API_EXTRACT_RATE_LIMITER"
+namespace_id = "760002"
+
+  [ratelimits.simple]
+  limit = 12
+  period = 60
