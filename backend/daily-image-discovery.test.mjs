@@ -85,6 +85,14 @@ function imageProviderResponse(url) {
       mime_type: "image/jpeg"
     }] });
   }
+  if (url.hostname === "api.duckduckgo.com") return jsonResponse({});
+  if (url.hostname === "en.wikipedia.org") return jsonResponse({ query: { search: [] } });
+  if (url.hostname === "api.gdeltproject.org") return jsonResponse({ articles: [{
+    title: "Daily news discovery fixture report",
+    url: "https://news-fixture.example/daily-report",
+    domain: "news-fixture.example",
+    seendate: "20261102T080000Z"
+  }] });
   if (url.hostname === "www.flickr.com") {
     return jsonResponse({ items: [{
       title: "Flickr " + query,
@@ -135,7 +143,7 @@ test("daily scheduled refresh discovers and stores images from all three image p
       host + " should be queried once for each daily seed");
   }
   assert.equal(database.runs.length, 1);
-  assert.equal(database.runs[0].rowsProcessed, 18);
+  assert.equal(database.runs[0].rowsProcessed, 19);
   assert.equal(database.runs[0].stats.seedsProcessed, 6);
   assert.equal(database.runs[0].stats.providers["Wikimedia Commons"].rowsSaved, 6);
   assert.equal(database.runs[0].stats.providers.Openverse.rowsSaved, 6);
