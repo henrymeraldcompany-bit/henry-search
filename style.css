@@ -1687,3 +1687,153 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
 .search-tabs button:focus-visible,.setting-row select:focus-visible,.setting-row input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 .result-status:empty{display:none}
 @media(prefers-reduced-motion:reduce){.skip-link,.app-sidebar{transition:none!important}}
+
+
+/* Task 65: mobile touch targets, safe areas and touch feedback */
+@media (hover: none) and (pointer: coarse) {
+  .icon-button,
+  .sidebar-item,
+  .back-home-button,
+  .settings-action,
+  .tts-control,
+  .web-page-button,
+  .video-play-button,
+  .video-original-link,
+  .read-in-gozie-button,
+  .gozie-reader-close,
+  .image-viewer-controls button,
+  .image-viewer-link {
+    min-height: 44px;
+  }
+
+  .search-area .search-tab {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .search-area .search-form .voice-button {
+    flex-basis: 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .search-area .search-form button[type="submit"] {
+    min-height: 44px;
+    padding-inline: 13px;
+  }
+
+  .search-form input,
+  .voice-language-label select,
+  .web-filter select,
+  .video-filter select,
+  .image-filter select,
+  .setting-row select {
+    min-height: 44px;
+  }
+
+  .sidebar-item {
+    padding-block: 12px;
+  }
+
+  .search-tab:active,
+  .sidebar-item:active,
+  .icon-button:active,
+  .tts-control:active,
+  .web-page-button:active,
+  .video-play-button:active,
+  .image-viewer-controls button:active {
+    filter: brightness(1.12);
+    transform: scale(.98);
+  }
+}
+
+/* Keep category controls usable on narrow screens without shrinking tap targets. */
+@media (max-width: 480px) {
+  .search-area .search-tabs {
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 3px 2px 8px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .search-area .search-tab {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .results-heading-actions {
+    max-width: none;
+  }
+
+  .tts-control {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+
+  .web-page-button,
+  .video-play-button,
+  .video-original-link,
+  .read-in-gozie-button,
+  .gozie-reader-close,
+  .back-home-button,
+  .settings-action {
+    min-height: 44px;
+  }
+
+  .setting-row {
+    min-height: 64px;
+  }
+
+  .setting-row select {
+    min-height: 44px;
+  }
+}
+
+/* Respect display cutouts and gesture areas on modern mobile devices. */
+@supports (padding: max(0px)) {
+  .topbar {
+    padding-top: max(16px, env(safe-area-inset-top));
+  }
+
+  .page {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .app-sidebar {
+    padding-top: max(22px, env(safe-area-inset-top));
+    padding-bottom: max(22px, env(safe-area-inset-bottom));
+    padding-left: max(18px, env(safe-area-inset-left));
+  }
+
+  .image-viewer-toolbar {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+
+  .image-viewer-controls {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Touch devices should not retain hover-only movement after a tap. */
+@media (hover: none) {
+  .icon-button:hover,
+  .theme-toggle:hover,
+  .search-tab:hover,
+  .search-form button:hover,
+  .sidebar-item:hover {
+    transform: none;
+  }
+
+  .image-preview-button:hover img,
+  .video-thumb-link:hover img {
+    transform: none;
+  }
+}
