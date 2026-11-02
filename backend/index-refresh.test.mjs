@@ -84,7 +84,8 @@ test("provider retry stops at shared budget and does not retry permanent errors"
   assert.equal(attempts, 1);
 });
 test("retry budget is globally bounded to three additional attempts", () => {
-  assert.match(source, /MAX_INDEX_RETRIES_PER_RUN = 3/);
+  assert.match(source, /calculateIndexRetryBudget\(/);
+  assert.match(source, /MAX_INDEX_RETRIES_PER_RUN = calculateIndexRetryBudget/);
   assert.match(source, /const retryBudget = \{ remaining: MAX_INDEX_RETRIES_PER_RUN \}/);
 });
 function extractFunction(name) {

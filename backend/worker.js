@@ -401,8 +401,8 @@ async function save(env, rows) {
       indexDedupKeys(r).canonical_page_url,indexDedupKeys(r).canonical_media_url
     );
   });
-  for (let i=0;i<stmts.length;i+=INDEX_D1_BATCH_SIZE) {
-    await env.MEDIA_DB.batch(stmts.slice(i,i+INDEX_D1_BATCH_SIZE));
+  for (let i=0;i<stmts.length;i+=40) {
+    await env.MEDIA_DB.batch(stmts.slice(i,i+40));
   }
   return rows.length;
 }
