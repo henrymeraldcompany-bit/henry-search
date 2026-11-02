@@ -52,6 +52,24 @@ async fetch(request, env = {}, ctx = {}) {
     {name:"Bing News RSS",url:()=>{const a=new URL("https://www.bing.com/news/search");Object.entries({q,format:"rss",setlang:"en-ng"}).forEach(([k,v])=>a.searchParams.set(k,v));return a.toString()}}
    ];
    for(const feed of feeds){try{const r=await fetch(feed.url(),{headers:{"Accept":"application/rss+xml, application/xml, text/xml","User-Agent":"Mozilla/5.0 (compatible; GOZIESearch/1.3)"},signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error("HTTP "+r.status);const xml=await r.text();const results=parseRss(xml);if(results.length)return out({query:q,source:feed.name,results:rankArticles(results,q)});errors.push(feed.name+": feed returned no readable articles")}catch(e){errors.push(feed.name+": "+e.message)}}
+   // When live news providers are unavailable, use GOZIE's own daily index.
+   // This is a bounded final fallback and never replaces live results.
+   try{
+    const indexedUrl=new URL("https://gozie-search-media.henrymeraldcompany.workers.dev/index/search");
+    indexedUrl.searchParams.set("kind","news");
+    indexedUrl.searchParams.set("q",q);
+    indexedUrl.searchParams.set("limit","20");
+    const indexed=await json(indexedUrl.toString(),6000);
+    const results=(Array.isArray(indexed.results)?indexed.results:[]).map(item=>({
+     title:typeof item?.title==="string"?item.title:"",
+     url:typeof item?.url==="string"?item.url:"",
+     snippet:typeof item?.snippet==="string"?item.snippet:"",
+     source:typeof item?.source==="string"&&item.source?item.source:(item?.domain||""),
+     published:typeof item?.published_at==="string"?item.published_at:""
+    })).filter(item=>item.title.trim().length>=8&&/^https?:\/\//i.test(item.url));
+    if(results.length)return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",results:rankArticles(results,q)});
+    errors.push("GOZIE daily news index: no indexed articles");
+   }catch(e){errors.push("GOZIE daily news index: "+e.message)}
    return out({error:"News providers could not return articles. Please try again shortly.",diagnostic:errors},502);
   }
   const providers = [

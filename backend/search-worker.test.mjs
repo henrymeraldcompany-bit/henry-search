@@ -297,3 +297,55 @@ test("article ranking removes invalid URLs, placeholder headlines and duplicate 
  assert.equal(ranked.length,1);
  assert.match(ranked[0].snippet,/much longer/);
 });
+
+
+test("news route falls back to the daily indexed news when live providers are unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    requested.push(url.href);
+    if (url.hostname === "api.gdeltproject.org") {
+      return new Response("temporarily unavailable", { status: 503 });
+    }
+    if (url.hostname === "news.google.com") {
+      return new Response("temporarily unavailable", { status: 503 });
+    }
+    if (url.hostname === "www.bing.com") {
+      return new Response("<rss><channel></channel></rss>", {
+        headers: { "content-type": "application/rss+xml" }
+      });
+    }
+    if (url.hostname === "gozie-search-media.henrymeraldcompany.workers.dev") {
+      return new Response(JSON.stringify({
+        kind: "news",
+        query: "technology",
+        count: 1,
+        results: [{
+          title: "Technology policy report",
+          url: "https://news.example/technology-policy",
+          domain: "news.example",
+          snippet: "A recent report about technology policy.",
+          source: "news.example",
+          published_at: "2026-11-02T07:00:00.000Z",
+          indexed_at: "2026-11-02T08:00:00.000Z"
+        }]
+      }), { headers: { "content-type": "application/json" } });
+    }
+    throw new Error("Unexpected endpoint " + url.href);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://search.example/news?q=technology")
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.source, "GOZIE daily news index");
+    assert.equal(payload.fallback, "daily-index");
+    assert.equal(payload.results.length, 1);
+    assert.equal(payload.results[0].url, "https://news.example/technology-policy");
+    assert.ok(requested.some(value => value.includes("/index/search?kind=news")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

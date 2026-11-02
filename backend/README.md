@@ -106,3 +106,8 @@ The Worker was updated with concurrent multi-source news discovery and deployed 
 ### Multi-provider contribution metrics
 
 When several web/news providers return the same canonical article, the index stores one deduplicated row with all contributing provider names. Per-provider metrics expose both `rowsSaved` (the provider that supplied the primary saved row) and `rowsContributed` (every provider that contributed to a saved canonical row). The top-level `rowsSaved` remains the unique row count; `rowsContributed` is intentionally additive across providers and can be higher when providers overlap.
+
+
+### Live news outage fallback
+
+The original `henry-search-api` Worker keeps GDELT and the two RSS feeds as live news sources. Only when all live sources fail or return no readable articles does it make one bounded request to the Media Worker's `/index/search?kind=news` endpoint. This fallback uses stored metadata and original article URLs; it does not copy or re-host article content. It is useful after the first successful daily webpage/news index run, but it cannot return indexed articles while that table is still empty.
