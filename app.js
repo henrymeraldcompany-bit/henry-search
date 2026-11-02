@@ -1717,53 +1717,62 @@ const categoryDetails = {
 
 function setCategory(category) {
   const allowedCategories = ["all", "images", "news", "videos"];
-
-  if (!allowedCategories.includes(category)) {
-    category = "all";
-  }
+  if (!allowedCategories.includes(category)) category = "all";
 
   currentCategory = category;
-
-  searchTabs.forEach((tab) => {
+  searchTabs.forEach(tab => {
     const isActive = tab.dataset.category === category;
-
     tab.classList.toggle("active", isActive);
     tab.setAttribute("aria-pressed", String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
   });
 
   const details = categoryDetails[category];
+  if (queryInput) queryInput.placeholder = details.placeholder;
+  if (searchHint && !isListening) searchHint.textContent = details.hint;
+}
 
-  if (queryInput) {
-    queryInput.placeholder = details.placeholder;
-  }
-
-  if (searchHint && !isListening) {
-    searchHint.textContent = details.hint;
+function runCurrentQueryInCategory() {
+  const hasActiveSearch = Boolean(
+    queryInput?.value.trim() && resultsSection && !resultsSection.hidden
+  );
+  if (!hasActiveSearch || !form) return;
+  if (typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+  } else {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   }
 }
 
-searchTabs.forEach((tab) => {
+searchTabs.forEach(tab => {
   tab.addEventListener("click", () => {
     const nextCategory = tab.dataset.category;
-    const hasActiveSearch = Boolean(
-      queryInput?.value.trim() &&
-      resultsSection &&
-      !resultsSection.hidden
-    );
-
+    if (!nextCategory || nextCategory === currentCategory) return;
     setCategory(nextCategory);
+    runCurrentQueryInCategory();
+  });
 
-    // Re-run the existing query immediately in the newly selected category.
-    // The user does not need to press Search again.
-    if (hasActiveSearch && form) {
-      if (typeof form.requestSubmit === "function") {
-        form.requestSubmit();
-      } else {
-        form.dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true })
-        );
-      }
+  tab.addEventListener("keydown", event => {
+    const tabs = [...searchTabs];
+    const currentIndex = tabs.indexOf(tab);
+    let nextIndex = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % tabs.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
     }
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    const changed = nextTab.dataset.category !== currentCategory;
+    setCategory(nextTab.dataset.category);
+    nextTab.focus();
+    nextTab.scrollIntoView?.({ behavior: getPreference("reduceMotion", false) ? "auto" : "smooth", block: "nearest", inline: "nearest" });
+    if (changed) runCurrentQueryInCategory();
   });
 });
 

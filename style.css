@@ -2469,3 +2469,66 @@ select:disabled {
     outline: 2px solid Highlight;
   }
 }
+
+
+/* Task 71 — responsive navigation and keyboard-operable category controls */
+.search-tabs {
+  min-width: 0;
+  max-width: 100%;
+}
+.search-area .search-tabs {
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.search-area .search-tab {
+  flex: 0 0 auto;
+  scroll-margin-inline: 8px;
+  touch-action: manipulation;
+}
+.search-area .search-tab[aria-pressed="true"] {
+  font-weight: 750;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .12);
+}
+.search-area .search-tab:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+.app-sidebar {
+  padding-top: max(22px, env(safe-area-inset-top));
+  padding-bottom: max(22px, env(safe-area-inset-bottom));
+}
+.sidebar-header {
+  flex: 0 0 auto;
+}
+.sidebar-item {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+@media (min-width: 481px) {
+  .search-area .search-tabs {
+    justify-content: center;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+@media (max-width: 480px) {
+  .search-area .search-tabs {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    scroll-padding-inline: 8px;
+  }
+  .search-area .search-tab {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-area .search-tab {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}
