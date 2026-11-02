@@ -10,7 +10,7 @@ const migration = await readFile(new URL("./migrations/20261102_index_deduplicat
 function extract(name, next, context) {
   const start = worker.indexOf(name);
   assert.notEqual(start, -1, name + " must exist");
-  const end = worker.indexOf("\\n" + next, start);
+  const end = worker.indexOf("\n" + next, start);
   assert.notEqual(end, -1, "Could not find end of " + name);
   return vm.runInNewContext("(" + worker.slice(start, end) + ")", context);
 }
