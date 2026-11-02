@@ -189,11 +189,11 @@ export function rankArticles(articles, query, now = Date.now()) {
   const input = Array.isArray(articles) ? articles : [];
   const cleaned = input.flatMap(article => {
     if (!article || typeof article !== "object") return [];
-    const title = String(article.title || "").replace(/\\s+/g, " ").trim();
+    const title = String(article.title || "").replace(/\s+/g, " ").trim();
     const url = canonicalizeResultUrl(article.url);
     if (!url || title.length < 8 || title.length > 250) return [];
     if (/^(?:home|homepage|breaking news|latest news|news|article|untitled)$/i.test(title)) return [];
-    if (/^(.)\\1{7,}$/.test(title)) return [];
+    if (/^(.)\1{7,}$/.test(title)) return [];
     return [{ ...article, title, canonicalUrl: url }];
   });
   const unique = deduplicateNewsStories(cleaned);
