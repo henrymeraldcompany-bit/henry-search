@@ -9,6 +9,7 @@ on:
       - "backend/api-security.js"
       - "backend/api-validation.js"
       - "backend/search-extract.js"
+      - "backend/api-rate-limit.js"
   workflow_dispatch:
 
 permissions:
@@ -36,7 +37,8 @@ jobs:
           grep -Fqi "X-Frame-Options: DENY" "$headers"
           grep -Fqi "Referrer-Policy: no-referrer" "$headers"
           grep -Fqi "Strict-Transport-Security:" "$headers"
-          echo "Production origin and security headers: ok"
+          grep -Fqi "X-GOZIE-RateLimit: active" "$headers"
+          echo "Production origin, security headers and active rate-limit bindings: ok"
 
       - name: Reject untrusted browser origins
         shell: bash
