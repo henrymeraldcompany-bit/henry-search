@@ -215,3 +215,14 @@ a page, nor does it use title similarity as proof that two different media files
 are identical. Canonical identity fields are populated as records are refreshed
 after the migration; older untouched rows retain their legacy identity until
 they are rediscovered.
+
+
+## 11. Daily webpage and news discovery
+
+The daily run now adds one rotating topic from the existing 24-topic discovery bank to the webpage and news index. DuckDuckGo Instant Answer and Wikipedia search are queried independently for webpage metadata. News discovery tries GDELT first, then Google News RSS and Bing News RSS only when earlier sources return no usable articles. Provider failures are isolated and recorded in the existing `index_runs.stats_json` metrics.
+
+The webpage/news discovery path has a hard allocation of five external requests per scheduled run: two webpage providers and up to three sequential news providers. It indexes at most 20 webpage records and 20 news records (40 total) per run. This allocation is included in the overall Workers Free request-budget calculation; the shared media-provider retry allowance is reduced accordingly so the planned total remains below the 50 external-subrequest ceiling with reserved headroom.
+
+Webpage/news metadata is stored in `search_index_items`, separate from `media_items` because the media table intentionally restricts its kind to images and videos. The new table stores canonical URL, title, snippet, domain, publisher/provider attribution, publication date and index timestamp. It never downloads or re-hosts page content. Existing safe webpage retrieval and text extraction remain available through the original search Worker. The media Worker exposes `/index/search?kind=web|news&q=...` for bounded readback and includes per-kind totals in `/index/status`.
+
+Migration: `backend/migrations/20261102_search_index_items.sql`. Apply this migration to the existing D1 database before deploying the Worker version that writes to the new table. The base `backend/schema.sql` also includes the table for new installations.
