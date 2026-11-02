@@ -22,14 +22,14 @@ async fetch(request, env = {}, ctx = {}) {
  if(request.method==="OPTIONS")return new Response(null,{status:origin&&!isAllowedApiOrigin(origin,env)?403:204,headers:cors});
  if(request.method!=="GET")return out({error:"Method not allowed."},405);
  const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
- if(route==="/")return out({name:"GOZIE SEARCH API",status:"online",endpoints:["/search?q=technology","/images?q=cats","/news?q=technology"]});
- if(!["/search","/images","/news","/extract"].includes(route))return out({error:"Not found."},404);
+ if(route!=="/"&&!["/search","/images","/news","/extract"].includes(route))return out({error:"Not found."},404);
  const rateLimit=await checkApiRateLimit(request,env,route);
  rateLimitState=rateLimit.configured?"active":"degraded";
  if(!rateLimit.allowed){
   const policy=String(rateLimit.limit)+";w="+String(rateLimit.period);
   return out({error:"Too many requests. Please wait before trying again."},429,{"Retry-After":String(rateLimit.period),"RateLimit-Limit":String(rateLimit.limit),"RateLimit-Policy":policy});
  }
+ if(route==="/")return out({name:"GOZIE SEARCH API",status:"online",endpoints:["/search?q=technology","/images?q=cats","/news?q=technology"]});
  const validation=validateApiRequest(u);
  if(!validation.valid)return out({error:validation.error},400);
  if(route==="/extract"){const target=u.searchParams.get("url")||"";if(!target)return out({error:"Provide a webpage URL using the url parameter."},400);const result=await extractPublicPage(target);return out(result.data,result.status);}
