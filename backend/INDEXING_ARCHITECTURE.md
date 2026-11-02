@@ -77,7 +77,7 @@ A per-run provider circuit breaker disables a provider after two consecutive req
 5. Rows are written to D1 table `media_items` using an upsert keyed by `(kind, source, page_url)`. Repeated discoveries refresh metadata and `indexed_at` instead of creating duplicate rows.
 6. Prepared statements are sent in D1 batches of up to 40.
 7. Records older than 180 days by `indexed_at` are deleted after the provider loop.
-8. A record is considered fresh for 30 days after its last successful metadata refresh. Freshness is based on `indexed_at` (not the original publication date); stale rows remain searchable as a fallback until the 180-day retention cutoff.
+8. A record is considered fresh for 30 days after its last successful metadata refresh. Freshness is based on `indexed_at` (not the original publication date). Missing or unparsable indexing timestamps are counted as stale, so the per-kind freshness totals always reconcile with the indexed-row total. The status summary also reports the oldest and newest stored indexing timestamps for each kind. Stale rows remain searchable as a fallback until the 180-day retention cutoff; freshness is a ranking signal, not a hard search filter.
 
 The index stores titles, descriptions, source identifiers, original page/media/thumbnail/embed URLs, attribution or license metadata where available, publication dates, duration, tags, safety classification and indexing timestamps. It does not store media binaries.
 
@@ -114,7 +114,7 @@ Each completed refresh writes one row to `index_runs` containing:
 - failure count and a bounded provider-labelled note;
 - versioned `stats_json` metrics.
 
-The metrics include seeds processed, provider calls, request failures, database-save failures, rows received/saved, disabled providers, duration, and per-provider attempts/successes/failures/row counts. The metrics column was added compatibly by `20261101_index_run_metrics.sql`; older run rows may have no detailed metrics and are parsed as `null`.
+The metrics include seeds processed, provider calls, request failures, database-save failures, rows received/saved, disabled providers, duration, and per-provider attempts/successes/failures/row counts. Freshness summaries report fresh/stale counts and the oldest/newest indexed timestamps per media kind; invalid timestamps are included in stale counts rather than disappearing from the breakdown. The metrics column was added compatibly by `20261101_index_run_metrics.sql`; older run rows may have no detailed metrics and are parsed as `null`.
 
 `GET /index/status` is the operational read surface. It returns per-kind totals, fresh/stale counts, the freshness and retention policy, verified-safe and unverified video totals, the latest run and grouped failure summaries. Search ordering preserves phrase and relevance ranking first, then prefers fresh records when relevance is tied. It should be used to distinguish a successful schedule invocation from a run in which individual providers failed or returned no records.
 

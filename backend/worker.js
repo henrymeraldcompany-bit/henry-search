@@ -798,9 +798,12 @@ function indexStatusCountsQuery() {
     "FROM media_items GROUP BY kind";
 }
 function indexFreshnessSummaryQuery() {
+  // Treat an absent or unparsable timestamp as stale so every indexed row is
+  // accounted for. Stale rows remain searchable as a fallback until retention.
   return "SELECT kind,COUNT(*) AS total," +
-    "SUM(CASE WHEN julianday(indexed_at) >= julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS fresh," +
-    "SUM(CASE WHEN julianday(indexed_at) < julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS stale " +
+    "SUM(CASE WHEN julianday(indexed_at) IS NOT NULL AND julianday(indexed_at) >= julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS fresh," +
+    "SUM(CASE WHEN julianday(indexed_at) IS NULL OR julianday(indexed_at) < julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS stale," +
+    "MIN(indexed_at) AS oldestIndexedAt,MAX(indexed_at) AS newestIndexedAt " +
     "FROM media_items GROUP BY kind";
 }
 function videoSafetySummary(rows) {
@@ -875,7 +878,7 @@ export default {
         const freshness=await env.MEDIA_DB.prepare(indexFreshnessSummaryQuery()).all();
         const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1").first();
         const latestRun=latest?{finished_at:latest.finished_at,rows_processed:latest.rows_processed,failure_count:latest.failure_count,note:latest.note,stats:parseIndexRunStats(latest.stats_json)}:null;
-        return reply({counts:counts.results||[],freshness: freshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
+        return reply({counts:counts.results||[],freshness: freshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
