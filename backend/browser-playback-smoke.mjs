@@ -44,6 +44,45 @@ try {
   });
   page.setDefaultTimeout(60_000);
 
+  // Keep this UI/player test deterministic: live video indexes can legitimately
+  // return zero results for a broad query, which tests provider availability
+  // rather than the published player's controls. The dedicated Worker routes
+  // are covered independently by the live API smoke job.
+  await page.route("**/videos?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (!url.searchParams.has("q")) return route.continue();
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        query: url.searchParams.get("q"),
+        safeSearch: true,
+        source: "Deterministic browser smoke fixture",
+        count: 2,
+        results: [
+          {
+            title: "GOZIE playback smoke fixture one",
+            url: "https://peertube.tv/videos/watch/fixture-one",
+            embedUrl: "https://peertube.tv/videos/embed/fixture-one",
+            source: "PeerTube fixture",
+            durationSeconds: 180,
+            publishedAt: new Date().toISOString(),
+            nsfw: false
+          },
+          {
+            title: "GOZIE playback smoke fixture two",
+            url: "https://peertube.tv/videos/watch/fixture-two",
+            embedUrl: "https://peertube.tv/videos/embed/fixture-two",
+            source: "PeerTube fixture",
+            durationSeconds: 240,
+            publishedAt: new Date().toISOString(),
+            nsfw: false
+          }
+        ]
+      })
+    });
+  });
+
   const response = await page.goto(base, { waitUntil: "domcontentloaded", timeout: 60_000 });
   assert.ok(response && response.ok(), "Published GOZIE SEARCH page must load successfully");
   await page.locator("#search-form").waitFor({ state: "visible" });
