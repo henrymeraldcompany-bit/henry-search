@@ -111,9 +111,21 @@
         </button>
       </form>
 
-      <p class="hint" id="search-hint">
-        Ask a question. Discover something new.
-      </p>
+      <div class="voice-controls">
+        <p class="hint" id="search-hint" role="status" aria-live="polite" aria-atomic="true">
+          Ask a question. Discover something new.
+        </p>
+        <label class="voice-language-label" for="voice-language">Voice language
+          <select id="voice-language" aria-label="Voice search language">
+            <option value="en-NG">English (Nigeria)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="en-US">English (US)</option>
+            <option value="ig-NG">Igbo</option>
+            <option value="yo-NG">Yoruba</option>
+            <option value="ha-NG">Hausa</option>
+          </select>
+        </label>
+      </div>
 
     </section>
 
