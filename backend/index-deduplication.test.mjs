@@ -21,15 +21,15 @@ const safeUrl = value => {
 const canonicalMediaKey = row => {
   const href = safeUrl(row.page_url || row.url);
   if (!href) return "";
-  const u = new URL(href), host = u.hostname.toLowerCase().replace(/^www\\./, "");
+  const u = new URL(href), host = u.hostname.toLowerCase().replace(/^www\./, "");
   if (host === "youtu.be" || ["youtube.com","m.youtube.com","youtube-nocookie.com"].includes(host)) {
     const id = host === "youtu.be" ? u.pathname.split("/").filter(Boolean)[0] :
-      (u.searchParams.get("v") || u.pathname.match(/^\\/(?:embed|shorts|live)\\/([\\w-]+)/i)?.[1] || "");
+      (u.searchParams.get("v") || u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]+)/i)?.[1] || "");
     if (id) return "https://youtube.com/watch?v=" + encodeURIComponent(id);
   }
   u.hostname = host; u.hash = "";
   for (const key of [...u.searchParams.keys()]) if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source|feature|si)$/i.test(key)) u.searchParams.delete(key);
-  u.searchParams.sort(); if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\\/+$/, "");
+  u.searchParams.sort(); if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\/+$/, "");
   return u.href;
 };
 const canonicalIndexUrl = extract("function canonicalIndexUrl(value, kind) {", "function indexDedupKeys", { safeUrl, URL, Array, canonicalMediaKey });
