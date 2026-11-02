@@ -1834,9 +1834,8 @@ function startVoiceSearch() {
           : "Speech captured. Preparing your search…";
       }
 
-      if (finalTranscript.trim() && !submitted) {
-        submitted = submitVoiceQuery(finalTranscript);
-      }
+      // Wait for recognition.onend before submitting so the browser can
+      // deliver every final speech segment, not just the first segment.
     };
 
     recognition.onnomatch = () => {
@@ -1865,7 +1864,13 @@ function startVoiceSearch() {
         const icon = voiceButton.querySelector("span");
         if (icon) icon.textContent = "🎙";
       }
-      if (!submitted && !finalTranscript.trim() && searchHint) {
+      if (!submitted && finalTranscript.trim()) {
+        if (searchHint) searchHint.textContent = "Searching for: " + finalTranscript.trim();
+        submitted = submitVoiceQuery(finalTranscript);
+        if (!submitted && searchHint) {
+          searchHint.textContent = "The spoken search could not be submitted. Please try again.";
+        }
+      } else if (!submitted && !finalTranscript.trim() && searchHint) {
         searchHint.textContent = "No complete speech was captured. Tap the microphone and try again.";
       }
     };
