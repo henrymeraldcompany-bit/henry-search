@@ -78,6 +78,11 @@ test("scheduled refresh stores webpage and news metadata separately from media r
       domain: "news-index.example",
       seendate: "20261102T080000Z"
     }] });
+    if (url.hostname === "news.google.com" || url.hostname === "www.bing.com") {
+      const provider = url.hostname === "news.google.com" ? "google" : "bing";
+      const xml = `<rss><channel><item><title>Daily topic news report</title><link>https://news-index.example/daily-report?utm_source=${provider}</link><source>news-index.example</source><pubDate>Mon, 02 Nov 2026 08:00:00 GMT</pubDate><description>Daily topic coverage from ${provider}.</description></item></channel></rss>`;
+      return new Response(xml, { headers: { "content-type": "application/rss+xml" } });
+    }
     throw new Error("Unexpected endpoint " + url.href);
   };
   try {
@@ -97,7 +102,16 @@ test("scheduled refresh stores webpage and news metadata separately from media r
     assert.equal(db.runs[0].failureCount, 0);
     assert.equal(db.runs[0].stats.providers.DuckDuckGo.rowsSaved, 1);
     assert.equal(db.runs[0].stats.providers.Wikipedia.rowsSaved, 1);
+    const savedNews = db.rows.find(row => row.kind === "news");
+    assert.deepEqual(JSON.parse(savedNews.providers_json), [
+      "GDELT news index", "Google News RSS", "Bing News RSS"
+    ]);
     assert.equal(db.runs[0].stats.providers["GDELT news index"].rowsSaved, 1);
+    assert.equal(db.runs[0].stats.providers["GDELT news index"].rowsContributed, 1);
+    assert.equal(db.runs[0].stats.providers["Google News RSS"].rowsContributed, 1);
+    assert.equal(db.runs[0].stats.providers["Bing News RSS"].rowsContributed, 1);
+    assert.equal(db.runs[0].stats.rowsSaved, 3);
+    assert.equal(db.runs[0].stats.rowsContributed, 5);
 
     const response = await worker.fetch(new Request(
       "https://media.example/index/search?kind=web&q=daily"

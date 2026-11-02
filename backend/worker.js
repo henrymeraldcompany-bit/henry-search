@@ -811,7 +811,7 @@ async function runIndexProviderWithRetry(run, budget, pause) {
 function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, durationMs) {
   const providers = {};
   let providerCalls = 0, providerFailures = 0, databaseSaveFailures = 0;
-  let rowsReceived = 0, rowsSaved = 0, rowsSkipped = 0;
+  let rowsReceived = 0, rowsSaved = 0, rowsContributed = 0, rowsSkipped = 0;
   const source = providerStats && typeof providerStats === "object" ? providerStats : {};
   Object.keys(source).sort().forEach(function (name) {
     const raw = source[name] && typeof source[name] === "object" ? source[name] : {};
@@ -827,6 +827,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
       databaseSaveFailures: count(raw.databaseSaveFailures),
       rowsReceived: count(raw.rowsReceived),
       rowsSaved: count(raw.rowsSaved),
+      rowsContributed: count(raw.rowsContributed),
       rowsSkipped: count(raw.rowsSkipped)
     };
     providers[String(name).slice(0, 48)] = metric;
@@ -835,6 +836,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
     databaseSaveFailures += metric.databaseSaveFailures;
     rowsReceived += metric.rowsReceived;
     rowsSaved += metric.rowsSaved;
+    rowsContributed += metric.rowsContributed;
     rowsSkipped += metric.rowsSkipped;
   });
   const seeds = Number(seedsProcessed);
@@ -847,6 +849,7 @@ function buildIndexRunStats(providerStats, seedsProcessed, disabledProviders, du
     databaseSaveFailures: databaseSaveFailures,
     rowsReceived: rowsReceived,
     rowsSaved: rowsSaved,
+    rowsContributed: rowsContributed,
     rowsSkipped: rowsSkipped,
     disabledProviders: Array.from(new Set((Array.isArray(disabledProviders) ? disabledProviders : [])
       .map(function (name) { return String(name || "").trim().slice(0, 48); })
@@ -873,7 +876,7 @@ async function refresh(env) {
     if (!providerStats[name]) {
       providerStats[name] = {
         attempted: 0, retries: 0, succeeded: 0, failed: 0,
-        databaseSaveFailures: 0, rowsReceived: 0, rowsSaved: 0, rowsSkipped: 0
+        databaseSaveFailures: 0, rowsReceived: 0, rowsSaved: 0, rowsContributed: 0, rowsSkipped: 0
       };
     }
     return providerStats[name];
@@ -981,6 +984,15 @@ async function refresh(env) {
         const providerNames = JSON.parse(row.providers_json || "[]");
         const metricName = providerNames[0] || row.provider || "Search index";
         metricsFor(metricName).rowsSaved += 1;
+        // A canonical result can be discovered by several providers. Keep
+        // rowsSaved unique while exposing every provider's contribution.
+        const contributors = new Set(providerNames.filter(name =>
+          typeof name === "string" && name.trim()
+        ));
+        if (!contributors.size && row.provider) contributors.add(row.provider);
+        for (const contributor of contributors) {
+          metricsFor(contributor).rowsContributed += 1;
+        }
       }
     } catch (error) {
       metricsFor("Search index database save").databaseSaveFailures += 1;

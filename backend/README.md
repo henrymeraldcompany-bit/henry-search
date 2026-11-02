@@ -101,3 +101,8 @@ Before deployment, the production D1 database was inspected: `search_index_items
 ### Task 53 deployment record — 2 November 2026
 
 The Worker was updated with concurrent multi-source news discovery and deployed to 100% of traffic. Cloudflare deployment ID: `01bf2be0-b168-4581-b242-557ac70fe87c`; version ID: `cb6da970-87b6-4bdb-adb9-a164a23ca172`. The existing `MEDIA_DB` binding, compatibility date and daily `0 7 * * *` UTC schedule were verified after upload. The live HTTP smoke-test URLs were inaccessible from the management environment, and GitHub reported no commit status checks for this commit; therefore runtime endpoint responses and automated test execution remain unverified.
+
+
+### Multi-provider contribution metrics
+
+When several web/news providers return the same canonical article, the index stores one deduplicated row with all contributing provider names. Per-provider metrics expose both `rowsSaved` (the provider that supplied the primary saved row) and `rowsContributed` (every provider that contributed to a saved canonical row). The top-level `rowsSaved` remains the unique row count; `rowsContributed` is intentionally additive across providers and can be higher when providers overlap.
