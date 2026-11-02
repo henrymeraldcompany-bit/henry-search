@@ -10,6 +10,141 @@ const resultsTitle = document.querySelector("#results-title");
 const resultStatus = document.querySelector("#result-status");
 const resultsList = document.querySelector("#results-list");
 
+// ========================================
+// TEXT TO SPEECH / READ ALOUD
+// ========================================
+const ttsPlayButton = document.querySelector("#tts-play");
+const ttsPauseButton = document.querySelector("#tts-pause");
+const ttsStopButton = document.querySelector("#tts-stop");
+let ttsUtterance = null;
+let ttsChunks = [];
+let ttsChunkIndex = 0;
+let ttsIsPaused = false;
+
+function getReadableSearchText() {
+  if (!resultsList) return "";
+  const clone = resultsList.cloneNode(true);
+  clone.querySelectorAll("button, input, select, textarea, nav, .image-filter-bar, .video-filter-bar, .web-filter-bar").forEach(node => node.remove());
+  return (clone.innerText || clone.textContent || "")
+    .replace(/https?:\\/\\/\\S+/g, "")
+    .replace(/\\s+/g, " ")
+    .trim()
+    .slice(0, 12000);
+}
+
+function updateTtsControls(state) {
+  if (!ttsPlayButton || !ttsPauseButton || !ttsStopButton) return;
+  const speaking = state === "speaking";
+  const paused = state === "paused";
+  ttsPlayButton.disabled = speaking || paused;
+  ttsPauseButton.disabled = !speaking && !paused;
+  ttsPauseButton.textContent = paused ? "Resume" : "Pause";
+  ttsStopButton.disabled = state === "idle";
+  ttsPlayButton.textContent = state === "idle" ? "▶ Read aloud" : "▶ Read aloud";
+}
+
+function splitSpeechText(text, maxLength = 1800) {
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  const chunks = [];
+  let current = "";
+  for (const sentence of sentences) {
+    const part = sentence.trim();
+    if (!part) continue;
+    if ((current + " " + part).trim().length > maxLength && current) {
+      chunks.push(current);
+      current = "";
+    }
+    if (part.length > maxLength) {
+      for (let offset = 0; offset < part.length; offset += maxLength) {
+        const fragment = part.slice(offset, offset + maxLength).trim();
+        if (fragment) chunks.push(fragment);
+      }
+    } else {
+      current = (current + " " + part).trim();
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function speakNextChunk() {
+  if (!("speechSynthesis" in window) || ttsChunkIndex >= ttsChunks.length) {
+    updateTtsControls("idle");
+    ttsUtterance = null;
+    ttsChunks = [];
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(ttsChunks[ttsChunkIndex]);
+  const rate = Number(getPreference("speechRate", 1));
+  utterance.rate = [0.8, 1, 1.2, 1.4].includes(rate) ? rate : 1;
+  const lang = getVoiceLanguage();
+  utterance.lang = lang;
+  const voices = window.speechSynthesis.getVoices();
+  const preferredVoice = voices.find(voice => voice.lang.toLowerCase() === lang.toLowerCase()) ||
+    voices.find(voice => voice.lang.toLowerCase().startsWith(lang.split("-")[0].toLowerCase()));
+  if (preferredVoice) utterance.voice = preferredVoice;
+  utterance.onstart = () => updateTtsControls("speaking");
+  utterance.onend = () => {
+    if (ttsUtterance !== utterance) return;
+    ttsChunkIndex += 1;
+    speakNextChunk();
+  };
+  utterance.onerror = event => {
+    if (event.error !== "canceled" && event.error !== "interrupted") {
+      const status = document.querySelector("#result-status");
+      if (status) status.textContent = "Read aloud stopped: " + event.error;
+    }
+    updateTtsControls("idle");
+  };
+  ttsUtterance = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+
+function startReadAloud() {
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+    const status = document.querySelector("#result-status");
+    if (status) status.textContent = "Read aloud is not supported by this browser. Try an updated browser with speech synthesis support.";
+    return;
+  }
+  const text = getReadableSearchText();
+  if (!text) {
+    const status = document.querySelector("#result-status");
+    if (status) status.textContent = "There is no readable search-result text yet.";
+    return;
+  }
+  window.speechSynthesis.cancel();
+  ttsChunks = splitSpeechText(text);
+  ttsChunkIndex = 0;
+  ttsIsPaused = false;
+  updateTtsControls("speaking");
+  speakNextChunk();
+}
+
+function stopReadAloud() {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  ttsUtterance = null;
+  ttsChunks = [];
+  ttsChunkIndex = 0;
+  ttsIsPaused = false;
+  updateTtsControls("idle");
+}
+
+ttsPlayButton?.addEventListener("click", startReadAloud);
+ttsPauseButton?.addEventListener("click", () => {
+  if (!("speechSynthesis" in window)) return;
+  if (window.speechSynthesis.paused) {
+    window.speechSynthesis.resume();
+    ttsIsPaused = false;
+    updateTtsControls("speaking");
+  } else if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.pause();
+    ttsIsPaused = true;
+    updateTtsControls("paused");
+  }
+});
+ttsStopButton?.addEventListener("click", stopReadAloud);
+
+
 const themeToggle = document.querySelector("#theme-toggle");
 const themeIcon = document.querySelector("#theme-icon");
 const themeLabel = document.querySelector(".theme-label");
