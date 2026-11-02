@@ -46,6 +46,7 @@ async fetch(request, env = {}, ctx = {}) {
     // origin-dependent security headers for the current caller on every hit.
     for(const [name,value] of Object.entries(cors))headers.set(name,value);
     if(!Object.prototype.hasOwnProperty.call(cors,"Access-Control-Allow-Origin"))headers.delete("Access-Control-Allow-Origin");
+    headers.set("X-GOZIE-RateLimit",rateLimitState);
     headers.set("X-GOZIE-Cache","HIT");
     return new Response(cached.body,{status:cached.status,statusText:cached.statusText,headers});
    }
