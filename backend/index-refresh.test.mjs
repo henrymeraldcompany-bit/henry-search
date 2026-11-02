@@ -42,7 +42,7 @@ test("collapses multiline and repeated whitespace in provider failure notes", ()
 
 
 const retryStart = source.indexOf("function isRetryableIndexError(");
-const retryEnd = source.indexOf("\\nfunction buildIndexRunStats(", retryStart);
+const retryEnd = source.indexOf("\nfunction buildIndexRunStats(", retryStart);
 assert.notEqual(retryStart, -1, "retry classification must exist");
 assert.notEqual(retryEnd, -1, "retry helper must precede run stats");
 const retryApi = vm.runInNewContext("(function(){ " + source.slice(retryStart, retryEnd) + "; return {isRetryableIndexError,runIndexProviderWithRetry}; })()", { Number, String, TypeError, Math, Promise });
@@ -85,7 +85,7 @@ test("provider retry stops at shared budget and does not retry permanent errors"
 });
 test("retry budget is globally bounded to three additional attempts", () => {
   assert.match(source, /MAX_INDEX_RETRIES_PER_RUN = 3/);
-  assert.match(source, /const retryBudget = \\{ remaining: MAX_INDEX_RETRIES_PER_RUN \\}/);
+  assert.match(source, /const retryBudget = \{ remaining: MAX_INDEX_RETRIES_PER_RUN \}/);
 });
 const statsStart = source.indexOf("function buildIndexRunStats(");
 const statsEnd = source.indexOf("\nfunction parseIndexRunStats(", statsStart);
