@@ -1,0 +1,74 @@
+name: API security live smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/api-security-live-smoke.yml"
+      - "backend/search-worker.js"
+      - "backend/api-security.js"
+      - "backend/api-validation.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      API: https://henry-search-api.henrymeraldcompany.workers.dev
+      ALLOWED_ORIGIN: https://henrymeraldcompany-bit.github.io
+    steps:
+      - name: Verify production CORS and security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          trap 'rm -f "$headers" "$body"' EXIT
+          status="$(curl --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 15 --header "Origin: $ALLOWED_ORIGIN" "$API/")"
+          [[ "$status" == "200" ]] || { echo "API root returned HTTP $status"; cat "$body"; exit 1; }
+          grep -Fqi "Access-Control-Allow-Origin: $ALLOWED_ORIGIN" "$headers"
+          grep -Fqi "X-Content-Type-Options: nosniff" "$headers"
+          grep -Fqi "X-Frame-Options: DENY" "$headers"
+          grep -Fqi "Referrer-Policy: no-referrer" "$headers"
+          grep -Fqi "Strict-Transport-Security:" "$headers"
+          echo "Production origin and security headers: ok"
+
+      - name: Reject untrusted browser origins
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          status="$(curl --silent --show-error --dump-header "$headers" --output /dev/null --write-out '%{http_code}' --max-time 15 --request OPTIONS --header 'Origin: https://untrusted.example' --header 'Access-Control-Request-Method: GET' "$API/search")"
+          [[ "$status" == "403" ]] || { echo "Untrusted CORS preflight returned HTTP $status; expected 403"; cat "$headers"; exit 1; }
+          if grep -Fqi "Access-Control-Allow-Origin:" "$headers"; then
+            echo "Untrusted origin received an allow-origin header"
+            exit 1
+          fi
+          echo "Untrusted origin rejected: ok"
+
+      - name: Verify malformed API requests return HTTP 400
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in             '/search'             '/search?q=solar&unexpected=1'             '/search?q=one&q=two'             '/search?q=solar%00energy'             '/search?q=solar&domain=bad_domain'             '/news?q=technology&from=2026-02-30'             '/news?q=technology&from=2026-11-03&to=2026-11-02'             '/extract?url=javascript%3Aalert%281%29'; do
+            tmp="$(mktemp)"
+            status="$(curl --silent --show-error --output "$tmp" --write-out '%{http_code}' --max-time 15 "$API$path")"
+            if [[ "$status" != "400" ]]; then
+              echo "$path returned HTTP $status; expected 400"
+              cat "$tmp"
+              rm -f "$tmp"
+              exit 1
+            fi
+            node - "$tmp" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (typeof data.error !== "string" || !data.error.trim()) throw new Error("Validation response omitted its error message");
+          NODE
+            rm -f "$tmp"
+          done
+          echo "Malformed request validation: ok"
