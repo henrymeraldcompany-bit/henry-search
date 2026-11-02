@@ -37,6 +37,52 @@ test("blocks the GOZIE Search API host to prevent recursive page extraction", ()
   );
 });
 
+test("rejects redirects to local or reserved destinations before fetching them", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    requested.push(url.href);
+    if (url.pathname === "/robots.txt") {
+      return new Response("User-agent: *\\nAllow: /", {
+        status: 200, headers: { "content-type": "text/plain" }
+      });
+    }
+    return new Response(null, {
+      status: 302,
+      headers: { location: "http://metadata.google.internal./latest/meta-data/" }
+    });
+  };
+  try {
+    const result = await retrievePublicPage("https://public.example/article");
+    assert.equal(result.status, 502);
+    assert.equal(requested.some(value => value.includes("metadata.google.internal")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("fails closed when robots.txt redirects instead of following an unverified robots destination", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    requested.push(url.href);
+    return new Response(null, {
+      status: 302,
+      headers: { location: "https://robots-redirect.example/robots.txt" }
+    });
+  };
+  try {
+    const result = await retrievePublicPage("https://public.example/article");
+    assert.equal(result.status, 403);
+    assert.equal(requested.length, 1);
+    assert.equal(requested[0], "https://public.example/robots.txt");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("honors robots disallow and more-specific allow rules", () => {
   assert.equal(robotsPathAllowed("User-agent: *\nDisallow: /private\nAllow: /private/open", new URL("https://example.com/private/open")), true);
   assert.equal(robotsPathAllowed("User-agent: *\nDisallow: /private", new URL("https://example.com/private/secret")), false);
