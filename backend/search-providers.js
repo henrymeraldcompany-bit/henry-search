@@ -129,26 +129,75 @@ export function rankSearchResults(results, query) {
     .map(({ _rankIndex, ...result }) => result);
 }
 
+const STORY_TITLE_STOP_WORDS = new Set([...RANKING_STOP_WORDS, "after", "amid", "about", "says", "said", "report", "reports", "update", "updates", "latest"]);
+
+function storyTitleTokens(title) {
+  return [...new Set(tokenize(title).filter(token => token.length > 1 && !STORY_TITLE_STOP_WORDS.has(token)))];
+}
+
+function areDuplicateStories(left, right) {
+  const a = storyTitleTokens(left?.title);
+  const b = storyTitleTokens(right?.title);
+  if (a.length < 3 || b.length < 3) return false;
+  const setB = new Set(b);
+  const overlap = a.filter(token => setB.has(token)).length;
+  if (overlap < 3) return false;
+  if (a.length === b.length && overlap === a.length) return true;
+  const containment = overlap / Math.min(a.length, b.length);
+  const jaccard = overlap / (a.length + b.length - overlap);
+  return Math.min(a.length, b.length) >= 4 && containment >= 0.9 && jaccard >= 0.65;
+}
+
+function mergeStoryCoverage(existing, incoming) {
+  const sources = [...new Set([...(existing.sources || [existing.source]), ...(incoming.sources || [incoming.source])].filter(Boolean))];
+  const providers = [...new Set([...(existing.providers || [existing.provider]), ...(incoming.providers || [incoming.provider])].filter(Boolean))];
+  const alternateUrls = [...new Set([...(existing.alternateUrls || []), existing.url, ...(incoming.alternateUrls || []), incoming.url]
+    .filter(value => typeof value === "string" && value))].filter(url => url !== existing.url);
+  const dates = [existing.published, incoming.published]
+    .filter(value => Number.isFinite(Date.parse(value)))
+    .sort((a, b) => Date.parse(b) - Date.parse(a));
+  const useIncomingTitle = storyTitleTokens(incoming.title).length > storyTitleTokens(existing.title).length;
+  return {
+    ...existing,
+    ...(useIncomingTitle ? { title: incoming.title } : {}),
+    snippet: String(incoming.snippet || "").length > String(existing.snippet || "").length ? incoming.snippet : existing.snippet,
+    published: dates[0] || existing.published || incoming.published || "",
+    sources, providers, alternateUrls
+  };
+}
+
+/** Conservatively collapse near-identical headlines while retaining publisher coverage and source URLs. */
+export function deduplicateNewsStories(articles) {
+  const stories = [];
+  for (const article of Array.isArray(articles) ? articles : []) {
+    if (!article || typeof article !== "object") continue;
+    const url = canonicalizeResultUrl(article.url);
+    if (!url) continue;
+    const candidate = { ...article, canonicalUrl: url };
+    const index = stories.findIndex(story => story.canonicalUrl === url || areDuplicateStories(story, candidate));
+    if (index < 0) stories.push(candidate);
+    else stories[index] = mergeStoryCoverage(stories[index], candidate);
+  }
+  return stories;
+}
+
 /**
  * Remove weak news entries and order useful articles by query match, metadata
  * completeness and freshness. Relevance remains the primary ranking signal.
  */
 export function rankArticles(articles, query, now = Date.now()) {
   const input = Array.isArray(articles) ? articles : [];
-  const unique = new Map();
-  for (const article of input) {
-    if (!article || typeof article !== "object") continue;
-    const title = String(article.title || "").replace(/\s+/g, " ").trim();
+  const cleaned = input.flatMap(article => {
+    if (!article || typeof article !== "object") return [];
+    const title = String(article.title || "").replace(/\\s+/g, " ").trim();
     const url = canonicalizeResultUrl(article.url);
-    if (!url || title.length < 8 || title.length > 250) continue;
-    if (/^(?:home|homepage|breaking news|latest news|news|article|untitled)$/i.test(title)) continue;
-    if (/^(.)\1{7,}$/.test(title)) continue;
-    const key = url;
-    const current = unique.get(key);
-    const candidate = { ...article, title, canonicalUrl: url };
-    if (!current || String(candidate.snippet || "").length > String(current.snippet || "").length) unique.set(key, candidate);
-  }
-  const ranked = [...unique.values()].map((article, index) => {
+    if (!url || title.length < 8 || title.length > 250) return [];
+    if (/^(?:home|homepage|breaking news|latest news|news|article|untitled)$/i.test(title)) return [];
+    if (/^(.)\\1{7,}$/.test(title)) return [];
+    return [{ ...article, title, canonicalUrl: url }];
+  });
+  const unique = deduplicateNewsStories(cleaned);
+  const ranked = unique.map((article, index) => {
     const snippet = String(article.snippet || "").trim();
     const source = String(article.source || "").trim();
     const publishedAt = Date.parse(article.published || "");
