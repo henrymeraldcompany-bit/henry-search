@@ -89,3 +89,10 @@ npx wrangler d1 execute gozie-search-media --remote --file=backend/migrations/20
 ```
 
 Use `GET /index/search?kind=web&q=...` or `GET /index/search?kind=news&q=...` to inspect indexed records. `GET /index/status` now includes `searchCounts`.
+
+
+### Task 52 deployment record — 2 November 2026
+
+The webpage/news indexing Worker was uploaded successfully on 2 November 2026 at 08:51:37 UTC. Cloudflare deployment ID: `102b64ea4557473cb5288f655031f8fc`; script tag: `b4b2b7e73ad6492fa342d5584f976fff`. The upload retained the existing `MEDIA_DB` binding and the daily `0 7 * * *` UTC trigger (08:00 Nigeria time). Cloudflare confirmed the Worker entry point and both `fetch` and `scheduled` handlers.
+
+Before deployment, the production D1 database was inspected: `search_index_items` and its three supporting indexes already existed with the expected schema and contained no records. The migration is included in the repository for reproducible setup; the existing production table was preserved. The next scheduled refresh will begin populating webpage/news records. The deployment API accepted the complete module graph; external HTTP smoke testing was unavailable from the deployment environment, so live route responses remain to be independently confirmed.
