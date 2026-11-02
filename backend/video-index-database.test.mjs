@@ -131,3 +131,96 @@ test("video writes are batched within the D1 statement limit", async () => {
   assert.equal(statements.length, 85);
   assert.deepEqual(batchSizes, [40, 40, 5]);
 });
+
+
+function extractWorkerFunction(name, nextName, context) {
+  const start = worker.indexOf(name);
+  assert.notEqual(start, -1, name + " must exist");
+  const end = worker.indexOf("\\n" + nextName, start);
+  assert.notEqual(end, -1, "Could not find end of " + name);
+  const source = worker.slice(start, end);
+  return vm.runInNewContext("(" + source + ")", context);
+}
+
+test("PeerTube adapter stores available creator links, tags and provider metadata", () => {
+  const safeUrl = (value, base) => {
+    if (!value) return "";
+    try { const url = new URL(value, base); return ["http:", "https:"].includes(url.protocol) ? url.href : ""; }
+    catch { return ""; }
+  };
+  const clean = value => String(value || "").replace(/<[^>]*>/g, "").trim();
+  const normalizeNumericDuration = value => Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const videoRow = extractWorkerFunction("function videoRow(v) {", "function peertubeSearchTargets", {
+    safeUrl, clean, normalizeNumericDuration, PEERTUBE: "https://peertube.tv"
+  });
+  const row = videoRow({
+    uuid: "video-42", host: "https://peer.tube", url: "/videos/watch/video-42",
+    title: "Metadata-rich lesson", description: "A useful lesson", nsfw: false,
+    duration: 95, publishedAt: "2026-11-01T08:00:00Z",
+    channel: { displayName: "Example creator", url: "/accounts/example" },
+    tags: ["science", { name: "space" }, { label: "education" }]
+  });
+  assert.equal(row.provider, "PeerTube");
+  assert.equal(row.creator_url, "https://peer.tube/accounts/example");
+  assert.deepEqual(JSON.parse(JSON.stringify(row.tags)), ["science", "space", "education"]);
+  assert.equal(row.duration_seconds, 95);
+  assert.equal(row.author, "Example creator");
+  assert.equal(row.page_url, "https://peer.tube/videos/watch/video-42");
+});
+
+test("YouTube adapter stores provider and channel metadata while enriching duration", async () => {
+  const calls = [];
+  const getJson = async url => {
+    const parsed = new URL(url); calls.push(parsed);
+    if (parsed.pathname.endsWith("/search")) return { items: [{
+      id: { videoId: "yt-42" },
+      snippet: { title: "A lesson", description: "Useful detail", channelTitle: "Science channel",
+        channelId: "UC-example", publishedAt: "2026-11-01T08:00:00Z",
+        thumbnails: { high: { url: "https://i.ytimg.com/vi/yt-42/hqdefault.jpg" } } }
+    }] };
+    return { items: [{ id: "yt-42", contentDetails: { duration: "PT1M35S" } }] };
+  };
+  const clean = value => String(value || "").trim();
+  const safeUrl = value => { try { const u = new URL(value); return ["http:", "https:"].includes(u.protocol) ? u.href : ""; } catch { return ""; } };
+  const isoDurationSeconds = value => {
+    const m = /^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/.exec(value || "");
+    return m ? Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0) : null;
+  };
+  const youtube = extractWorkerFunction("async function youtube(q, key, count) {", "async function save(env, rows)", {
+    URL, encodeURIComponent, getJson, clean, safeUrl, isoDurationSeconds, Map, console
+  });
+  const rows = await youtube("science", "server-secret", 5);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].provider, "YouTube");
+  assert.equal(rows[0].creator_url, "https://www.youtube.com/channel/UC-example");
+  assert.equal(rows[0].duration_seconds, 95);
+  assert.equal(rows[0].author, "Science channel");
+  assert.equal(calls.length, 2);
+});
+
+test("video upserts preserve known metadata when refreshed provider fields are empty", async () => {
+  const { save, env, statements } = makeSaveHarness();
+  const row = {
+    kind: "video", source: "peer.tube", source_id: "video-42",
+    title: "Updated title", description: "Updated description",
+    page_url: "https://peer.tube/videos/watch/video-42",
+    media_url: "", thumbnail_url: "", embed_url: "", author: "",
+    license: "", provider: "", creator_url: "", license_url: "",
+    attribution: "", published_at: "", duration_seconds: null,
+    tags: [], nsfw: 0
+  };
+  await save(env, [row]);
+  const sql = statements[0].sql;
+  for (const field of [
+    "media_url=COALESCE(NULLIF(excluded.media_url,''),media_items.media_url)",
+    "thumbnail_url=COALESCE(NULLIF(excluded.thumbnail_url,''),media_items.thumbnail_url)",
+    "embed_url=COALESCE(NULLIF(excluded.embed_url,''),media_items.embed_url)",
+    "author=COALESCE(NULLIF(excluded.author,''),media_items.author)",
+    "provider=COALESCE(NULLIF(excluded.provider,''),media_items.provider)",
+    "creator_url=COALESCE(NULLIF(excluded.creator_url,''),media_items.creator_url)",
+    "published_at=COALESCE(NULLIF(excluded.published_at,''),media_items.published_at)",
+    "duration_seconds=COALESCE(excluded.duration_seconds,media_items.duration_seconds)"
+  ]) assert.ok(sql.includes(field), "Missing metadata-preserving upsert: " + field);
+  assert.match(sql, /tags=CASE WHEN excluded\.tags IS NULL OR excluded\.tags IN \('','\\[\\]'\) THEN media_items\.tags ELSE excluded\.tags END/);
+  assert.match(sql, /nsfw=excluded\.nsfw/);
+});

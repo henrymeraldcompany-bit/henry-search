@@ -198,17 +198,26 @@ function videoRow(v) {
   const thumb = safeUrl((v && (v.thumbnailUrl || v.thumbnailPath || v.previewPath || v.thumbnail || v.preview)) || "", base);
   const d = v && (v.publishedAt || v.published_at || v.createdAt || "");
   const published = d && Number.isFinite(Date.parse(d)) ? new Date(Date.parse(d)).toISOString() : "";
+  const channel = (v && v.channel) || (v && v.account) || {};
+  const rawTags = Array.isArray(v && v.tags) ? v.tags
+    : Array.isArray(v && v.hashtags) ? v.hashtags : [];
+  const tags = rawTags.map(function (tag) {
+    return clean(typeof tag === "string" ? tag : tag && (tag.name || tag.label) || "", 80);
+  }).filter(Boolean).slice(0, 30);
   let source = ""; try { source = new URL(page).hostname; } catch (_) {}
   return {
     kind: "video", source: source, source_id: String((v && (v.uuid || v.shortUUID)) || page),
+    provider: "PeerTube",
     title: clean((v && (v.title || v.name)) || "Untitled video", 250),
     description: clean((v && v.description) || "", 1000),
     page_url: page, media_url: page, thumbnail_url: thumb, embed_url: embed,
-    author: clean((v && v.channel && v.channel.displayName) || (v && v.account && (v.account.displayName || v.account.name)) || "", 200),
-    license: "", published_at: published,
+    author: clean(channel.displayName || channel.name || "", 200),
+    creator_url: safeUrl(channel.url || channel.account && channel.account.url || "", base),
+    license: typeof (v && v.licence) === "string" ? clean(v.licence, 100) : "",
+    published_at: published,
     duration_seconds: normalizeNumericDuration(v && v.duration),
     nsfw: 0,
-    tags: ""
+    tags: tags
   };
 }
 function peertubeSearchTargets(q, count) {
@@ -278,8 +287,10 @@ async function youtube(q, key, count) {
       description:clean(s.description,1000), page_url:url, media_url:url,
       thumbnail_url:safeUrl((t.high && t.high.url) || (t.medium && t.medium.url) || (t.default && t.default.url) || ""),
       embed_url:"https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id),
-      author:clean(s.channelTitle,200), license:"", published_at:s.publishedAt || "",
-      duration_seconds:null, nsfw:0, tags:"" };
+      author:clean(s.channelTitle,200), creator_url:s.channelId
+        ? "https://www.youtube.com/channel/" + encodeURIComponent(s.channelId) : "",
+      provider:"YouTube", license:"", published_at:s.publishedAt || "",
+      duration_seconds:null, nsfw:0, tags:[] };
   }).filter(Boolean);
   if (!rows.length) return rows;
   const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");

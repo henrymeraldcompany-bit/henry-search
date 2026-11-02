@@ -160,3 +160,19 @@ The current design does not persist per-seed checkpoints, resume a partially com
 - Operational setup and current deployment notes: `backend/README.md`
 
 The architecture is considered documented when the schedule, seed selection, provider fan-out, request budget, normalization/safety boundary, persistence model, retention policy, metrics, and failure behavior can be traced to these implementation files and checked by the backend regression suite.
+
+
+### 5B. Video metadata enrichment and refresh behavior
+
+PeerTube normalization stores the provider label, creator display name and
+profile URL when supplied, available tags, publication date, duration, and
+watch/thumbnail/embed URLs. YouTube normalization stores its provider label,
+channel name and canonical channel URL; duration is enriched through the
+video-details endpoint. Fields not supplied by a provider remain empty or
+NULL rather than being fabricated.
+
+On repeat discoveries, the D1 upsert refreshes populated metadata while
+preserving existing creator links, provider labels, playback URLs, publication
+dates, tags, and known duration when the new response omits them. Safety
+classification is deliberately refreshed on every update so an item no longer
+explicitly marked safe cannot retain a verified-safe status.
