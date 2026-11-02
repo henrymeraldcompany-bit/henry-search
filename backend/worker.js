@@ -18,6 +18,9 @@ const SEEDS = [
   "music performance", "literature", "astronomy", "wildlife"
 ];
 const DAILY_SEED_BATCH_SIZE = 6;
+// Freshness is measured from the last successful metadata refresh, not publication date.
+const INDEX_FRESH_DAYS = 30;
+const INDEX_RETENTION_DAYS = 180;
 const PEERTUBE = "https://peertube.tv";
 // Use several public PeerTube instances so search is not tied to one instance's
 // federation/search-index settings. Failed instances are isolated per request.
@@ -429,7 +432,8 @@ function indexedQuery(kind, q, limit) {
       "SELECT *, (" + score + ") AS relevance_score, " +
       "CASE WHEN title_words LIKE ? THEN 0 ELSE 1 END AS phrase_rank " +
       "FROM normalized WHERE (" + conditions + ") " +
-      "ORDER BY phrase_rank ASC, relevance_score DESC, indexed_at DESC LIMIT ?",
+      "ORDER BY phrase_rank ASC, relevance_score DESC, " +
+      "CASE WHEN julianday(indexed_at) >= julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 0 ELSE 1 END ASC, indexed_at DESC LIMIT ?", 
     params: [kind].concat(scoreArgs, [phrase], conditionArgs, [rowLimit])
   };
 }
@@ -770,8 +774,9 @@ async function refresh(env) {
   if (disabledProviders.length) {
     console.warn("Daily index disabled repeatedly failing providers for this run:", disabledProviders.join(", "));
   }
+  // Keep stale rows searchable as a fallback, but remove records beyond the retention horizon.
   await env.MEDIA_DB.prepare("DELETE FROM media_items WHERE indexed_at < ?")
-    .bind(new Date(Date.now() - 180 * 86400000).toISOString()).run();
+    .bind(new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString()).run();
   const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
   await env.MEDIA_DB.prepare(
     "INSERT INTO index_runs (finished_at,rows_processed,failure_count,note,stats_json) VALUES (?,?,?,?,?)"
@@ -790,6 +795,12 @@ function indexStatusCountsQuery() {
   return "SELECT kind,COUNT(*) AS total," +
     "SUM(CASE WHEN nsfw=0 THEN 1 ELSE 0 END) AS verified_safe," +
     "SUM(CASE WHEN nsfw=1 THEN 1 ELSE 0 END) AS unverified " +
+    "FROM media_items GROUP BY kind";
+}
+function indexFreshnessSummaryQuery() {
+  return "SELECT kind,COUNT(*) AS total," +
+    "SUM(CASE WHEN julianday(indexed_at) >= julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS fresh," +
+    "SUM(CASE WHEN julianday(indexed_at) < julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS stale " +
     "FROM media_items GROUP BY kind";
 }
 function videoSafetySummary(rows) {
@@ -861,9 +872,10 @@ export default {
       if(p==="/videos")return await search(request,env,"video");
       if(p==="/index/status"){
         const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
+        const freshness=await env.MEDIA_DB.prepare(indexFreshnessSummaryQuery()).all();
         const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1").first();
         const latestRun=latest?{finished_at:latest.finished_at,rows_processed:latest.rows_processed,failure_count:latest.failure_count,note:latest.note,stats:parseIndexRunStats(latest.stats_json)}:null;
-        return reply({counts:counts.results||[],videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
+        return reply({counts:counts.results||[],freshness: freshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}

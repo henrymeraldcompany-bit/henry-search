@@ -77,6 +77,7 @@ A per-run provider circuit breaker disables a provider after two consecutive req
 5. Rows are written to D1 table `media_items` using an upsert keyed by `(kind, source, page_url)`. Repeated discoveries refresh metadata and `indexed_at` instead of creating duplicate rows.
 6. Prepared statements are sent in D1 batches of up to 40.
 7. Records older than 180 days by `indexed_at` are deleted after the provider loop.
+8. A record is considered fresh for 30 days after its last successful metadata refresh. Freshness is based on `indexed_at` (not the original publication date); stale rows remain searchable as a fallback until the 180-day retention cutoff.
 
 The index stores titles, descriptions, source identifiers, original page/media/thumbnail/embed URLs, attribution or license metadata where available, publication dates, duration, tags, safety classification and indexing timestamps. It does not store media binaries.
 
@@ -115,7 +116,7 @@ Each completed refresh writes one row to `index_runs` containing:
 
 The metrics include seeds processed, provider calls, request failures, database-save failures, rows received/saved, disabled providers, duration, and per-provider attempts/successes/failures/row counts. The metrics column was added compatibly by `20261101_index_run_metrics.sql`; older run rows may have no detailed metrics and are parsed as `null`.
 
-`GET /index/status` is the operational read surface. It returns per-kind totals, verified-safe and unverified video totals, the latest run and grouped failure summaries. It should be used to distinguish a successful schedule invocation from a run in which individual providers failed or returned no records.
+`GET /index/status` is the operational read surface. It returns per-kind totals, fresh/stale counts, the freshness and retention policy, verified-safe and unverified video totals, the latest run and grouped failure summaries. Search ordering preserves phrase and relevance ranking first, then prefers fresh records when relevance is tied. It should be used to distinguish a successful schedule invocation from a run in which individual providers failed or returned no records.
 
 ## 7. Failure boundaries and recovery characteristics
 
@@ -124,7 +125,8 @@ The metrics include seeds processed, provider calls, request failures, database-
 - **Individual PeerTube instance failure:** preserve results from successful instances; fail the PeerTube provider call only when all configured instances fail.
 - **Refresh-level failure:** log the scheduled refresh failure. The next cron invocation is the next automatic attempt.
 - **Duplicate discovery:** D1 upsert refreshes the existing canonical source row.
-- **Stale metadata:** records older than 180 days are pruned after a refresh.
+- **Freshness:** metadata refreshed within 30 days is classified as fresh; older records remain searchable but are ranked behind equally relevant fresh records.
+- **Retention:** records older than 180 days are pruned after a refresh.
 
 The current design does not persist per-seed checkpoints, resume a partially completed run, or maintain a distributed lock. The rotation is date-derived rather than advanced by a mutable cursor. Those are explicit characteristics of the present baseline, not guarantees of exactly-once processing.
 

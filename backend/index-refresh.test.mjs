@@ -94,3 +94,25 @@ test("index-run metrics schema adds a backward-compatible JSON column", async ()
   assert.match(migration, /ALTER TABLE index_runs ADD COLUMN stats_json TEXT NOT NULL DEFAULT '\{\}'/);
   assert.match(source, /failure_count,note,stats_json\) VALUES/);
 });
+
+const freshnessStart = source.indexOf("function indexFreshnessSummaryQuery()");
+const freshnessEnd = source.indexOf("\n}", freshnessStart);
+assert.notEqual(freshnessStart, -1, "indexFreshnessSummaryQuery must exist");
+assert.notEqual(freshnessEnd, -1, "freshness query function must close");
+const freshnessQuery = vm.runInNewContext("(" + source.slice(freshnessStart, freshnessEnd + 2) + ")", {});
+test("freshness policy separates fresh and stale records without hiding stale fallback rows", () => {
+  const sql = freshnessQuery();
+  assert.match(sql, /julianday\(indexed_at\)/);
+  assert.match(sql, /-30 days/);
+  assert.match(sql, /AS fresh/);
+  assert.match(sql, /AS stale/);
+  assert.match(source, /INDEX_FRESH_DAYS = 30/);
+  assert.match(source, /INDEX_RETENTION_DAYS = 180/);
+  assert.match(source, /freshnessPolicy:\{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS\}/);
+  assert.match(source, /relevance_score DESC,[\s\S]*julianday\(indexed_at\)/);
+  assert.match(source, /DELETE FROM media_items WHERE indexed_at < \?/);
+});
+test("freshness is measured from indexed_at and legacy rows are included in the status breakdown", () => {
+  assert.match(sql, /FROM media_items GROUP BY kind/);
+  assert.match(source, /indexed_at=excluded\.indexed_at/);
+});
