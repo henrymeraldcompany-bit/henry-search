@@ -120,6 +120,63 @@ function renderWebFilterBar(items) {
 // DISPLAY NORMAL WEB RESULTS
 // ========================================
 
+function renderNewsResults(items) {
+  if (!resultsList) return;
+  const articles = Array.isArray(items) ? items : [];
+  resultsList.replaceChildren();
+
+  if (!articles.length) {
+    const message = document.createElement("div");
+    message.className = "message-card";
+    message.textContent = "No news articles were returned. Try another search.";
+    resultsList.appendChild(message);
+    return;
+  }
+
+  for (const item of articles) {
+    const originalUrl = safeHttpUrl(item.originalUrl || item.url || item.link || "");
+    if (!originalUrl) continue;
+
+    const card = document.createElement("article");
+    card.className = "result-card news-preview-card";
+
+    const sourceLine = document.createElement("div");
+    sourceLine.className = "result-url";
+    const publisher = (Array.isArray(item.sources) ? item.sources : [item.source])
+      .find(value => typeof value === "string" && value.trim());
+    sourceLine.textContent = publisher || new URL(originalUrl).hostname;
+
+    const title = makeLink(originalUrl, item.title || originalUrl);
+    title.className = "result-title";
+
+    const metadata = document.createElement("p");
+    metadata.className = "result-attribution";
+    const published = item.published && Number.isFinite(Date.parse(item.published))
+      ? new Date(item.published).toLocaleString()
+      : "";
+    metadata.textContent = published
+      ? "Published " + published
+      : "News preview";
+    const providers = [...new Set((Array.isArray(item.providers) ? item.providers : [item.provider])
+      .filter(value => typeof value === "string" && value.trim()))];
+    if (providers.length) metadata.textContent += " · Found via " + providers.join(", ");
+
+    const summaryText = String(item.preview?.summary || item.snippet || item.description || "").trim();
+    card.append(sourceLine, title, metadata);
+    if (summaryText) {
+      const summary = document.createElement("p");
+      summary.className = "result-description news-preview-summary";
+      summary.textContent = summaryText;
+      card.appendChild(summary);
+    }
+
+    const originalLink = makeLink(originalUrl, "Read full article at original source");
+    originalLink.className = "result-source-link news-original-source";
+    card.appendChild(originalLink);
+    resultsList.appendChild(card);
+  }
+}
+
 function renderResults(items) {
   if (!resultsList) return;
   if (Array.isArray(items) && items !== currentWebResults) { currentWebResults = items; currentWebFilters = { domain: 'all', source: 'all', date: 'any' }; currentWebPage = 1; }
@@ -1563,7 +1620,7 @@ if (form && queryInput && resultsList) {
             `${items.length} news result${items.length === 1 ? "" : "s"} from ${data.source || "the news provider"}.`;
         }
 
-        renderResults(items);
+        renderNewsResults(items);
       } catch (error) {
         if (resultStatus) resultStatus.textContent = "News search unavailable";
         showMessage(
