@@ -47,7 +47,7 @@ The daily refresh rotates six seeds per day from a 24-topic discovery bank, comp
 Run the regression suites with Node.js 22:
 
 ```sh
-node --test backend/duration.test.mjs backend/indexed-search.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs backend/index-refresh.test.mjs backend/video-safety.test.mjs
+node --test backend/duration.test.mjs backend/indexed-search.test.mjs backend/media-ranking.test.mjs backend/media-url.test.mjs backend/video-filters.test.mjs backend/image-providers.test.mjs backend/video-search.test.mjs backend/index-refresh.test.mjs backend/video-safety.test.mjs
 ```
 
 They cover ISO-8601 duration parsing, numeric PeerTube duration normalization, strict PeerTube/YouTube safe-search settings, rejection of unclassified video results, D1 safe-by-default filtering, rotating seed coverage, provider circuit breaking, YouTube seed rotation, whole-word relevance, source diversity, deduplication, Flickr feed mapping and URL safety, and source/date/duration filters. The repository includes `.github/workflows/backend-tests.yml`, which runs all six suites on relevant pushes and pull requests. Both backend and media regression workflows passed for the playback-guard pull request on 29 October 2026; the backend Node.js test log reports 56 passed and 0 failed. The live smoke workflow separates media-route checks from the original web/news API checks and rejects video embed/thumbnail URLs that point to the source homepage.
