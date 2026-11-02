@@ -610,3 +610,35 @@ test("API security headers are present without granting wildcard browser access"
   assert.equal(denied["Access-Control-Allow-Origin"], undefined);
   assert.equal(denied["Access-Control-Allow-Methods"], "GET, OPTIONS");
 });
+
+import { validateApiRequest } from "./api-validation.js";
+
+test("validates supported API routes, required queries and route-specific parameters", () => {
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=solar")).valid, true);
+  assert.equal(validateApiRequest(new URL("https://api.example/images?q=cats")).valid, true);
+  assert.equal(validateApiRequest(new URL("https://api.example/news?q=technology&date=week")).valid, true);
+  assert.equal(validateApiRequest(new URL("https://api.example/extract?url=https%3A%2F%2Fexample.com%2Fstory")).valid, true);
+  assert.equal(validateApiRequest(new URL("https://api.example/search")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=solar&unexpected=1")).valid, false);
+});
+
+test("rejects duplicate parameters, control characters and oversized search queries", () => {
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=one&q=two")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=solar%00energy")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=" + "x".repeat(301))).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=%20solar")).valid, false);
+});
+
+test("validates web search filters and news date ranges", () => {
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=solar&domain=example.com&date=month")).valid, true);
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=solar&domain=bad_domain")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/search?q=solar&date=forever")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/news?q=world&from=2026-02-30")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/news?q=world&from=2026-11-03&to=2026-11-02")).valid, false);
+});
+
+test("validates webpage URL input before extraction", () => {
+  assert.equal(validateApiRequest(new URL("https://api.example/extract?url=javascript%3Aalert(1)")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/extract?url=https%3A%2F%2Fuser%3Apass%40example.com")).valid, false);
+  assert.equal(validateApiRequest(new URL("https://api.example/extract?url=https%3A%2F%2Fexample.com%2F%2500")).valid, true);
+});

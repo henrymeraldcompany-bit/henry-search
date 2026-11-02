@@ -3,6 +3,7 @@ import { runSearchProviders, filterSearchResults, rankArticles, canonicalizeResu
 import { buildSearchCacheKey, isCacheableSearchRoute } from "./search-cache.js";
 import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited, robotsAllows, extractPublicPage } from "./search-extract.js";
 import { buildApiSecurityHeaders, isAllowedApiOrigin } from "./api-security.js";
+import { validateApiRequest } from "./api-validation.js";
 export default {
 async fetch(request, env = {}, ctx = {}) {
  const origin=request.headers.get("Origin")||"";
@@ -21,6 +22,8 @@ async fetch(request, env = {}, ctx = {}) {
  const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
  if(route==="/")return out({name:"GOZIE SEARCH API",status:"online",endpoints:["/search?q=technology","/images?q=cats","/news?q=technology"]});
  if(!["/search","/images","/news","/extract"].includes(route))return out({error:"Not found."},404);
+ const validation=validateApiRequest(u);
+ if(!validation.valid)return out({error:validation.error},400);
  if(route==="/extract"){const target=u.searchParams.get("url")||"";if(!target)return out({error:"Provide a webpage URL using the url parameter."},400);const result=await extractPublicPage(target);return out(result.data,result.status);}
  if(!q)return out({error:"Enter a search query."},400);
  if(q.length>300)return out({error:"Search query must be 300 characters or fewer."},400);
