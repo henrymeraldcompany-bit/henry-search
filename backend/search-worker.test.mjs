@@ -54,7 +54,7 @@ test("rejects redirects to local or reserved destinations before fetching them",
     });
   };
   try {
-    const result = await retrievePublicPage("https://public.example/article");
+    const result = await retrievePublicPage("https://public.example.com/article");
     assert.equal(result.status, 502);
     assert.equal(requested.some(value => value.includes("metadata.google.internal")), false);
   } finally {
@@ -74,10 +74,10 @@ test("fails closed when robots.txt redirects instead of following an unverified 
     });
   };
   try {
-    const result = await retrievePublicPage("https://public.example/article");
+    const result = await retrievePublicPage("https://public.example.com/article");
     assert.equal(result.status, 403);
     assert.equal(requested.length, 1);
-    assert.equal(requested[0], "https://public.example/robots.txt");
+    assert.equal(requested[0], "https://public.example.com/robots.txt");
   } finally {
     globalThis.fetch = originalFetch;
   }
