@@ -1973,3 +1973,125 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
     display: none;
   }
 }
+
+
+
+/* Task 67 — clearer, scan-friendly web search result presentation */
+.results-list > .web-result-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px 20px;
+  border-radius: 16px;
+  text-align: left;
+}
+.web-result-card .result-url-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.web-result-card .result-rank {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.web-result-card .result-site-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+.web-result-card .result-url {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.web-result-card .result-title {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--accent);
+  font-size: clamp(17px, 2.4vw, 20px);
+  font-weight: 700;
+  line-height: 1.38;
+  letter-spacing: -.25px;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+.web-result-card .result-title:hover,
+.web-result-card .result-title:focus-visible {
+  text-decoration: underline;
+}
+.web-result-card .result-attribution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.web-result-card .result-description {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+  opacity: .88;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.web-result-card .read-in-gozie-button {
+  justify-self: start;
+  margin-top: 4px;
+  min-height: 40px;
+}
+.web-result-card .gozie-extracted-panel {
+  width: 100%;
+}
+@media (max-width: 600px) {
+  .results-list { gap: 10px; }
+  .results-list > .web-result-card {
+    gap: 8px;
+    padding: 15px 14px;
+    border-radius: 14px;
+  }
+  .web-result-card .result-title {
+    font-size: 17px;
+    line-height: 1.4;
+  }
+  .web-result-card .result-description {
+    font-size: 13px;
+    line-height: 1.6;
+    -webkit-line-clamp: 5;
+  }
+  .web-result-card .result-attribution {
+    font-size: 10px;
+  }
+}
+@media (max-width: 360px) {
+  .results-list > .web-result-card { padding: 13px 11px; }
+  .web-result-card .result-site-mark { flex-basis: 25px; width: 25px; height: 25px; }
+}
