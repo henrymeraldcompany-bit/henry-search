@@ -161,8 +161,10 @@ test("a failing daily image provider is isolated while other providers continue 
 
   const images = database.rows.filter(row => row[0] === "image");
   assert.equal(images.length, 12, "Wikimedia and Flickr should still save six images each");
-  assert.equal(requestedHosts.filter(value => value === "api.openverse.org").length, 5,
-    "Openverse should be disabled after two logical failures, with three bounded retries globally");
+  assert.equal(requestedHosts.filter(value => value === "api.openverse.org").length, 3,
+    "Openverse should be disabled after two logical failures, with one shared retry reserved after the media and web/news request budgets");
+  assert.equal(database.runs[0].stats.providers.Openverse.retries, 1,
+    "the single shared retry must be reported in provider metrics");
   assert.equal(database.runs.length, 1);
   assert.equal(database.runs[0].stats.providers.Openverse.failed, 2);
   assert.equal(database.runs[0].stats.providers["Wikimedia Commons"].rowsSaved, 6);
