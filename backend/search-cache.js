@@ -9,7 +9,7 @@ export function isCacheableSearchRoute(path) {
 export function buildSearchCacheKey(input) {
   const url = new URL(input instanceof URL ? input.href : String(input));
   url.hash = "";
-  const query = (url.searchParams.get("q") || "").trim().replace(/\\s+/g, " ").toLowerCase();
+  const query = (url.searchParams.get("q") || "").trim().replace(/\s+/g, " ").toLowerCase();
   url.searchParams.set("q", query);
   const entries = [...url.searchParams.entries()].sort(([ak, av], [bk, bv]) =>
     ak.localeCompare(bk) || av.localeCompare(bv)
