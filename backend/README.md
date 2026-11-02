@@ -76,3 +76,16 @@ Enter the secret interactively. Never commit it or include it in frontend code. 
 ### Index-status provider diagnostics and run metrics
 
 `GET /index/status` returns `counts`, `videoSafety`, `latestRun`, and `failureSummary`. The failure summary groups the latest run's bounded note by provider and stage (`request`, `database-save`, or `unknown`). The latest run also exposes a parsed `stats` object: rotating seeds processed, provider calls, request failures, database-save failures, metadata rows received/saved, duration, disabled providers, and per-provider attempt/success/failure/row counts. These metrics are written to `index_runs.stats_json` by the daily Worker run. The migration `20261101_index_run_metrics.sql` adds this backward-compatible JSON column; legacy runs without metrics return `stats: null` until the next scheduled refresh. This avoids additional D1 reads and does not store media files.
+
+
+### Daily webpage and news indexing
+
+The daily Media Worker also indexes a rotating webpage/news topic into the same D1 database, in a separate `search_index_items` table. It uses DuckDuckGo Instant Answer and Wikipedia for webpage metadata, then GDELT with Google News RSS and Bing News RSS fallbacks for news. This adds a hard maximum of five external requests and 40 stored webpage/news rows per scheduled run, and the overall retry allowance is recalculated to preserve Workers Free request headroom.
+
+Apply the new migration before deploying the updated Worker:
+
+```sh
+npx wrangler d1 execute gozie-search-media --remote --file=backend/migrations/20261102_search_index_items.sql --config backend/wrangler.toml
+```
+
+Use `GET /index/search?kind=web&q=...` or `GET /index/search?kind=news&q=...` to inspect indexed records. `GET /index/status` now includes `searchCounts`.
