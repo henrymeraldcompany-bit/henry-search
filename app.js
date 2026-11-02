@@ -1550,7 +1550,26 @@ function setCategory(category) {
 
 searchTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
-    setCategory(tab.dataset.category);
+    const nextCategory = tab.dataset.category;
+    const hasActiveSearch = Boolean(
+      queryInput?.value.trim() &&
+      resultsSection &&
+      !resultsSection.hidden
+    );
+
+    setCategory(nextCategory);
+
+    // Re-run the existing query immediately in the newly selected category.
+    // The user does not need to press Search again.
+    if (hasActiveSearch && form) {
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true })
+        );
+      }
+    }
   });
 });
 
