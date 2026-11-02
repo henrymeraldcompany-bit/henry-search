@@ -323,7 +323,7 @@ test("news route queries GDELT, Google News and Bing News together and merges du
   try {
     const response = await worker.fetch(new Request("https://search.example/news?q=solar%20energy"));
     const payload = await response.json();
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, JSON.stringify(payload));
     assert.deepEqual(requested.sort(), ["api.gdeltproject.org", "news.google.com", "www.bing.com"]);
     assert.equal(payload.attemptedProviders, 3);
     assert.equal(payload.results.length, 1);
@@ -354,7 +354,7 @@ test("news route keeps healthy provider results when another live provider fails
   try {
     const response = await worker.fetch(new Request("https://search.example/news?q=technology%20policy"));
     const payload = await response.json();
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, JSON.stringify(payload));
     assert.deepEqual(requested.sort(), ["api.gdeltproject.org", "news.google.com", "www.bing.com"]);
     assert.equal(payload.results.length, 1);
     assert.equal(payload.results[0].url, "https://news.example/technology-policy");
