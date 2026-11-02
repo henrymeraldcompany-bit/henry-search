@@ -62,7 +62,7 @@ function makeLink(url, text) {
 
   link.href = url;
   link.textContent = text;
-  link.target = "_blank";
+  link.target = getPreference("newTab", true) ? "_blank" : "_self";
   link.rel = "noopener noreferrer";
 
   return link;
@@ -92,7 +92,7 @@ async function fetchJson(url, timeoutMs = 12000) {
 let currentWebResults = [];
 let currentWebFilters = { domain: 'all', source: 'all', date: 'any' };
 let currentWebPage = 1;
-const WEB_RESULTS_PER_PAGE = 10;
+let WEB_RESULTS_PER_PAGE = 10;
 function applyWebResultFilters(items) {
  const now=Date.now();
  return items.filter(item=>{
@@ -1569,7 +1569,7 @@ if (form && queryInput && resultsList) {
       return;
     }
 
-    if (hero) hero.hidden = true;
+    saveSearchHistory(query, currentCategory);\n    if (hero) hero.hidden = true;
     if (resultsSection) resultsSection.hidden = false;
 
     if (resultsTitle) resultsTitle.textContent = query;
@@ -1841,82 +1841,166 @@ if (voiceButton) {
 }
 
 // ========================================
-// LIGHT AND DARK THEMES
+// DEVICE PREFERENCES, SIDEBAR AND VIEWS
 // ========================================
-
+function readPreferences() {
+  try { return JSON.parse(localStorage.getItem("gozie-preferences") || "{}"); }
+  catch { return {}; }
+}
+function getPreference(key, fallback) {
+  const value = readPreferences()[key];
+  return value === undefined ? fallback : value;
+}
+function savePreference(key, value) {
+  const prefs = readPreferences();
+  prefs[key] = value;
+  try { localStorage.setItem("gozie-preferences", JSON.stringify(prefs)); } catch {}
+}
+function readSearchHistory() {
+  try {
+    const value = JSON.parse(localStorage.getItem("gozie-search-history") || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch { return []; }
+}
+function saveSearchHistory(query, category) {
+  const history = readSearchHistory().filter(item => item.query.toLowerCase() !== query.toLowerCase());
+  history.unshift({ query, category, date: new Date().toISOString() });
+  try { localStorage.setItem("gozie-search-history", JSON.stringify(history.slice(0, 40))); } catch {}
+}
 function applyTheme(theme) {
   const selectedTheme = theme === "light" ? "light" : "dark";
-
   document.documentElement.dataset.theme = selectedTheme;
-
-  if (themeIcon) {
-    themeIcon.textContent =
-      selectedTheme === "dark" ? "☀" : "☾";
-  }
-
-  if (themeLabel) {
-    themeLabel.textContent =
-      selectedTheme === "dark" ? "Light mode" : "Dark mode";
-  }
-
-  if (themeToggle) {
-    themeToggle.setAttribute(
-      "aria-label",
-      selectedTheme === "dark"
-        ? "Switch to light mode"
-        : "Switch to dark mode"
-    );
-  }
+  if (themeIcon) themeIcon.textContent = selectedTheme === "dark" ? "☀" : "☾";
+  if (themeLabel) themeLabel.textContent = selectedTheme === "dark" ? "Light mode" : "Dark mode";
+  if (themeToggle) themeToggle.setAttribute("aria-label", selectedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode");
 }
-
 let savedTheme = "dark";
-
-try {
-  savedTheme = localStorage.getItem("gozie-theme") || "dark";
-} catch {
-  // Use the default theme if storage is unavailable.
-}
-
+try { savedTheme = localStorage.getItem("gozie-theme") || "dark"; } catch {}
 applyTheme(savedTheme);
-
-if (themeToggle) {
-  themeToggle.addEventListener("click", () => {
-    const nextTheme =
-      document.documentElement.dataset.theme === "dark"
-        ? "light"
-        : "dark";
-
-    applyTheme(nextTheme);
-
-    try {
-      localStorage.setItem("gozie-theme", nextTheme);
-    } catch {
-      // Theme switching still works without storage.
-    }
-  });
-}
-
-// ========================================
-// MENU BUTTON
-// ========================================
+themeToggle?.addEventListener("click", () => {
+  const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(nextTheme);
+  try { localStorage.setItem("gozie-theme", nextTheme); } catch {}
+});
 
 const menuToggle = document.querySelector("#menu-toggle");
+const sidebar = document.querySelector("#app-sidebar");
+const sidebarBackdrop = document.querySelector("#sidebar-backdrop");
+const page = document.querySelector(".page");
+const settingsView = document.querySelector("#settings-view");
+const historyView = document.querySelector("#history-view");
+const historyList = document.querySelector("#history-list");
+function openSidebar() {
+  sidebar?.classList.add("is-open");
+  sidebar?.setAttribute("aria-hidden", "false");
+  if (sidebarBackdrop) sidebarBackdrop.hidden = false;
+  menuToggle?.setAttribute("aria-expanded", "true");
+  document.body.classList.add("sidebar-visible");
+}
+function closeSidebar() {
+  sidebar?.classList.remove("is-open");
+  sidebar?.setAttribute("aria-hidden", "true");
+  if (sidebarBackdrop) sidebarBackdrop.hidden = true;
+  menuToggle?.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("sidebar-visible");
+}
+menuToggle?.addEventListener("click", openSidebar);
+document.querySelector("#sidebar-close")?.addEventListener("click", closeSidebar);
+sidebarBackdrop?.addEventListener("click", closeSidebar);
+document.addEventListener("keydown", event => { if (event.key === "Escape") closeSidebar(); });
 
-if (menuToggle) {
-  menuToggle.addEventListener("click", () => {
-    if (!queryInput) return;
+function showUtilityView(view) {
+  closeSidebar();
+  if (page) page.classList.toggle("utility-open", Boolean(view));
+  if (settingsView) settingsView.hidden = view !== "settings";
+  if (historyView) historyView.hidden = view !== "history";
+  if (!view) {
+    if (hero) hero.hidden = false;
+    if (resultsSection) resultsSection.hidden = true;
+    queryInput?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: getPreference("reduceMotion", false) ? "auto" : "smooth" });
+  } else {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+}
+document.querySelector("#sidebar-new-search")?.addEventListener("click", () => {
+  showUtilityView(null);
+  if (queryInput) queryInput.value = "";
+});
+document.querySelector("#sidebar-settings")?.addEventListener("click", () => {
+  loadSettings();
+  showUtilityView("settings");
+});
+document.querySelector("#sidebar-history")?.addEventListener("click", () => {
+  renderSearchHistory();
+  showUtilityView("history");
+});
+document.querySelectorAll("[data-return-home]").forEach(button => button.addEventListener("click", () => showUtilityView(null)));
 
-    queryInput.focus();
-
-    queryInput.scrollIntoView({
-      behavior: "smooth",
-      block: "center"
+function loadSettings() {
+  const prefs = readPreferences();
+  const newTab = document.querySelector("#setting-new-tab");
+  const reduced = document.querySelector("#setting-reduced-motion");
+  const category = document.querySelector("#setting-default-category");
+  const count = document.querySelector("#setting-results-count");
+  if (newTab) newTab.checked = prefs.newTab !== false;
+  if (reduced) reduced.checked = Boolean(prefs.reduceMotion);
+  if (category) category.value = prefs.defaultCategory || "all";
+  if (count) count.value = String(prefs.resultsPerPage || 10);
+}
+function announceSettings(message) {
+  const status = document.querySelector("#settings-status");
+  if (status) status.textContent = message;
+}
+document.querySelector("#setting-new-tab")?.addEventListener("change", event => { savePreference("newTab", event.target.checked); announceSettings("Link-opening preference saved."); });
+document.querySelector("#setting-reduced-motion")?.addEventListener("change", event => {
+  savePreference("reduceMotion", event.target.checked);
+  document.documentElement.classList.toggle("reduce-motion", event.target.checked);
+  announceSettings("Motion preference saved.");
+});
+document.querySelector("#setting-default-category")?.addEventListener("change", event => { savePreference("defaultCategory", event.target.value); announceSettings("Default search category saved."); });
+document.querySelector("#setting-results-count")?.addEventListener("change", event => {
+  WEB_RESULTS_PER_PAGE = Number(event.target.value) === 20 ? 20 : 10;
+  savePreference("resultsPerPage", WEB_RESULTS_PER_PAGE);
+  currentWebPage = 1;
+  if (currentWebResults.length) renderResults(currentWebResults);
+  announceSettings("Results display preference saved.");
+});
+document.querySelector("#clear-search-history")?.addEventListener("click", () => {
+  try { localStorage.removeItem("gozie-search-history"); } catch {}
+  renderSearchHistory();
+  announceSettings("Search history cleared from this device.");
+});
+function renderSearchHistory() {
+  if (!historyList) return;
+  historyList.replaceChildren();
+  const history = readSearchHistory();
+  if (!history.length) {
+    const empty = document.createElement("p");
+    empty.className = "settings-note";
+    empty.textContent = "No searches saved yet.";
+    historyList.appendChild(empty);
+    return;
+  }
+  history.forEach(item => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "history-item";
+    const name = document.createElement("strong");
+    name.textContent = item.query;
+    const meta = document.createElement("small");
+    meta.textContent = (item.category || "all").toUpperCase() + " · " + new Date(item.date).toLocaleString();
+    row.append(name, meta);
+    row.addEventListener("click", () => {
+      showUtilityView(null);
+      queryInput.value = item.query;
+      setCategory(item.category || "all");
+      form?.requestSubmit();
     });
+    historyList.appendChild(row);
   });
 }
-
-// ========================================
-// INITIAL SETUP
-// ========================================
-
-setCategory("all");
+loadSettings();
+WEB_RESULTS_PER_PAGE = Number(getPreference("resultsPerPage", 10)) === 20 ? 20 : 10;
+document.documentElement.classList.toggle("reduce-motion", Boolean(getPreference("reduceMotion", false)));
+setCategory(["all", "images", "news", "videos"].includes(getPreference("defaultCategory", "all")) ? getPreference("defaultCategory", "all") : "all");
