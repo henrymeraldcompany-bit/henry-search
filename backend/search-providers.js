@@ -138,11 +138,11 @@ export function rankArticles(articles, query, now = Date.now()) {
   const unique = new Map();
   for (const article of input) {
     if (!article || typeof article !== "object") continue;
-    const title = String(article.title || "").replace(/\\s+/g, " ").trim();
+    const title = String(article.title || "").replace(/\s+/g, " ").trim();
     const url = canonicalizeResultUrl(article.url);
     if (!url || title.length < 8 || title.length > 250) continue;
     if (/^(?:home|homepage|breaking news|latest news|news|article|untitled)$/i.test(title)) continue;
-    if (/^(.)\\1{7,}$/.test(title)) continue;
+    if (/^(.)\1{7,}$/.test(title)) continue;
     const key = url;
     const current = unique.get(key);
     const candidate = { ...article, title, canonicalUrl: url };
