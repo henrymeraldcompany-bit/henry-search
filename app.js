@@ -805,10 +805,16 @@ function renderImageGallery(items, query = "") {
     image.alt = item.title || "Image search result";
     image.loading = "lazy";
     image.decoding = "async";
+    image.referrerPolicy = "no-referrer";
+    image.title = item.title || "Open full-size image";
 
     image.addEventListener("error", () => {
-      image.alt = "Image preview unavailable";
-      image.classList.add("image-unavailable");
+      image.remove();
+      const fallback = document.createElement("span");
+      fallback.className = "image-preview-unavailable";
+      fallback.textContent = "Preview unavailable";
+      fallback.setAttribute("aria-label", "Image preview unavailable; activate to try the full-size image");
+      previewButton.appendChild(fallback);
     });
 
     previewButton.appendChild(image);
