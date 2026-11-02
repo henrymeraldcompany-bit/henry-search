@@ -7,6 +7,36 @@ test("rejects local, private literal, credential and non-standard-port targets",
   for (const value of ["http://localhost/page","http://127.0.0.1/","http://192.168.1.2/","http://service.local/","https://user:pass@example.com/","https://example.com:8443/"]) assert.equal(safePublicUrl(value), null);
   assert.equal(safePublicUrl("https://example.com/article").hostname, "example.com");
 });
+test("rejects trailing-dot local hosts, reserved DNS zones and common private-IP DNS aliases", () => {
+  for (const value of [
+    "http://localhost./",
+    "http://service.local./",
+    "http://metadata.google.internal./",
+    "http://printer.home.arpa/",
+    "http://host.example.test/",
+    "http://host.example.invalid/",
+    "http://169.254.169.254.nip.io/",
+    "http://192.168.1.10.sslip.io/",
+    "http://127.0.0.1.xip.io/",
+    "http://127.0.0.1.localtest.me/",
+    "http://0x7f000001/",
+    "http://2130706433/",
+    "http://[::1]/",
+    "http://[fd00::1]/",
+    "http://[fe80::1]/"
+  ]) assert.equal(safePublicUrl(value), null, value);
+  const normalized = safePublicUrl("https://example.com./article");
+  assert.equal(normalized.hostname, "example.com");
+  assert.equal(normalized.href, "https://example.com/article");
+});
+
+test("blocks the GOZIE Search API host to prevent recursive page extraction", () => {
+  assert.equal(
+    safePublicUrl("https://henry-search-api.henrymeraldcompany.workers.dev/extract"),
+    null
+  );
+});
+
 test("honors robots disallow and more-specific allow rules", () => {
   assert.equal(robotsPathAllowed("User-agent: *\nDisallow: /private\nAllow: /private/open", new URL("https://example.com/private/open")), true);
   assert.equal(robotsPathAllowed("User-agent: *\nDisallow: /private", new URL("https://example.com/private/secret")), false);
