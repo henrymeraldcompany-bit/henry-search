@@ -49,7 +49,7 @@ test("rejects cross-origin canonical URLs and unsafe image URLs", () => {
   assert.equal(result.canonical, "https://example.com/a"); assert.equal(result.image, "");
 });
 
-import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles, deduplicateNewsStories } from "./search-providers.js";
+import { canonicalizeResultUrl, runSearchProviders, rankSearchResults, scoreSearchResult, diversifySearchResults, filterSearchResults, rankArticles, deduplicateNewsStories, filterNewsByDate } from "./search-providers.js";
 
 test("canonicalizes equivalent URLs and removes common tracking parameters", () => {
   assert.equal(
@@ -193,6 +193,29 @@ test('date filtering excludes unknown and future dates but any-time preserves al
  assert.equal(filterSearchResults(items,{date:'month'},now).length,2);
  assert.equal(filterSearchResults(items,{date:'any'},now).length,5);
  assert.equal(filterSearchResults(items,{date:'invalid'},now).length,0);
+});
+
+
+test("news publication-date filters support presets and inclusive UTC date ranges", () => {
+ const now=Date.parse("2026-11-02T12:00:00.000Z");
+ const articles=[
+  {title:"Today",published:"2026-11-02T08:00:00.000Z"},
+  {title:"Yesterday",published:"2026-11-01T08:00:00.000Z"},
+  {title:"Last week",published:"2026-10-25T08:00:00.000Z"},
+  {title:"Undated",published:""},
+  {title:"Future",published:"2026-11-03T08:00:00.000Z"}
+ ];
+ assert.deepEqual(filterNewsByDate(articles,{date:"day"},now).results.map(x=>x.title),["Today"]);
+ assert.deepEqual(filterNewsByDate(articles,{date:"week"},now).results.map(x=>x.title),["Today","Yesterday"]);
+ assert.deepEqual(filterNewsByDate(articles,{date:"any",from:"2026-11-01",to:"2026-11-02"},now).results.map(x=>x.title),["Today","Yesterday"]);
+ assert.equal(filterNewsByDate(articles,{date:"any"},now).results.length,5);
+});
+
+test("news publication-date filters reject invalid dates and reversed ranges", () => {
+ assert.equal(filterNewsByDate([],{date:"decade"}).valid,false);
+ assert.equal(filterNewsByDate([],{from:"2026-02-30"}).valid,false);
+ assert.equal(filterNewsByDate([],{from:"2026-11-03",to:"2026-11-02"}).valid,false);
+ assert.equal(filterNewsByDate([],{from:"2026-11-02"}).valid,true);
 });
 
 
