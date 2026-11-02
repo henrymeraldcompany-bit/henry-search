@@ -10,7 +10,8 @@
 </head>
 
 <body>
-  <main class="page">
+  <a class="skip-link" href="#search-form">Skip to search</a>
+  <main class="page" id="main-content">
 
     <header class="topbar">
       <a class="brand-small" href="./" aria-label="GOZIE SEARCH home">
@@ -19,7 +20,7 @@
       </a>
 
       <div class="top-actions">
-        <button id="menu-toggle" class="icon-button" type="button" aria-label="Open sidebar" aria-expanded="false">☰</button>
+        <button id="menu-toggle" class="icon-button" type="button" aria-label="Open navigation menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
       </div>
     </header>
 
@@ -87,6 +88,7 @@
 
         <input
           id="query"
+          aria-describedby="search-hint"
           name="q"
           type="search"
           placeholder="What are you looking for?"
@@ -133,7 +135,8 @@
       id="results-section"
       class="results-section"
       hidden
-      aria-live="polite"
+      aria-live="off"
+      aria-labelledby="results-title"
     >
       <div class="results-heading">
         <div>
@@ -148,7 +151,7 @@
         </div>
       </div>
 
-      <p id="result-status" class="result-status"></p>
+      <p id="result-status" class="result-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div id="results-list" class="results-list"></div>
     </section>
 
@@ -181,7 +184,7 @@
   </main>
 
   <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
-  <aside id="app-sidebar" class="app-sidebar" aria-label="Main sidebar" aria-hidden="true">
+  <aside id="app-sidebar" class="app-sidebar" role="dialog" aria-modal="true" aria-label="Navigation menu" aria-hidden="true" tabindex="-1">
     <div class="sidebar-header"><a class="brand-small" href="./"><span class="brand-mark">G</span><span>GOZIE <span class="brand-accent">SEARCH</span></span></a><button id="sidebar-close" class="icon-button" type="button" aria-label="Close sidebar">×</button></div>
     <button id="sidebar-new-search" class="sidebar-item primary-sidebar-item" type="button"><span>＋</span> New search</button>
     <button id="sidebar-history" class="sidebar-item" type="button"><span>◷</span> Search history</button>
