@@ -414,6 +414,41 @@ test("news route integrates search and publisher feeds, merging duplicates and f
   }
 });
 
+test("news results expose bounded preview metadata and preserve original publisher links", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.hostname === "api.gdeltproject.org") {
+      return new Response(JSON.stringify({ articles: [{
+        title: "Solar energy research breakthrough reported by science journal",
+        url: "https://publisher.example/story?utm_source=gdelt",
+        domain: "publisher.example",
+        seendate: "20261102T080000Z"
+      }] }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.hostname === "news.google.com") {
+      return new Response("<rss><channel><item><title>Solar energy research breakthrough reported by science journal</title><link>https://publisher.example/story?utm_source=google</link><source>Publisher Google</source><pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate><description>A useful preview about solar energy research.</description></item></channel></rss>");
+    }
+    if (url.hostname === "www.bing.com" || ["feeds.bbci.co.uk","www.aljazeera.com","www.theguardian.com","feeds.npr.org"].includes(url.hostname)) {
+      return new Response("<rss><channel></channel></rss>");
+    }
+    throw new Error("Unexpected endpoint " + url.href);
+  };
+  try {
+    const response = await worker.fetch(new Request("https://search.example/news?q=solar%20energy"));
+    const payload = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(payload));
+    const article = payload.results[0];
+    assert.equal(article.originalUrl, article.url);
+    assert.equal(article.preview.url, article.url);
+    assert.equal(article.preview.publisher, "publisher.example");
+    assert.ok(article.preview.summary.length <= 1200);
+    assert.equal(article.preview.published, article.published);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("news route keeps healthy provider results when another live provider fails", async () => {
   const originalFetch = globalThis.fetch;
   const requested = [];
