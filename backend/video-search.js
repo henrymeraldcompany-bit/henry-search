@@ -80,7 +80,9 @@ export async function runVideoProviders(providers, query) {
     }
     successful.push(name);
     for (const raw of Array.isArray(outcome.value) ? outcome.value : []) {
-      if (!raw || typeof raw !== "object" || raw.nsfw === true || Number(raw.nsfw) > 0) continue;
+      // Admit only explicit safe classifications. Missing, null, string, or other
+      // ambiguous values must never be treated as safe by default.
+      if (!raw || typeof raw !== "object" || !(raw.nsfw === false || raw.nsfw === 0)) continue;
       const page = safeHttpUrl(raw.page_url || raw.url);
       if (!page) continue;
       const media = safeHttpUrl(raw.media_url || page);

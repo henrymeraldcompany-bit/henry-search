@@ -4,8 +4,8 @@ import { runVideoProviders, rankVideoResults, diversifyVideoResults, buildVideoF
 
 test("runs independent providers and combines their video results", async () => {
   const result = await runVideoProviders([
-    { name: "PeerTube", search: async q => [{source_id:"abc",page_url:"https://peer.example/w/abc",title:"Space exploration",description:"A short clip"}] },
-    { name: "YouTube", search: async q => [{source_id:"xyz",page_url:"https://youtube.com/watch?v=xyz",title:"Space exploration lecture"}] }
+    { name: "PeerTube", search: async q => [{source_id:"abc",page_url:"https://peer.example/w/abc",title:"Space exploration",description:"A short clip",nsfw:0}] },
+    { name: "YouTube", search: async q => [{source_id:"xyz",page_url:"https://youtube.com/watch?v=xyz",title:"Space exploration lecture",nsfw:0}] }
   ], "space exploration");
   assert.equal(result.results.length, 2);
   assert.deepEqual(result.providers, ["PeerTube", "YouTube"]);
@@ -16,7 +16,7 @@ test("runs independent providers and combines their video results", async () => 
 test("isolates failed providers while retaining successful results", async () => {
   const result = await runVideoProviders([
     {name:"PeerTube",search:async()=>{throw new Error("temporarily unavailable");}},
-    {name:"YouTube",search:async()=>[{page_url:"https://youtube.com/watch?v=1",title:"Science"}]}
+    {name:"YouTube",search:async()=>[{page_url:"https://youtube.com/watch?v=1",title:"Science",nsfw:0}]}
   ], "science");
   assert.equal(result.results.length, 1);
   assert.equal(result.failures[0].provider, "PeerTube");
@@ -26,8 +26,8 @@ test("isolates failed providers while retaining successful results", async () =>
 test("deduplicates repeated IDs from one provider and merges richer metadata", async () => {
   const result = await runVideoProviders([
     {name:"PeerTube",search:async()=>[
-      {source_id:"same",page_url:"https://peer.example/w/same",title:"Untitled video"},
-      {source_id:"same",page_url:"https://peer.example/w/same",title:"A better title",description:"More detail"}
+      {source_id:"same",page_url:"https://peer.example/w/same",title:"Untitled video",nsfw:0},
+      {source_id:"same",page_url:"https://peer.example/w/same",title:"A better title",description:"More detail",nsfw:0}
     ]}
   ], "test");
   assert.equal(result.results.length, 1);
@@ -40,7 +40,7 @@ test("rejects unsafe, malformed and explicitly unsafe video rows", async () => {
     {name:"Provider",search:async()=>[
       {page_url:"javascript:alert(1)",title:"bad"},
       {page_url:"https://example.com/unsafe",nsfw:true,title:"unsafe"},
-      {page_url:"https://example.com/good",title:"safe"}
+      {page_url:"https://example.com/good",title:"safe",nsfw:0}
     ]}
   ], "safe");
   assert.equal(result.results.length, 1);
@@ -56,7 +56,7 @@ test("returns a consistent public video schema with provider and source attribut
       thumbnail_url:"https://upload.wikimedia.org/earth.jpg",
       embed_url:"",title:"Earth from orbit",description:"A view of Earth",
       author:"NASA",license:"CC BY 4.0",published_at:"2025-01-02T00:00:00Z",
-      duration_seconds:12.5
+      duration_seconds:12.5,nsfw:0
     }]}
   ],"Earth from orbit");
   assert.deepEqual(Object.keys(result.results[0]).filter(key => [
@@ -77,7 +77,7 @@ test("returns a consistent public video schema with provider and source attribut
 
 test("normalizes missing optional metadata to stable empty or null values", async () => {
   const result=await runVideoProviders([{name:"Example",search:async()=>[
-    {page_url:"https://video.example/watch/1",source_id:"1",title:"A video"}
+    {page_url:"https://video.example/watch/1",source_id:"1",title:"A video",nsfw:0}
   ]}],"video");
   const row=result.results[0];
   assert.equal(row.thumbnail_url,"");
@@ -93,12 +93,12 @@ test("unifies the same canonical video URL returned by different providers", asy
   const result = await runVideoProviders([
     {name:"Provider A",search:async()=>[{
       source:"Provider A",source_id:"a-1",page_url:"https://www.example.com/watch?id=42&utm_source=feed#player",
-      title:"Untitled video",description:"",thumbnail_url:"",author:""
+      title:"Untitled video",description:"",thumbnail_url:"",author:"",nsfw:0
     }]},
     {name:"Provider B",search:async()=>[{
       source:"Provider B",source_id:"b-9",page_url:"https://example.com/watch?id=42",
       title:"A useful video title",description:"A fuller description",
-      thumbnail_url:"https://cdn.example.com/thumb.jpg",author:"Creator",license:"CC BY"
+      thumbnail_url:"https://cdn.example.com/thumb.jpg",author:"Creator",license:"CC BY",nsfw:0
     }]}
   ],"useful video");
   assert.equal(result.results.length,1);
@@ -111,12 +111,33 @@ test("unifies the same canonical video URL returned by different providers", asy
 
 test("keeps different meaningful video identifiers separate", async () => {
   const result=await runVideoProviders([{name:"YouTube",search:async()=>[
-    {source_id:"abc123",page_url:"https://youtube.com/watch?v=abc123",title:"First"},
-    {source_id:"xyz789",page_url:"https://youtube.com/watch?v=xyz789",title:"Second"}
+    {source_id:"abc123",page_url:"https://youtube.com/watch?v=abc123",title:"First",nsfw:0},
+    {source_id:"xyz789",page_url:"https://youtube.com/watch?v=xyz789",title:"Second",nsfw:0}
   ]}],"video");
   assert.equal(result.results.length,2);
 });
 
+
+
+test("requires an explicit safe classification and rejects missing or ambiguous flags", async () => {
+  const result = await runVideoProviders([
+    {name:"Safety metadata",search:async()=>[
+      {page_url:"https://video.example/missing",title:"Missing flag"},
+      {page_url:"https://video.example/null",title:"Null flag",nsfw:null},
+      {page_url:"https://video.example/string-false",title:"String false",nsfw:"false"},
+      {page_url:"https://video.example/string-zero",title:"String zero",nsfw:"0"},
+      {page_url:"https://video.example/unsafe",title:"Unsafe",nsfw:true},
+      {page_url:"https://video.example/flagged",title:"Flagged",nsfw:1},
+      {page_url:"https://video.example/boolean-safe",title:"Boolean safe",nsfw:false},
+      {page_url:"https://video.example/numeric-safe",title:"Numeric safe",nsfw:0}
+    ]}
+  ],"safety metadata");
+  assert.deepEqual(result.results.map(row=>row.page_url),[
+    "https://video.example/boolean-safe",
+    "https://video.example/numeric-safe"
+  ]);
+  assert.equal(result.results.every(row=>row.nsfw===0),true);
+});
 
 test("ranks exact video title phrases above loose description matches", () => {
   const rows = [
