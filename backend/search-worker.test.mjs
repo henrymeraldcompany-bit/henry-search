@@ -851,3 +851,18 @@ test("does not count CORS preflight requests against API rate limits", async () 
   assert.equal(response.status, 204);
   assert.equal(calls, 0);
 });
+
+
+test("applies the general rate limit to the API root status endpoint", async () => {
+  let calls = 0;
+  const env = {
+    API_RATE_LIMITER: { limit: async () => { calls++; return { success: true }; } },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: true }) }
+  };
+  const response = await worker.fetch(new Request("https://api.example/"), env);
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.status, "online");
+  assert.equal(calls, 1);
+  assert.equal(response.headers.get("X-GOZIE-RateLimit"), "active");
+});
