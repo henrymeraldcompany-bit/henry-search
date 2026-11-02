@@ -229,72 +229,101 @@ export async function discoverDailyWeb(query, options = {}) {
 export async function discoverDailyNews(query, options = {}) {
   const budget = options.budget;
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
-  const attempts = [];
-  const errors = [];
-  const record = function (name, rows, error) {
-    attempts.push({
-      name,
-      ok: !error,
-      rowsReceived: Array.isArray(rows) ? rows.length : 0,
-      error: error ? String(error.message || error) : ""
-    });
-  };
-  const ranked = function (rows) {
-    return rankArticles(rows, query).slice(0,
-      Math.min(MAX_RESULTS, Math.max(1, Number(options.maxResults) || MAX_RESULTS)));
-  };
-
-  try {
-    const endpoint = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
-    Object.entries({
-      query: String(query || "").trim(),
-      mode: "artlist",
-      format: "json",
-      maxrecords: String(MAX_RESULTS),
-      sort: "datedesc"
-    }).forEach(function (entry) { endpoint.searchParams.set(entry[0], entry[1]); });
-    const data = await requestJson(endpoint.toString(), budget, timeoutMs);
-    const rows = normalizeNewsItems(data.articles, "GDELT news index");
-    record("GDELT news index", rows);
-    const results = ranked(rows);
-    if (results.length) return { results, attempts, errors };
-  } catch (error) {
-    record("GDELT news index", [], error);
-    errors.push({ provider: "GDELT news index", error: String(error.message || error) });
-  }
-
-  const feeds = [
+  const providers = [
+    {
+      name: "GDELT news index",
+      search: async function (searchQuery) {
+        const endpoint = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
+        Object.entries({
+          query: String(searchQuery || "").trim(),
+          mode: "artlist",
+          format: "json",
+          maxrecords: String(MAX_RESULTS),
+          sort: "datedesc"
+        }).forEach(function (entry) { endpoint.searchParams.set(entry[0], entry[1]); });
+        const data = await requestJson(endpoint.toString(), budget, timeoutMs);
+        return normalizeNewsItems(data.articles, "GDELT news index");
+      }
+    },
     {
       name: "Google News RSS",
-      url: function () {
+      search: async function (searchQuery) {
         const endpoint = new URL("https://news.google.com/rss/search");
-        Object.entries({ q: query, hl: "en-NG", gl: "NG", ceid: "NG:en" })
+        Object.entries({ q: searchQuery, hl: "en-NG", gl: "NG", ceid: "NG:en" })
           .forEach(function (entry) { endpoint.searchParams.set(entry[0], entry[1]); });
-        return endpoint.toString();
+        return parseRss(await requestText(endpoint.toString(), budget, timeoutMs), "Google News RSS");
       }
     },
     {
       name: "Bing News RSS",
-      url: function () {
+      search: async function (searchQuery) {
         const endpoint = new URL("https://www.bing.com/news/search");
-        Object.entries({ q: query, format: "rss", setlang: "en-ng" })
+        Object.entries({ q: searchQuery, format: "rss", setlang: "en-ng" })
           .forEach(function (entry) { endpoint.searchParams.set(entry[0], entry[1]); });
-        return endpoint.toString();
+        return parseRss(await requestText(endpoint.toString(), budget, timeoutMs), "Bing News RSS");
       }
     }
   ];
 
-  for (const feed of feeds) {
-    try {
-      const xml = await requestText(feed.url(), budget, timeoutMs);
-      const rows = parseRss(xml, feed.name);
-      record(feed.name, rows);
-      const results = ranked(rows);
-      if (results.length) return { results, attempts, errors };
-    } catch (error) {
-      record(feed.name, [], error);
-      errors.push({ provider: feed.name, error: String(error.message || error) });
+  // Query every configured source independently. A provider outage must not
+  // suppress healthy providers, and successful sources are combined rather
+  // than using RSS only as a fallback when GDELT is empty.
+  const settled = await Promise.allSettled(providers.map(function (provider) {
+    return Promise.resolve().then(function () {
+      return provider.search(String(query || "").trim());
+    });
+  }));
+  const attempts = [];
+  const errors = [];
+  const merged = new Map();
+
+  for (let index = 0; index < settled.length; index += 1) {
+    const outcome = settled[index];
+    const providerName = providers[index].name;
+    if (outcome.status === "rejected") {
+      const message = String(outcome.reason && outcome.reason.message || outcome.reason || "Provider request failed");
+      attempts.push({ name: providerName, ok: false, rowsReceived: 0, error: message.slice(0, 240) });
+      errors.push({ provider: providerName, error: message.slice(0, 240) });
+      continue;
+    }
+
+    const rows = Array.isArray(outcome.value) ? outcome.value : [];
+    attempts.push({ name: providerName, ok: true, rowsReceived: rows.length, error: "" });
+    for (const row of rows) {
+      const canonicalUrl = canonicalizeResultUrl(row && row.url);
+      if (!canonicalUrl) continue;
+      const incoming = {
+        ...row,
+        canonicalUrl,
+        sources: [String(row.source || providerName)],
+        providers: [providerName]
+      };
+      const existing = merged.get(canonicalUrl);
+      if (!existing) {
+        merged.set(canonicalUrl, incoming);
+        continue;
+      }
+      existing.sources = [...new Set([...(existing.sources || []), ...incoming.sources])];
+      existing.providers = [...new Set([...(existing.providers || []), ...incoming.providers])];
+      if (String(incoming.snippet || "").length > String(existing.snippet || "").length) {
+        existing.snippet = incoming.snippet;
+      }
+      if (!existing.published || (incoming.published && Date.parse(incoming.published) > Date.parse(existing.published))) {
+        existing.published = incoming.published;
+      }
+      if (String(incoming.title || "").length > String(existing.title || "").length) {
+        existing.title = incoming.title;
+      }
     }
   }
-  return { results: [], attempts, errors };
+
+  const maxResults = Math.min(MAX_RESULTS, Math.max(1, Number(options.maxResults) || MAX_RESULTS));
+  const results = rankArticles(Array.from(merged.values()), query).slice(0, maxResults);
+  return {
+    results,
+    providers: attempts.filter(function (attempt) { return attempt.ok; }).map(function (attempt) { return attempt.name; }),
+    failures: errors,
+    attempted: providers.length,
+    attempts
+  };
 }
