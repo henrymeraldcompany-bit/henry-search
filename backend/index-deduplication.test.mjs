@@ -33,7 +33,7 @@ const canonicalMediaKey = row => {
   return u.href;
 };
 const canonicalIndexUrl = extract("function canonicalIndexUrl(value, kind) {", "function indexDedupKeys", { safeUrl, URL, Array, canonicalMediaKey });
-const indexDedupKeys = extract("function indexDedupKeys(row) {", "async function save(env, rows)", { canonicalIndexUrl });
+const indexDedupKeys = extract("function indexDedupKeys(row) {", "function videoRow(v)", { canonicalIndexUrl });
 
 test("video index identity merges YouTube watch, short and embed URL variants", () => {
   const keys = [
