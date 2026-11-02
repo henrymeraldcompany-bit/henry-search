@@ -184,6 +184,37 @@ function normalizeNumericDuration(value) {
   const seconds = Number(normalized);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
+function canonicalIndexUrl(value, kind) {
+  const href = safeUrl(value);
+  if (!href) return "";
+  if (kind === "video") return canonicalMediaKey({ page_url: href });
+  try {
+    const url = new URL(href);
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.hash = "";
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source)$/i.test(key)) url.searchParams.delete(key);
+    }
+    if ((url.protocol === "https:" && url.port === "443") ||
+        (url.protocol === "http:" && url.port === "80")) url.port = "";
+    url.searchParams.sort();
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.href;
+  } catch (_) { return ""; }
+}
+function indexDedupKeys(row) {
+  const kind = row && row.kind;
+  if (kind === "video") return {
+    canonical_page_url: canonicalIndexUrl(row.page_url || row.media_url, "video"),
+    canonical_media_url: ""
+  };
+  if (kind === "image") return {
+    canonical_page_url: "",
+    canonical_media_url: canonicalIndexUrl(row.media_url, "image")
+  };
+  return { canonical_page_url: "", canonical_media_url: "" };
+}
+
 function videoRow(v) {
   // Require an explicit safe classification from PeerTube; unknown or flagged
   // items are not returned or indexed.
@@ -308,37 +339,6 @@ async function youtube(q, key, count) {
   }
   return rows;
 }
-function canonicalIndexUrl(value, kind) {
-  const href = safeUrl(value);
-  if (!href) return "";
-  if (kind === "video") return canonicalMediaKey({ page_url: href });
-  try {
-    const url = new URL(href);
-    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    url.hash = "";
-    for (const key of Array.from(url.searchParams.keys())) {
-      if (/^(utm_.+|fbclid|gclid|dclid|ref|ref_src|source)$/i.test(key)) url.searchParams.delete(key);
-    }
-    if ((url.protocol === "https:" && url.port === "443") ||
-        (url.protocol === "http:" && url.port === "80")) url.port = "";
-    url.searchParams.sort();
-    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
-    return url.href;
-  } catch (_) { return ""; }
-}
-function indexDedupKeys(row) {
-  const kind = row && row.kind;
-  if (kind === "video") return {
-    canonical_page_url: canonicalIndexUrl(row.page_url || row.media_url, "video"),
-    canonical_media_url: ""
-  };
-  if (kind === "image") return {
-    canonical_page_url: "",
-    canonical_media_url: canonicalIndexUrl(row.media_url, "image")
-  };
-  return { canonical_page_url: "", canonical_media_url: "" };
-}
-
 async function save(env, rows) {
   if (!rows.length) return 0;
   const indexedAt = new Date().toISOString();

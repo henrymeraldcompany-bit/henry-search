@@ -20,7 +20,7 @@ function extractSave() {
 
 function makeSaveHarness() {
   const save = vm.runInNewContext("(" + extractSave() + ")", {
-    Date, JSON, Number, String
+    Date, JSON, Number, String, indexDedupKeys: row => ({ canonical_page_url: row.kind === "video" ? row.page_url : "", canonical_media_url: row.kind === "image" ? row.media_url : "" })
   });
   const statements = [];
   const batchSizes = [];

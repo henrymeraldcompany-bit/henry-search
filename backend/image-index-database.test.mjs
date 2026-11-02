@@ -42,7 +42,7 @@ test("image metadata migration adds backward-compatible columns and indexes", ()
 
 test("D1 save persists and updates image attribution, dimensions and format", async () => {
   const save = vm.runInNewContext("(" + extractSave() + ")", {
-    Date, JSON, Number
+    Date, JSON, Number, indexDedupKeys: row => ({ canonical_page_url: row.kind === "video" ? row.page_url : "", canonical_media_url: row.kind === "image" ? row.media_url : "" })
   });
   const statements = [];
   const env = { MEDIA_DB: {
