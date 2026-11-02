@@ -300,9 +300,15 @@ test("article ranking removes invalid URLs, placeholder headlines and duplicate 
 });
 
 
-test("news route queries GDELT, Google News and Bing News together and merges duplicate attribution", async () => {
+test("news route integrates search and publisher feeds, merging duplicates and filtering unrelated headlines", async () => {
   const originalFetch = globalThis.fetch;
   const requested = [];
+  const publisherHosts = {
+    "feeds.bbci.co.uk": "BBC Publisher",
+    "www.aljazeera.com": "Al Jazeera Publisher",
+    "www.theguardian.com": "Guardian Publisher",
+    "feeds.npr.org": "NPR Publisher"
+  };
   globalThis.fetch = async input => {
     const url = new URL(String(input));
     requested.push(url.hostname);
@@ -314,9 +320,20 @@ test("news route queries GDELT, Google News and Bing News together and merges du
         seendate: "20261102T080000Z"
       }] }), { headers: { "content-type": "application/json" } });
     }
-    const provider = url.hostname === "news.google.com" ? "Google" : "Bing";
-    const publisher = provider === "Google" ? "Publisher Google" : "Publisher Bing";
-    return new Response("<rss><channel><item><title>Solar energy research breakthrough reported by science journal</title><link>https://publisher.example/story?utm_source=" + provider.toLowerCase() + "</link><source>" + publisher + "</source><pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate><description>Additional reporting details about solar energy research.</description></item></channel></rss>", {
+    let provider, publisher;
+    if (url.hostname === "news.google.com") {
+      provider = "Google News RSS"; publisher = "Publisher Google";
+    } else if (url.hostname === "www.bing.com") {
+      provider = "Bing News RSS"; publisher = "Publisher Bing";
+    } else {
+      provider = Object.keys(publisherHosts).includes(url.hostname) ? publisherHosts[url.hostname] : "Publisher";
+      publisher = provider;
+    }
+    const story = "<item><title>Solar energy research breakthrough reported by science journal</title><link>https://publisher.example/story?utm_source=" + encodeURIComponent(provider.toLowerCase()) + "</link><source>" + publisher + "</source><pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate><description>Additional reporting details about solar energy research.</description></item>";
+    const unrelated = url.hostname === "feeds.bbci.co.uk"
+      ? "<item><title>Unrelated football transfer update from local league</title><link>https://sports.example/transfer</link><description>Sports transfer coverage.</description></item>"
+      : "";
+    return new Response("<rss><channel>" + story + unrelated + "</channel></rss>", {
       headers: { "content-type": "application/rss+xml" }
     });
   };
@@ -324,12 +341,19 @@ test("news route queries GDELT, Google News and Bing News together and merges du
     const response = await worker.fetch(new Request("https://search.example/news?q=solar%20energy"));
     const payload = await response.json();
     assert.equal(response.status, 200, JSON.stringify(payload));
-    assert.deepEqual(requested.sort(), ["api.gdeltproject.org", "news.google.com", "www.bing.com"]);
-    assert.equal(payload.attemptedProviders, 3);
+    assert.deepEqual(requested.sort(), [
+      "api.gdeltproject.org", "feeds.bbci.co.uk", "feeds.npr.org",
+      "news.google.com", "www.aljazeera.com", "www.bing.com", "www.theguardian.com"
+    ]);
+    assert.equal(payload.attemptedProviders, 7);
     assert.equal(payload.results.length, 1);
-    assert.deepEqual(payload.results[0].providers, ["GDELT", "Google News RSS", "Bing News RSS"]);
+    assert.deepEqual(payload.results[0].providers, [
+      "GDELT", "Google News RSS", "Bing News RSS",
+      "BBC Publisher", "Al Jazeera Publisher", "Guardian Publisher", "NPR Publisher"
+    ]);
     assert.ok(payload.results[0].sources.includes("Publisher Google"));
     assert.ok(payload.results[0].sources.includes("Publisher Bing"));
+    assert.ok(payload.results[0].sources.includes("BBC Publisher"));
     assert.equal(payload.results[0].published, "2026-11-02T09:00:00.000Z");
   } finally {
     globalThis.fetch = originalFetch;
@@ -339,6 +363,7 @@ test("news route queries GDELT, Google News and Bing News together and merges du
 test("news route keeps healthy provider results when another live provider fails", async () => {
   const originalFetch = globalThis.fetch;
   const requested = [];
+  const publisherHosts = ["feeds.bbci.co.uk", "www.aljazeera.com", "www.theguardian.com", "feeds.npr.org"];
   globalThis.fetch = async input => {
     const url = new URL(String(input));
     requested.push(url.hostname);
@@ -348,17 +373,25 @@ test("news route keeps healthy provider results when another live provider fails
         headers: { "content-type": "application/rss+xml" }
       });
     }
-    if (url.hostname === "www.bing.com") return new Response("<rss><channel></channel></rss>");
+    if (url.hostname === "www.bing.com" || publisherHosts.includes(url.hostname)) {
+      return new Response("<rss><channel></channel></rss>");
+    }
     throw new Error("Unexpected endpoint " + url.href);
   };
   try {
     const response = await worker.fetch(new Request("https://search.example/news?q=technology%20policy"));
     const payload = await response.json();
     assert.equal(response.status, 200, JSON.stringify(payload));
-    assert.deepEqual(requested.sort(), ["api.gdeltproject.org", "news.google.com", "www.bing.com"]);
+    assert.deepEqual(requested.sort(), [
+      "api.gdeltproject.org", "feeds.bbci.co.uk", "feeds.npr.org",
+      "news.google.com", "www.aljazeera.com", "www.bing.com", "www.theguardian.com"
+    ]);
     assert.equal(payload.results.length, 1);
     assert.equal(payload.results[0].url, "https://news.example/technology-policy");
-    assert.deepEqual(payload.providers, ["Google News RSS", "Bing News RSS"]);
+    assert.deepEqual(payload.providers, [
+      "Google News RSS", "Bing News RSS", "BBC News World",
+      "Al Jazeera English", "The Guardian World", "NPR News"
+    ]);
     assert.equal(payload.failedProviders.length, 1);
     assert.equal(payload.failedProviders[0].provider, "GDELT");
     assert.equal(requested.some(value => value.includes("index/search")), false);
@@ -370,16 +403,14 @@ test("news route keeps healthy provider results when another live provider fails
 test("news route falls back to the daily indexed news when live providers are unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const requested = [];
+  const publisherHosts = ["feeds.bbci.co.uk", "www.aljazeera.com", "www.theguardian.com", "feeds.npr.org"];
   globalThis.fetch = async input => {
     const url = new URL(String(input));
     requested.push(url.href);
-    if (url.hostname === "api.gdeltproject.org") {
+    if (url.hostname === "api.gdeltproject.org" || url.hostname === "news.google.com") {
       return new Response("temporarily unavailable", { status: 503 });
     }
-    if (url.hostname === "news.google.com") {
-      return new Response("temporarily unavailable", { status: 503 });
-    }
-    if (url.hostname === "www.bing.com") {
+    if (url.hostname === "www.bing.com" || publisherHosts.includes(url.hostname)) {
       return new Response("<rss><channel></channel></rss>", {
         headers: { "content-type": "application/rss+xml" }
       });
@@ -407,7 +438,7 @@ test("news route falls back to the daily indexed news when live providers are un
       new Request("https://search.example/news?q=technology")
     );
     const payload = await response.json();
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, JSON.stringify(payload));
     assert.equal(payload.source, "GOZIE daily news index");
     assert.equal(payload.fallback, "daily-index");
     assert.equal(payload.results.length, 1);
