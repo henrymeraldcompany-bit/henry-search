@@ -300,6 +300,73 @@ test("article ranking removes invalid URLs, placeholder headlines and duplicate 
 });
 
 
+test("news route queries GDELT, Google News and Bing News together and merges duplicate attribution", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    requested.push(url.hostname);
+    if (url.hostname === "api.gdeltproject.org") {
+      return new Response(JSON.stringify({ articles: [{
+        title: "Solar energy research breakthrough reported by science journal",
+        url: "https://publisher.example/story?utm_source=gdelt",
+        domain: "publisher.example",
+        seendate: "20261102T080000Z"
+      }] }), { headers: { "content-type": "application/json" } });
+    }
+    const provider = url.hostname === "news.google.com" ? "Google" : "Bing";
+    const publisher = provider === "Google" ? "Publisher Google" : "Publisher Bing";
+    return new Response("<rss><channel><item><title>Solar energy research breakthrough reported by science journal</title><link>https://publisher.example/story?utm_source=" + provider.toLowerCase() + "</link><source>" + publisher + "</source><pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate><description>Additional reporting details about solar energy research.</description></item></channel></rss>", {
+      headers: { "content-type": "application/rss+xml" }
+    });
+  };
+  try {
+    const response = await worker.fetch(new Request("https://search.example/news?q=solar%20energy"));
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(requested.sort(), ["api.gdeltproject.org", "news.google.com", "www.bing.com"]);
+    assert.equal(payload.attemptedProviders, 3);
+    assert.equal(payload.results.length, 1);
+    assert.deepEqual(payload.results[0].providers, ["GDELT", "Google News RSS", "Bing News RSS"]);
+    assert.ok(payload.results[0].sources.includes("Publisher Google"));
+    assert.ok(payload.results[0].sources.includes("Publisher Bing"));
+    assert.equal(payload.results[0].published, "2026-11-02T09:00:00.000Z");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("news route keeps healthy provider results when another live provider fails", async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    requested.push(url.hostname);
+    if (url.hostname === "api.gdeltproject.org") return new Response("temporarily unavailable", { status: 503 });
+    if (url.hostname === "news.google.com") {
+      return new Response("<rss><channel><item><title>Technology policy report explains major research changes</title><link>https://news.example/technology-policy</link><source>Example News</source><pubDate>Mon, 02 Nov 2026 08:00:00 GMT</pubDate><description>A detailed report about technology policy and research.</description></item></channel></rss>", {
+        headers: { "content-type": "application/rss+xml" }
+      });
+    }
+    if (url.hostname === "www.bing.com") return new Response("<rss><channel></channel></rss>");
+    throw new Error("Unexpected endpoint " + url.href);
+  };
+  try {
+    const response = await worker.fetch(new Request("https://search.example/news?q=technology%20policy"));
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(requested.sort(), ["api.gdeltproject.org", "news.google.com", "www.bing.com"]);
+    assert.equal(payload.results.length, 1);
+    assert.equal(payload.results[0].url, "https://news.example/technology-policy");
+    assert.deepEqual(payload.providers, ["Google News RSS", "Bing News RSS"]);
+    assert.equal(payload.failedProviders.length, 1);
+    assert.equal(payload.failedProviders[0].provider, "GDELT");
+    assert.equal(requested.some(value => value.includes("index/search")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("news route falls back to the daily indexed news when live providers are unavailable", async () => {
   const originalFetch = globalThis.fetch;
   const requested = [];
