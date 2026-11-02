@@ -71,6 +71,18 @@ The suites cover duration parsing, PeerTube and YouTube safe-search settings, re
 
 ## Live news provider integration — 2 November 2026
 
-The main `henry-search-api` Worker now queries GDELT, Google News RSS and Bing News RSS concurrently for each `/news?q=...` request. Results are normalized, canonicalized and deduplicated across providers while preserving publisher and provider attribution. Query relevance ranking is applied to the combined live result set. Individual provider timeouts, HTTP errors and empty feeds are isolated; any healthy provider can still supply the response. If no live provider yields a usable article, the route makes one bounded request to the Media Worker's daily news index. The response includes successful providers, attempted provider count and bounded per-provider failures when live results are returned.
+The main `henry-search-api` Worker queries seven independent live news sources concurrently for each `/news?q=...` request:
 
-Regression coverage includes all-provider fan-out, duplicate attribution merging, date normalization, and partial-provider failure recovery. GitHub Actions backend regression run `41420517740` passed 194/194 tests. Cloudflare deployment on 2 November 2026: deployment `f9e07053-d224-4ead-9e90-a16e58fc328d`, version `34c11454-2249-4dac-afaa-48186ecadfd4` at 100% traffic. Existing Worker compatibility date (`2026-10-19`) and empty binding configuration were preserved. Live public HTTP smoke verification was not available from the deployment control plane and remains outstanding.
+- GDELT news index
+- Google News RSS search
+- Bing News RSS search
+- BBC News World RSS
+- Al Jazeera English RSS
+- The Guardian World RSS
+- NPR News RSS
+
+The four publisher feeds are broad feeds rather than query APIs, so their results pass through GOZIE's query-relevance ranker and unrelated headlines are excluded. All results are normalized, canonicalized and deduplicated while preserving publisher and provider attribution. Individual provider timeouts, HTTP errors and empty feeds are isolated; healthy sources can still contribute. If no live provider yields a relevant article, the route makes one bounded request to the Media Worker's daily news index. The response includes successful providers, attempted provider count and bounded per-provider failures.
+
+Regression coverage includes seven-provider fan-out, duplicate attribution merging, date normalization, irrelevant publisher-feed filtering, and partial-provider failure recovery. GitHub Actions backend regression run `41420930653` passed 194/194 tests; media regression run `41420930638` passed. Live smoke workflow `41420849750`, attempt 2, passed the original web/news API and Media Worker health, index, image and video route checks. The news API returned one relevant result from the available publisher feeds for the smoke query; the daily indexed news lookup contract also passed, with zero indexed matches for that particular query.
+
+Cloudflare deployment on 2 November 2026: deployment `45f2c92e-9d95-44dd-8664-0c99dfeb560d`, version `b6595717-7052-4c25-bfe9-602a5c4a248c` at 100% traffic. Existing Worker compatibility date (`2026-10-19`) and empty binding configuration were preserved.
