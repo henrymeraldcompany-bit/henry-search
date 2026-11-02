@@ -109,7 +109,10 @@ const budgetApi = vm.runInNewContext(
 );
 test("indexing request budget stays below the Workers Free 50-subrequest ceiling with reserve", () => {
   assert.equal(budgetApi.calculateIndexRetryBudget(50, 3, 6, 3, 2), 3);
-  assert.equal(6 * (3 + 3) + 2 + 3 * 3, 47);
+  assert.equal(budgetApi.calculateIndexRetryBudget(50, 3, 6, 3, 2, 5), 1);
+  assert.equal(6 * (3 + 3) + 2 + 5 + 1 * 3, 46);
+  assert.match(source, /MAX_DAILY_WEB_NEWS_REQUESTS = 5/);
+  assert.match(source, /INDEX_MAX_SEARCH_ROWS_PER_RUN = 40/);
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50/);
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3/);
 });
