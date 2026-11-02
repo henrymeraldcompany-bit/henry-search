@@ -1678,3 +1678,12 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
 .tts-control:disabled{opacity:.42;cursor:not-allowed}
 .tts-control:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:560px){.results-heading{align-items:flex-start;gap:10px}.results-heading-actions{max-width:155px}.tts-control{font-size:11px;padding:6px 8px}}
+
+/* Task 64: keyboard and screen-reader accessibility */
+.skip-link{position:fixed;z-index:2000;top:10px;left:10px;padding:12px 16px;border-radius:10px;background:var(--surface);color:var(--text);border:2px solid var(--accent);transform:translateY(-160%);transition:transform .15s ease;font-weight:700}
+.skip-link:focus{transform:translateY(0);outline:3px solid var(--accent);outline-offset:3px}
+.app-sidebar:focus{outline:none}
+.app-sidebar button:focus-visible,.app-sidebar a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.search-tabs button:focus-visible,.setting-row select:focus-visible,.setting-row input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.result-status:empty{display:none}
+@media(prefers-reduced-motion:reduce){.skip-link,.app-sidebar{transition:none!important}}
