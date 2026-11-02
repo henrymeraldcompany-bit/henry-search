@@ -15,6 +15,13 @@
   --gold: #e7b84b;
   --red: #f04452;
   --silver: #c4d0dc;
+  --viewer-bg: rgba(5, 7, 12, 0.97);
+  --viewer-toolbar: #111522;
+  --viewer-border: #34394a;
+  --viewer-control: #252b3b;
+  --viewer-control-hover: #394258;
+  --backdrop: rgba(2, 8, 14, 0.68);
+  --danger: #e47b7b;
 }
 
 
@@ -34,6 +41,13 @@
   --gold: #a87508;
   --red: #cf3040;
   --silver: #607487;
+  --viewer-bg: rgba(17, 30, 44, 0.97);
+  --viewer-toolbar: #ffffff;
+  --viewer-border: rgba(35, 70, 100, 0.18);
+  --viewer-control: #eaf2f8;
+  --viewer-control-hover: #dceaf4;
+  --backdrop: rgba(20, 35, 51, 0.48);
+  --danger: #b42332;
 }
 
 * {
@@ -1089,7 +1103,7 @@ input:focus-visible {
   z-index: 99999;
   display: flex;
   flex-direction: column;
-  background: rgba(5, 7, 12, 0.97);
+  background: var(--viewer-bg);
   color: #ffffff;
 }
 
@@ -1099,8 +1113,8 @@ input:focus-visible {
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  background: #111522;
-  border-bottom: 1px solid #34394a;
+  background: var(--viewer-toolbar);
+  border-bottom: 1px solid var(--viewer-border);
 }
 
 .image-viewer-heading {
@@ -1121,16 +1135,16 @@ input:focus-visible {
   min-width: 34px;
   min-height: 34px;
   padding: 6px 9px;
-  border: 1px solid #51586c;
+  border: 1px solid var(--viewer-border);
   border-radius: 8px;
-  background: #252b3b;
-  color: #ffffff;
+  background: var(--viewer-control);
+  color: var(--text);
   font-size: 16px;
   cursor: pointer;
 }
 
 .image-viewer-controls button:hover {
-  background: #394258;
+  background: var(--viewer-control-hover);
 }
 
 .image-zoom-label {
@@ -1566,7 +1580,7 @@ input:focus-visible {
 /* Functional web and news result filters */
 .web-filter-bar{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:0 0 16px;padding:12px;border:1px solid var(--border,#345);border-radius:12px;background:var(--surface,#101a24)}
 .web-filter{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1 1 130px;color:var(--text,#eaf0f6);font-size:12px}
-.web-filter select{width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--border,#345);border-radius:8px;background:var(--background,#0b1118);color:var(--text,#eaf0f6);font:inherit}
+.web-filter select{width:100%;min-height:38px;padding:7px 9px;border:1px solid var(--border,#345);border-radius:8px;background:var(--input-bg);color:var(--text,#eaf0f6);font:inherit}
 .web-filter-count{margin-left:auto;padding:8px 2px;color:var(--muted,#9aabba);font-size:12px}
 @media(max-width:480px){.web-filter-bar{gap:7px;padding:9px}.web-filter{min-width:calc(50% - 7px);flex-basis:calc(50% - 7px)}.web-filter-count{width:100%;margin-left:0}}
 
@@ -1623,7 +1637,7 @@ input:focus-visible {
 }
 
 /* Functional slide-out navigation and browser settings */
-.sidebar-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(2,8,14,.68);backdrop-filter:blur(3px)}
+.sidebar-backdrop{position:fixed;inset:0;z-index:1000;background:var(--backdrop);backdrop-filter:blur(3px)}
 .sidebar-backdrop[hidden]{display:none}
 .app-sidebar{position:fixed;z-index:1001;inset:0 auto 0 0;width:min(340px,88vw);padding:22px 18px;display:flex;flex-direction:column;gap:10px;background:var(--surface);border-right:1px solid var(--border);box-shadow:20px 0 70px rgba(0,0,0,.3);transform:translateX(-105%);transition:transform .25s ease}
 .app-sidebar.is-open{transform:translateX(0)}
@@ -1653,7 +1667,7 @@ input:focus-visible {
 .setting-row small{color:var(--muted);font-size:12px;line-height:1.5}
 .setting-row input[type=checkbox]{width:21px;height:21px;accent-color:var(--accent);flex:0 0 auto}
 .setting-row select{max-width:145px;min-height:38px;padding:7px;border:1px solid var(--border);border-radius:9px;background:var(--input-bg);color:var(--text)}
-.danger-action{border-color:rgba(220,80,80,.4);color:#e47b7b}
+.danger-action{border-color:rgba(220,80,80,.4);color:var(--danger)}
 .settings-status{min-height:22px;color:var(--accent);font-size:13px}
 .history-list{display:grid;gap:9px}
 .history-item{display:grid;gap:6px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer}
@@ -2363,5 +2377,95 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
     animation: none;
     border-top-color: var(--accent);
     opacity: 0.8;
+  }
+}
+
+
+/* Task 70 — complete, balanced dark and light theme coverage */
+:root {
+  accent-color: var(--accent-strong);
+  scrollbar-color: var(--surface-soft) var(--bg);
+}
+html {
+  color-scheme: dark;
+  scrollbar-gutter: stable;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+input, select, textarea {
+  color-scheme: inherit;
+}
+select,
+.web-filter select,
+.image-filter select,
+.video-filter select,
+.voice-language-label select,
+.setting-row select {
+  border-color: var(--border);
+  background-color: var(--input-bg);
+  color: var(--text);
+}
+select option {
+  background: var(--surface);
+  color: var(--text);
+}
+.search-form input {
+  color-scheme: inherit;
+}
+.image-viewer {
+  background: var(--viewer-bg);
+  color: var(--text);
+}
+.image-viewer-toolbar {
+  background: var(--viewer-toolbar);
+  border-color: var(--viewer-border);
+  color: var(--text);
+}
+.image-viewer-controls button {
+  border-color: var(--viewer-border);
+  background: var(--viewer-control);
+  color: var(--text);
+}
+.image-viewer-controls button:hover {
+  background: var(--viewer-control-hover);
+}
+.sidebar-backdrop {
+  background: var(--backdrop);
+}
+.danger-action {
+  color: var(--danger);
+}
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-sidebar,
+  .image-viewer,
+  .image-viewer-toolbar,
+  .image-viewer-controls button,
+  .settings-group,
+  .history-item,
+  .result-card,
+  .message-card {
+    transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+  }
+}
+@media (forced-colors: active) {
+  .brand-mark,
+  .hero h1 span {
+    forced-color-adjust: none;
+  }
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 2px solid Highlight;
   }
 }

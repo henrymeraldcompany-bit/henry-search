@@ -2139,17 +2139,33 @@ function saveSearchHistory(query, category) {
 function applyTheme(theme) {
   const selectedTheme = theme === "light" ? "light" : "dark";
   document.documentElement.dataset.theme = selectedTheme;
+  document.documentElement.style.colorScheme = selectedTheme;
   if (themeIcon) themeIcon.textContent = selectedTheme === "dark" ? "☀" : "☾";
   if (themeLabel) themeLabel.textContent = selectedTheme === "dark" ? "Light mode" : "Dark mode";
-  if (themeToggle) themeToggle.setAttribute("aria-label", selectedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+  if (themeToggle) {
+    const actionLabel = selectedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    themeToggle.setAttribute("aria-label", actionLabel);
+    themeToggle.setAttribute("title", actionLabel);
+  }
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.setAttribute("content", selectedTheme === "dark" ? "#080d13" : "#f3f7fb");
 }
-let savedTheme = "dark";
-try { savedTheme = localStorage.getItem("gozie-theme") || "dark"; } catch {}
-applyTheme(savedTheme);
+let savedTheme = null;
+try { savedTheme = localStorage.getItem("gozie-theme"); } catch {}
+const systemTheme = window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+applyTheme(savedTheme === "light" || savedTheme === "dark" ? savedTheme : systemTheme);
 themeToggle?.addEventListener("click", () => {
   const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   applyTheme(nextTheme);
   try { localStorage.setItem("gozie-theme", nextTheme); } catch {}
+});
+const systemThemeQuery = window.matchMedia?.("(prefers-color-scheme: light)");
+systemThemeQuery?.addEventListener?.("change", event => {
+  let explicitTheme = null;
+  try { explicitTheme = localStorage.getItem("gozie-theme"); } catch {}
+  if (explicitTheme !== "light" && explicitTheme !== "dark") {
+    applyTheme(event.matches ? "light" : "dark");
+  }
 });
 
 const menuToggle = document.querySelector("#menu-toggle");
