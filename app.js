@@ -180,6 +180,47 @@ function showMessage(message) {
   resultsList.appendChild(card);
 }
 
+let activeSearchRequest = 0;
+
+function showSearchLoading(message, requestId) {
+  if (!resultsList) return;
+  resultsList.replaceChildren();
+
+  const card = document.createElement("div");
+  card.className = "message-card search-loading-card";
+  card.setAttribute("role", "status");
+  card.setAttribute("aria-live", "polite");
+  card.setAttribute("aria-atomic", "true");
+
+  const spinner = document.createElement("span");
+  spinner.className = "search-loading-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+
+  const label = document.createElement("span");
+  label.className = "search-loading-label";
+  label.textContent = message;
+
+  card.append(spinner, label);
+  resultsList.appendChild(card);
+  resultsList.setAttribute("aria-busy", "true");
+  if (resultStatus) resultStatus.textContent = message;
+  if (form) form.setAttribute("aria-busy", "true");
+}
+
+function finishSearchRequest(requestId) {
+  if (requestId !== activeSearchRequest) return;
+  resultsList?.setAttribute("aria-busy", "false");
+  form?.setAttribute("aria-busy", "false");
+  const submitButton = form?.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = false;
+    submitButton.classList.remove("is-searching");
+    submitButton.setAttribute("aria-label", "Search");
+    const label = submitButton.querySelector(".search-button-text");
+    if (label) label.textContent = "Search";
+  }
+}
+
 function safeHttpUrl(value) {
   try {
     const url = new URL(value);
@@ -1741,22 +1782,33 @@ if (form && queryInput && resultsList) {
       return;
     }
 
+    const requestId = ++activeSearchRequest;
     saveSearchHistory(query, currentCategory);
     if (hero) hero.hidden = true;
     if (resultsSection) resultsSection.hidden = false;
 
     if (resultsTitle) resultsTitle.textContent = query;
 
-    if (resultStatus) {
-      resultStatus.textContent = "Preparing your search…";
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.classList.add("is-searching");
+      submitButton.setAttribute("aria-label", "Searching");
+      const label = submitButton.querySelector(".search-button-text");
+      if (label) label.textContent = "Searching…";
     }
 
-    showMessage("GOZIE SEARCH is preparing your results…");
+    const loadingText = currentCategory === "images" ? "Finding matching images…"
+      : currentCategory === "videos" ? "Finding matching videos…"
+      : currentCategory === "news" ? "Gathering the latest news…"
+      : "Searching the web…";
+    showSearchLoading(loadingText, requestId);
 
     // IMAGE SEARCH
     if (currentCategory === "images") {
       try {
         const data = await fetchImageResults(query);
+        if (requestId !== activeSearchRequest) return;
         const items = Array.isArray(data.results) ? data.results : [];
 
         if (resultStatus) {
@@ -1767,6 +1819,7 @@ if (form && queryInput && resultsList) {
 
         renderImageGallery(items, query);
       } catch (error) {
+        if (requestId !== activeSearchRequest) return;
         if (resultStatus) {
           resultStatus.textContent = "Image search unavailable";
         }
@@ -1775,6 +1828,8 @@ if (form && queryInput && resultsList) {
           `${error.message || "Could not load images."} ` +
           "Check your connection and try again."
         );
+      } finally {
+        finishSearchRequest(requestId);
       }
 
       return;
@@ -1786,6 +1841,7 @@ if (form && queryInput && resultsList) {
         const endpoint = new URL("/news", SEARCH_API);
         endpoint.searchParams.set("q", query);
         const data = await fetchJson(endpoint.toString());
+        if (requestId !== activeSearchRequest) return;
         const items = Array.isArray(data.results) ? data.results : [];
 
         if (resultStatus) {
@@ -1795,10 +1851,13 @@ if (form && queryInput && resultsList) {
 
         renderNewsResults(items);
       } catch (error) {
+        if (requestId !== activeSearchRequest) return;
         if (resultStatus) resultStatus.textContent = "News search unavailable";
         showMessage(
           `${error.message || "Could not load news."} Check your connection and try again.`
         );
+      } finally {
+        finishSearchRequest(requestId);
       }
       return;
     }
@@ -1807,17 +1866,21 @@ if (form && queryInput && resultsList) {
     if (currentCategory === "videos") {
       try {
         const data = await fetchVideoResults(query);
+        if (requestId !== activeSearchRequest) return;
         if (resultStatus) {
           resultStatus.textContent =
             `${data.items.length} video${data.items.length === 1 ? "" : "s"} found via ${data.source}.`;
         }
         renderVideoResults(data.items, query);
       } catch (error) {
+        if (requestId !== activeSearchRequest) return;
         if (resultStatus) resultStatus.textContent = "Video search unavailable";
         showVideoSearchError(
           query,
           `${error?.message || "Could not load videos."} Check your connection and try again.`
         );
+      } finally {
+        finishSearchRequest(requestId);
       }
       return;
     }
@@ -1828,6 +1891,7 @@ if (form && queryInput && resultsList) {
       endpoint.searchParams.set("q", query);
 
       const data = await fetchJson(endpoint.toString());
+      if (requestId !== activeSearchRequest) return;
 
       const items = Array.isArray(data.results)
         ? data.results
@@ -1843,6 +1907,7 @@ if (form && queryInput && resultsList) {
 
       renderResults(items);
     } catch (error) {
+      if (requestId !== activeSearchRequest) return;
       if (resultStatus) {
         resultStatus.textContent = "Search unavailable";
       }
@@ -1851,6 +1916,8 @@ if (form && queryInput && resultsList) {
         `${error.message || "Could not reach GOZIE SEARCH."} ` +
         "Please check your connection and try again."
       );
+    } finally {
+      finishSearchRequest(requestId);
     }
   });
 } else {
