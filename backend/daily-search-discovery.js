@@ -214,7 +214,7 @@ export async function discoverDailyWeb(query, options = {}) {
       rowsReceived: outcome.results.filter(function (item) {
         return (item.providers || [item.provider]).includes(provider.name);
       }).length,
-      error: failure && failure.error ? String(failure.error) : ""
+      error: failure && failure.message ? String(failure.message) : ""
     };
   });
   return {
