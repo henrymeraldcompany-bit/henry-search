@@ -156,6 +156,7 @@ const voiceButton = document.querySelector("#voice-search");
 const searchHint = document.querySelector("#search-hint");
 const searchTabs = document.querySelectorAll(".search-tab");
 
+let preferenceCache = null;
 const SEARCH_API =
   "https://henry-search-api.henrymeraldcompany.workers.dev";
 
@@ -2128,7 +2129,6 @@ if (voiceButton) {
 // ========================================
 // Cache the small preference object in memory. Result rendering can create many
 // links; reparsing localStorage for every link adds avoidable work on mobile CPUs.
-let preferenceCache = null;
 function readPreferences() {
   if (preferenceCache) return preferenceCache;
   try {
