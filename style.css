@@ -1837,3 +1837,139 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
     transform: none;
   }
 }
+
+
+/* Task 66: clearer, faster mobile search homepage */
+@media (max-width: 600px) {
+  .hero {
+    padding: 34px 4px 25px;
+  }
+
+  .brand-mark-large {
+    width: 49px;
+    height: 49px;
+    margin-bottom: 15px;
+    border-radius: 16px;
+    font-size: 32px;
+  }
+
+  .hero .eyebrow {
+    margin-bottom: 11px;
+    font-size: 10px;
+    letter-spacing: 1.6px;
+  }
+
+  .hero h1 {
+    font-size: clamp(39px, 10vw, 54px);
+    line-height: 1.02;
+  }
+
+  .intro {
+    max-width: 330px;
+    margin-top: 13px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .search-area {
+    margin-top: 2px;
+  }
+
+  .search-tabs {
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 2px 1px 7px;
+  }
+
+  .search-tab {
+    min-height: 44px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .search-form {
+    min-height: 66px;
+    gap: 8px;
+    padding: 8px 8px 8px 13px;
+    border-radius: 19px;
+  }
+
+  .search-form input {
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .search-form input::placeholder {
+    font-size: 14px;
+  }
+
+  .search-form .voice-button {
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .search-form button[type="submit"] {
+    flex: 0 0 auto;
+    min-height: 46px;
+    padding-inline: 13px;
+    border-radius: 13px;
+    font-size: 13px;
+  }
+
+  .voice-controls {
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 9px 12px;
+    margin: 12px 2px 24px;
+  }
+
+  .voice-controls .hint {
+    flex: 1 1 100%;
+    text-align: left;
+    font-size: 12px;
+  }
+
+  .voice-language-label {
+    max-width: 100%;
+    font-size: 11px;
+  }
+
+  .voice-language-label select {
+    max-width: min(155px, 48vw);
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 360px) {
+  .page {
+    width: calc(100% - 22px);
+  }
+
+  .search-form {
+    gap: 6px;
+    padding-left: 10px;
+  }
+
+  .search-icon {
+    font-size: 24px;
+  }
+
+  .search-form .voice-button {
+    flex-basis: 42px;
+    width: 42px;
+    min-width: 42px;
+  }
+
+  .search-form button[type="submit"] {
+    gap: 4px;
+    padding-inline: 10px;
+  }
+
+  .search-button-text {
+    display: none;
+  }
+}
