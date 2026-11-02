@@ -1003,14 +1003,18 @@ async function refresh(env) {
   if (disabledProviders.length) {
     console.warn("Daily index disabled repeatedly failing providers for this run:", disabledProviders.join(", "));
   }
-  // Keep stale rows searchable as a fallback, but remove records beyond the retention horizon.
-  if (!reserveIndexD1QueryBudget(d1QueryBudget, 1)) {
+  // Keep stale rows searchable as a fallback, but prune both media and
+  // webpage/news metadata indexes beyond the shared retention horizon.
+  if (!reserveIndexD1QueryBudget(d1QueryBudget, 2)) {
     throw new Error("D1 indexing query budget exhausted before retention cleanup");
   }
+  const retentionCutoff = new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString();
   await env.MEDIA_DB.prepare(
     "DELETE FROM media_items WHERE rowid IN (SELECT rowid FROM media_items WHERE indexed_at < ? ORDER BY indexed_at ASC LIMIT ?)"
-  ).bind(new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString(),
-    INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
+  ).bind(retentionCutoff, INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
+  await env.MEDIA_DB.prepare(
+    "DELETE FROM search_index_items WHERE rowid IN (SELECT rowid FROM search_index_items WHERE indexed_at < ? ORDER BY indexed_at ASC LIMIT ?)"
+  ).bind(retentionCutoff, INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
   const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
   if (!reserveIndexD1QueryBudget(d1QueryBudget, 1)) {
     throw new Error("D1 indexing query budget exhausted before run summary");
@@ -1040,12 +1044,21 @@ async function refresh(env) {
       searchRowsSkipped: searchRowsSkipped,
       searchRowsLimit: INDEX_MAX_SEARCH_ROWS_PER_RUN,
       webNewsRequests: searchRequestBudget.snapshot(),
-      retentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE
+      retentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE,
+      searchIndexRetentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE
     }
   }));
 }
 function searchIndexCountsQuery() {
   return "SELECT kind,COUNT(*) AS total,COUNT(DISTINCT domain) AS domains,MAX(indexed_at) AS newestIndexedAt " +
+    "FROM search_index_items GROUP BY kind";
+}
+function searchIndexFreshnessSummaryQuery() {
+  // Webpage/news metadata follows the same freshness policy as media rows.
+  return "SELECT kind,COUNT(*) AS total," +
+    "SUM(CASE WHEN julianday(indexed_at) IS NOT NULL AND julianday(indexed_at) >= julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS fresh," +
+    "SUM(CASE WHEN julianday(indexed_at) IS NULL OR julianday(indexed_at) < julianday('now','-" + INDEX_FRESH_DAYS + " days') THEN 1 ELSE 0 END) AS stale," +
+    "MIN(indexed_at) AS oldestIndexedAt,MAX(indexed_at) AS newestIndexedAt " +
     "FROM search_index_items GROUP BY kind";
 }
 function indexStatusCountsQuery() {
@@ -1146,9 +1159,10 @@ export default {
         const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
         const freshness=await env.MEDIA_DB.prepare(indexFreshnessSummaryQuery()).all();
         const searchCounts=await env.MEDIA_DB.prepare(searchIndexCountsQuery()).all();
+        const searchFreshness=await env.MEDIA_DB.prepare(searchIndexFreshnessSummaryQuery()).all();
         const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1").first();
         const latestRun=latest?{finished_at:latest.finished_at,rows_processed:latest.rows_processed,failure_count:latest.failure_count,note:latest.note,stats:parseIndexRunStats(latest.stats_json)}:null;
-        return reply({counts:counts.results||[],searchCounts:searchCounts.results||[],freshness: freshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
+        return reply({counts:counts.results||[],searchCounts:searchCounts.results||[],freshness: freshness.results||[],searchFreshness:searchFreshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
