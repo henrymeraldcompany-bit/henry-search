@@ -188,7 +188,7 @@ test("YouTube adapter stores provider and channel metadata while enriching durat
     const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(value || "");
     return m ? Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0) : null;
   };
-  const youtube = extractWorkerFunction("async function youtube(q, key, count) {", "async function save(env, rows)", {
+  const youtube = extractWorkerFunction("async function youtube(q, key, count) {", "async function saveSearchIndexRows(env, rows)", {
     URL, encodeURIComponent, getJson, clean, safeUrl, isoDurationSeconds, Map, console
   });
   const rows = await youtube("science", "server-secret", 5);
