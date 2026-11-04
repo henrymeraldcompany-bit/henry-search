@@ -116,3 +116,9 @@ When several web/news providers return the same canonical article, the index sto
 ### Live news outage fallback
 
 The original `henry-search-api` Worker keeps GDELT and the two RSS feeds as live news sources. Only when all live sources fail or return no readable articles does it make one bounded request to the Media Worker's `/index/search?kind=news` endpoint. This fallback uses stored metadata and original article URLs; it does not copy or re-host article content. It is useful after the first successful daily webpage/news index run, but it cannot return indexed articles while that table is still empty.
+
+### Task 77 — Search API Workers Cache deployment — 4 November 2026
+
+The original `henry-search-api` Worker now uses Cloudflare Workers Cache for reusable `/search`, `/news`, and `/images` responses. The default gateway entrypoint remains uncached so it executes on every request to enforce rate limits and rebuild origin-specific CORS headers. The named `CachedSearch` entrypoint is cache-enabled. Equivalent search queries are normalized into the same path/query cache key. Successful cacheable responses use a 60-second freshness lifetime with a 300-second stale-while-revalidate window; errors, webpage extraction, and requests carrying Authorization are not cached.
+
+Cloudflare deployment ID: `35f85233-a203-4594-b6b9-a08f5b531c48`; version ID: `21417aed-da88-4047-b0ce-518bc4768293`. Cloudflare confirmed the version receives 100% of traffic, Workers Cache is enabled, the default entrypoint is explicitly cache-disabled, the `CachedSearch` entrypoint is cache-enabled, and both existing rate-limit bindings remain configured (`API_RATE_LIMITER` 120/minute and `API_EXTRACT_RATE_LIMITER` 12/minute). The backend regression workflow passed 231 tests with zero failures. The production cache HIT/MISS smoke check is being run separately after deployment.
