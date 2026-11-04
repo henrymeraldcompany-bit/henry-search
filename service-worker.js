@@ -1,10 +1,10 @@
-const CACHE_NAME = "gozie-search-shell-v3";
+const CACHE_NAME = "gozie-search-shell-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css",
-  "./app.js",
-  "./pwa.js",
+  "./style.css?v=4",
+  "./app.js?v=4",
+  "./pwa.js?v=4",
   "./manifest.webmanifest",
   "./icons/gozie-search.svg"
 ];
