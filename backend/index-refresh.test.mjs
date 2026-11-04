@@ -205,7 +205,7 @@ test("freshness policy separates fresh and stale records without hiding stale fa
   assert.match(sql, /MAX\(indexed_at\) AS newestIndexedAt/);
   assert.match(source, /INDEX_FRESH_DAYS = 30/);
   assert.match(source, /INDEX_RETENTION_DAYS = 180/);
-  assert.match(source, /freshnessPolicy:\s*\{\s*freshWithinDays:INDEX_FRESH_DAYS,\s*retentionDays:INDEX_RETENTION_DAYS,\s*staleRowsRemainSearchable:true,\s*invalidTimestampsCountAsStale:true/);
+  assert.match(source, /freshnessPolicy:\s*\{\s*freshWithinDays:\s*INDEX_FRESH_DAYS,\s*retentionDays:\s*INDEX_RETENTION_DAYS,\s*staleRowsRemainSearchable:\s*true,\s*invalidTimestampsCountAsStale:\s*true/);
   assert.match(source, /relevance_score DESC,[\s\S]*julianday\(indexed_at\)/);
   assert.match(source, /DELETE FROM media_items WHERE rowid IN \(SELECT rowid FROM media_items WHERE indexed_at < \? ORDER BY indexed_at ASC LIMIT \?\)/);
 });
