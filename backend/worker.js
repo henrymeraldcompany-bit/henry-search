@@ -1137,6 +1137,7 @@ function indexFailureSummary(note) {
 }
 
 
+// Task 78: keep operational status reads in one D1 round trip.
 async function readIndexStatus(env) {
   // One D1 batch replaces five sequential database round trips. These
   // statements are read-only and retain the existing response contract.
