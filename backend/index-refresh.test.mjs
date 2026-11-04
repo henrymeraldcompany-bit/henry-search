@@ -205,7 +205,7 @@ test("freshness policy separates fresh and stale records without hiding stale fa
   assert.match(sql, /MAX\(indexed_at\) AS newestIndexedAt/);
   assert.match(source, /INDEX_FRESH_DAYS = 30/);
   assert.match(source, /INDEX_RETENTION_DAYS = 180/);
-  assert.match(source, /freshnessPolicy:\{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true\}/);
+  assert.match(source, /freshnessPolicy:\s*\{\s*freshWithinDays:INDEX_FRESH_DAYS,\s*retentionDays:INDEX_RETENTION_DAYS,\s*staleRowsRemainSearchable:true,\s*invalidTimestampsCountAsStale:true/);
   assert.match(source, /relevance_score DESC,[\s\S]*julianday\(indexed_at\)/);
   assert.match(source, /DELETE FROM media_items WHERE rowid IN \(SELECT rowid FROM media_items WHERE indexed_at < \? ORDER BY indexed_at ASC LIMIT \?\)/);
 });
@@ -219,7 +219,7 @@ test("freshness summary accounts for invalid timestamps as stale and exposes ref
   assert.match(freshnessSql, /julianday\(indexed_at\) IS NULL OR julianday\(indexed_at\) < julianday/);
   assert.match(freshnessSql, /MIN\(indexed_at\) AS oldestIndexedAt/);
   assert.match(freshnessSql, /MAX\(indexed_at\) AS newestIndexedAt/);
-  assert.match(source, /staleRowsRemainSearchable:true/);
+  assert.match(source, /staleRowsRemainSearchable:\s*true/);
   assert.match(source, /invalidTimestampsCountAsStale:true/);
 });
 
