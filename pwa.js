@@ -3,10 +3,37 @@
   const status = document.getElementById("pwa-status");
   if (!installButton) return;
 
+  const installedKey = "gozie-search-pwa-installed";
   let installPrompt = null;
   const say = message => {
     if (status) status.textContent = message;
   };
+  const isRunningInstalled = () =>
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    window.navigator.standalone === true;
+
+  const hideInstallButton = () => {
+    installButton.hidden = true;
+    installButton.setAttribute("aria-hidden", "true");
+  };
+  const showInstallButton = () => {
+    if (isRunningInstalled()) return hideInstallButton();
+    try {
+      if (localStorage.getItem(installedKey) === "true") return hideInstallButton();
+    } catch (_) {}
+    installButton.hidden = false;
+    installButton.removeAttribute("aria-hidden");
+  };
+
+  // Installed app windows never need to advertise installation.
+  if (isRunningInstalled()) {
+    hideInstallButton();
+  } else {
+    try {
+      if (localStorage.getItem(installedKey) === "true") hideInstallButton();
+    } catch (_) {}
+  }
 
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
     window.addEventListener("load", () => {
@@ -19,7 +46,7 @@
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault();
     installPrompt = event;
-    installButton.hidden = false;
+    showInstallButton();
     installButton.textContent = "Install app";
   });
 
@@ -36,7 +63,10 @@
 
   window.addEventListener("appinstalled", () => {
     installPrompt = null;
-    installButton.hidden = true;
-    say("GOZIE SEARCH has been installed on this device.");
+    try {
+      localStorage.setItem(installedKey, "true");
+    } catch (_) {}
+    hideInstallButton();
+    say("GOZIE SEARCH has been installed in this browser.");
   });
 })();
