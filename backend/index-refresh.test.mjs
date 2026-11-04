@@ -220,7 +220,7 @@ test("freshness summary accounts for invalid timestamps as stale and exposes ref
   assert.match(freshnessSql, /MIN\(indexed_at\) AS oldestIndexedAt/);
   assert.match(freshnessSql, /MAX\(indexed_at\) AS newestIndexedAt/);
   assert.match(source, /staleRowsRemainSearchable:\s*true/);
-  assert.match(source, /invalidTimestampsCountAsStale:true/);
+  assert.match(source, /invalidTimestampsCountAsStale:\\s*true/);
 });
 
 
