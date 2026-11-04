@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="./icons/gozie-search.svg">
   <meta name="description" content="GOZIE SEARCH helps you explore the web, images, news and videos.">
   <title>GOZIE SEARCH — Explore Beyond Limits</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 
 <body>
@@ -169,7 +169,7 @@
         <label class="setting-row"><span><strong>Open results in a new tab</strong><small>Keep your search page open when visiting a result.</small></span><input id="setting-new-tab" type="checkbox" checked></label>
         <label class="setting-row"><span><strong>Reduce motion</strong><small>Use simpler transitions and respect accessibility preferences.</small></span><input id="setting-reduced-motion" type="checkbox"></label>
         <label class="setting-row"><span><strong>Default search category</strong><small>Choose the category selected when you open GOZIE SEARCH.</small></span><select id="setting-default-category"><option value="all">All</option><option value="images">Images</option><option value="news">News</option><option value="videos">Videos</option></select></label>
-        <label class="setting-row"><span><strong>Results per page</strong><small>Choose how many web results appear on each page.</small></span><select id="setting-results-count"><option value="10">10 results</option><option value="20">20 results</option></select></label>
+        <div class="setting-row"><span><strong>Results per page</strong><small>GOZIE SEARCH shows 25 web results on each page.</small></span><strong>25</strong></div>
       </div>
       <div class="settings-group"><h2>Privacy and data</h2><p class="settings-note">Search history is stored only in this browser on this device.</p><button id="clear-search-history" class="settings-action danger-action" type="button">Clear search history</button></div>
       <p id="settings-status" class="settings-status" role="status" aria-live="polite"></p>
@@ -202,7 +202,7 @@
     <div class="sidebar-bottom"><span>GOZIE SEARCH</span><small>Explore beyond limits.</small></div>
   </aside>
 
-  <script src="app.js"></script>
-  <script src="pwa.js"></script>
+  <script src="app.js?v=4"></script>
+  <script src="pwa.js?v=4"></script>
 </body>
 </html>
