@@ -12,6 +12,10 @@ const functionSource = source.slice(start, end + 2);
 const readIndexStatus = vm.runInNewContext("(" + functionSource + ")", {
   INDEX_FRESH_DAYS: 30,
   INDEX_RETENTION_DAYS: 180,
+  indexStatusCountsQuery: () => "SELECT media status counts",
+  indexFreshnessSummaryQuery: () => "SELECT media freshness",
+  searchIndexCountsQuery: () => "SELECT search counts",
+  searchIndexFreshnessSummaryQuery: () => "SELECT search freshness",
   videoSafetySummary: rows => ({
     verifiedSafe: Number(rows.find(row => row.kind === "video")?.verified_safe || 0),
     unverified: Number(rows.find(row => row.kind === "video")?.unverified || 0)
