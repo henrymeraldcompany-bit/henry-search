@@ -4,8 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/api-security-live-smoke.yml"
       - "backend/search-worker.js"
+      - "backend/search-api-entry.js"
+      - "backend/search-api.wrangler.toml"
+      - "backend/README.md"
       - "backend/api-security.js"
       - "backend/api-validation.js"
       - "backend/search-extract.js"
@@ -79,3 +81,44 @@ jobs:
             rm -f "$tmp"
           done
           echo "Malformed request validation: ok"
+
+      - name: Verify Workers Cache hit while gateway security still runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          query="technology cache verification ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for expected in MISS HIT; do
+            headers="$(mktemp)"
+            body="$(mktemp)"
+            trap 'rm -f "$headers" "$body"' EXIT
+            if [[ "$expected" == "MISS" ]]; then
+              origin_args=(--header "Origin: $ALLOWED_ORIGIN")
+            else
+              origin_args=()
+            fi
+            status="$(curl --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 20 "${origin_args[@]}" --get --data-urlencode "q=$query" "$API/search")"
+            [[ "$status" == "200" ]] || { echo "Cache probe returned HTTP $status on expected $expected"; cat "$body"; exit 1; }
+            cache_status="$(awk 'BEGIN { IGNORECASE=1 } $1 == "Cf-Cache-Status:" { gsub("\\r", "", $2); print toupper($2) }' "$headers" | tail -n1)"
+            gozie_cache="$(awk 'BEGIN { IGNORECASE=1 } $1 == "X-GOZIE-Cache:" { gsub("\\r", "", $2); print toupper($2) }' "$headers" | tail -n1)"
+            rate_limit="$(awk 'BEGIN { IGNORECASE=1 } $1 == "X-GOZIE-RateLimit:" { gsub("\\r", "", $2); print tolower($2) }' "$headers" | tail -n1)"
+            [[ "$cache_status" == "$expected" ]] || { echo "Cf-Cache-Status was '$cache_status'; expected '$expected'"; cat "$headers"; exit 1; }
+            [[ "$gozie_cache" == "$expected" ]] || { echo "X-GOZIE-Cache was '$gozie_cache'; expected '$expected'"; cat "$headers"; exit 1; }
+            [[ "$rate_limit" == "active" ]] || { echo "Rate limiting was not active on $expected"; cat "$headers"; exit 1; }
+            if [[ "$expected" == "MISS" ]]; then
+              grep -Fqi "Access-Control-Allow-Origin: $ALLOWED_ORIGIN" "$headers"
+            else
+              if grep -Fqi "Access-Control-Allow-Origin:" "$headers"; then
+                echo "Cached response leaked a previous caller's CORS origin"
+                cat "$headers"
+                exit 1
+              fi
+            fi
+            node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (!Array.isArray(data.results)) throw new Error("Cache probe response omitted results array");
+          NODE
+            rm -f "$headers" "$body"
+            trap - EXIT
+          done
+          echo "Workers Cache MISS/HIT, fresh CORS, and per-request rate limiting: ok"
