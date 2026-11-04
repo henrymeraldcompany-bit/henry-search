@@ -1,4 +1,4 @@
-const CACHE_NAME = "gozie-search-shell-v1";
+const CACHE_NAME = "gozie-search-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
