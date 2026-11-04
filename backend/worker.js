@@ -66,13 +66,16 @@ function reserveIndexD1QueryBudget(budget, count) {
 }
 
 function reply(data, status) {
-  return new Response(JSON.stringify(data), { status: status || 200, headers: {
+  const code = Number(status) || 200;
+  const headers = {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, OPTIONS",
     "access-control-allow-headers": "Content-Type",
-    "cache-control": "public, max-age=60"
-  }});
+    "cache-control": code >= 400 ? "no-store" : "public, max-age=60"
+  };
+  if (code === 503) headers["retry-after"] = "5";
+  return new Response(JSON.stringify(data), { status: code, headers: headers });
 }
 function clean(value, max) {
   return String(value || "").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -682,7 +685,15 @@ async function provider(fn) { try { return await fn(); } catch(e) { console.warn
 async function search(request,env,kind) {
   const q=(new URL(request.url).searchParams.get("q")||"").trim().slice(0,180);
   if(!q)return reply({error:"Please provide a search query.",results:[]},400);
-  const saved=await indexed(env,kind,q,100);
+  let saved=[];
+  let indexUnavailable=false;
+  try {
+    saved=await indexed(env,kind,q,100);
+  } catch(error) {
+    indexUnavailable=true;
+    console.warn("Indexed search temporarily unavailable; continuing with live providers:",
+      error && error.message || error);
+  }
   const fetchLive=async function(query) {
     if(kind==="image") {
       const imageProviders=[
@@ -735,6 +746,7 @@ async function search(request,env,kind) {
     failedProviders:kind==="image"?imageProviderState.failures:videoProviderState.failures,
     attemptedProviders:kind==="image"?imageProviderState.attempted:videoProviderState.attempted,
     safeSearch:kind==="video",
+    indexStatus:indexUnavailable?"temporarily-unavailable":"available",
     expanded:!!expandedQuery,expandedQuery:expandedQuery||null});
 }
 function getDailySeedBatch(daySlot, seeds, batchSize) {
@@ -1202,7 +1214,10 @@ export default {
         return reply(await readIndexStatus(env));
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404);
-    }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
+    }catch(e){
+      console.error("Media API request failed",e&&e.message||e);
+      return reply({error:"The media service is temporarily unavailable. Please try again shortly."},503);
+    }
   },
   async scheduled(controller,env,ctx) {
     ctx.waitUntil(refresh(env).catch(function(e){console.error("Daily index refresh failed",e&&e.message||e);}));
