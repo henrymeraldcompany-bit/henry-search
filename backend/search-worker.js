@@ -329,7 +329,7 @@ export default {
   if(!Object.prototype.hasOwnProperty.call(cors,"Access-Control-Allow-Origin"))headers.delete("Access-Control-Allow-Origin");
   headers.set("X-GOZIE-RateLimit",rateLimitState);
   const cacheStatus=response.headers.get("Cf-Cache-Status");
-  headers.set("X-GOZIE-Cache",cacheStatus||(isCacheableSearchRoute(route)&&!request.headers.has("Authorization")?"MISS":"BYPASS"));
+  headers.set("X-GOZIE-Cache",cacheStatus||(canUseCache?"MISS":"BYPASS"));
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
  }
 };
