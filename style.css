@@ -1540,43 +1540,6 @@ input:focus-visible {
 }
 
 
-/* Public webpage extraction panel */
-.read-in-gozie-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 12px;
-  min-height: 38px;
-  padding: 8px 14px;
-  border: 1px solid var(--border, #345);
-  border-radius: 10px;
-  background: var(--surface, #14202b);
-  color: var(--text, #eaf0f6);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.read-in-gozie-button:disabled { opacity: .65; cursor: wait; }
-.gozie-extracted-panel {
-  margin-top: 12px;
-  padding: 14px;
-  border: 1px solid var(--border, #345);
-  border-radius: 12px;
-  background: var(--surface, #101a24);
-  color: var(--text, #eaf0f6);
-  overflow-wrap: anywhere;
-}
-.gozie-extracted-panel[hidden] { display: none; }
-.gozie-reader-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-bottom:10px; border-bottom:1px solid var(--border); }
-.gozie-reader-label { color:var(--accent); font-size:11px; font-weight:800; letter-spacing:.12em; }
-.gozie-reader-close { min-height:34px; padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface-soft); color:var(--text); font:inherit; font-size:12px; cursor:pointer; }
-.gozie-extracted-panel h3 { margin: 14px 0 7px; font-size: clamp(19px, 4vw, 25px); line-height:1.35; }
-.gozie-reader-metadata { margin:0 0 12px; color:var(--muted); font-size:12px; }
-.gozie-extracted-summary { font-weight: 600; margin: 0 0 14px; line-height:1.6; }
-.gozie-extracted-text { max-width:72ch; margin: 0 auto 18px; font-size:16px; line-height:1.85; white-space: pre-line; overflow-wrap:anywhere; }
-.gozie-extracted-source { display: inline-block; font-weight: 700; }
-
 /* Functional web and news result filters */
 .web-filter-bar{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:0 0 16px;padding:12px;border:1px solid var(--border,#345);border-radius:12px;background:var(--surface,#101a24)}
 .web-filter{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1 1 130px;color:var(--text,#eaf0f6);font-size:12px}
@@ -1713,8 +1676,6 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
   .web-page-button,
   .video-play-button,
   .video-original-link,
-  .read-in-gozie-button,
-  .gozie-reader-close,
   .image-viewer-controls button,
   .image-viewer-link {
     min-height: 44px;
@@ -1792,8 +1753,6 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
   .web-page-button,
   .video-play-button,
   .video-original-link,
-  .read-in-gozie-button,
-  .gozie-reader-close,
   .back-home-button,
   .settings-action {
     min-height: 44px;
@@ -2076,14 +2035,6 @@ html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{sc
   opacity: .88;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
-}
-.web-result-card .read-in-gozie-button {
-  justify-self: start;
-  margin-top: 4px;
-  min-height: 40px;
-}
-.web-result-card .gozie-extracted-panel {
-  width: 100%;
 }
 @media (max-width: 600px) {
   .results-list { gap: 10px; }
@@ -2563,21 +2514,6 @@ select:disabled {
   cursor: pointer;
 }
 .install-app-button:hover { border-color: var(--accent-strong); }
-.pwa-status {
-  position: absolute;
-  top: 100%;
-  right: 12px;
-  z-index: 20;
-  max-width: min(92vw, 360px);
-  margin: 6px 0 0;
-  padding: 8px 11px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 12px;
-}
-.pwa-status:empty { display: none; }
 @media (max-width: 420px) {
   .install-app-button { min-height: 36px; padding: 7px 9px; font-size: 11px; }
 }
