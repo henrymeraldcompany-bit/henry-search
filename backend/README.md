@@ -133,3 +133,16 @@ Before the change, production D1 contained 1,819 media_items, 40 search_index_it
 Regression coverage: backend workflow run 41860394949 passed 233/233 tests; media regression workflow run 41860395122 passed. The Media Worker was uploaded on 4 November 2026 at 15:43:27 UTC; deployment ID dc6b2444-9004-4834-b19b-ef5e9261c1a4, version ID 85a8fb09-b9c9-44f5-b074-272d1ea371f8, with 100% traffic assigned to the new version. Cloudflare confirmed the existing MEDIA_DB binding, fetch and scheduled handlers, and daily 0 7 * * * UTC schedule were retained.
 
 Post-deployment verification for Task 78: Media Worker live smoke run 41860862266 passed the Media Worker health route, index-status contract, web/news freshness contract, indexed web/news search route, and image/video search routes. Live image search returned 40 results across 2 source hosts and 3 providers; live video search returned 40 results across 17 source hosts and 17 providers. The separate legacy search/news API portion of that combined workflow was not fully green: web search passed, while live news returned HTTP 502 because GDELT returned HTTP 429, Google News RSS returned HTTP 503, Bing News RSS had no readable articles, and the daily news index returned HTTP 404. This upstream news-provider issue is separate from the Media Worker Task 78 change. The backend suite passed 233/233 tests in run 41860862357; media regression run 41860862270 passed.
+
+
+### Task 79 — Error handling and recovery — 4 November 2026
+
+The Media Worker now treats its D1 metadata index as an optional enhancement for live image/video searches. If an indexed candidate lookup fails, it logs the issue and continues with live providers. Responses include an additive `indexStatus` field (`available` or `temporarily-unavailable`). Unexpected Media Worker request errors return HTTP 503 with `Retry-After: 5` and `Cache-Control: no-store`; detailed exception text remains in Worker logs.
+
+The original Search API gateway now catches unexpected errors from the cached-search entrypoint and returns a safe JSON 503 response with retry guidance, `X-GOZIE-Cache: BYPASS`, and a degraded rate-limit status. Existing CORS and per-request rate limiting remain in the uncached gateway.
+
+Backend regression run 41861765082 passed 237/237 tests. Media regression run 41861744667 passed 114/114 tests. The added `backend/task79-error-recovery.test.mjs` tests cover D1 error responses, health-route availability without D1, live image-provider fallback, and API gateway recovery when the cache entrypoint rejects.
+
+Media Worker deployment: `bcd47cad-56cc-40ee-be6d-7078fd33d721`, version `01cc2ca6-c90c-470d-bc46-9d62c946d099`, 100% traffic. Existing `MEDIA_DB` binding and daily `0 7 * * *` UTC schedule preserved. Search API deployment: `cfb3b87d-417f-450a-996f-5b9e05c521c9`, version `33eb962c-371b-4072-be45-32ab7d5cb413`, 100% traffic. Workers Cache remains enabled for `CachedSearch` and disabled for the default gateway; both rate-limit bindings preserved.
+
+Production smoke run 41861471760 passed Media Worker health, index status, freshness, indexed search, image/video search and frontend playback checks. API security smoke run 41861471617 passed. Synthetic dependency failures are covered by automated regression tests rather than by deliberately disrupting production services.
