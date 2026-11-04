@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "GOZIE SEARCH",
+  "short_name": "GOZIE SEARCH",
+  "description": "Explore the web, images, news and videos with GOZIE SEARCH.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#080d13",
+  "theme_color": "#080d13",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "./icons/gozie-search.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
