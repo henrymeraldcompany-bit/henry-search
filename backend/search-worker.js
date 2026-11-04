@@ -5,54 +5,26 @@ import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited,
 import { buildApiSecurityHeaders, isAllowedApiOrigin } from "./api-security.js";
 import { validateApiRequest } from "./api-validation.js";
 import { checkApiRateLimit } from "./api-rate-limit.js";
-export default {
-async fetch(request, env = {}, ctx = {}) {
- const origin=request.headers.get("Origin")||"";
- const cors=buildApiSecurityHeaders(origin,env);
- let cacheRequest=null;
- let rateLimitState="not-checked";
- const out=(data,status=200,extraHeaders={})=>{
-  const response=new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=UTF-8","Cache-Control":status>=400?"no-store":"public, max-age=60, s-maxage=60, stale-while-revalidate=300","X-GOZIE-Cache":cacheRequest?"MISS":"BYPASS","X-GOZIE-RateLimit":rateLimitState,...extraHeaders}});
-  if(status===200&&cacheRequest&&typeof caches!=="undefined"&&caches.default){
-   const write=caches.default.put(cacheRequest,response.clone()).catch(()=>{});
-   if(typeof ctx.waitUntil==="function")ctx.waitUntil(write);
-  }
-  return response;
- };
- if(request.method==="OPTIONS")return new Response(null,{status:origin&&!isAllowedApiOrigin(origin,env)?403:204,headers:cors});
- if(request.method!=="GET")return out({error:"Method not allowed."},405);
- const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
- if(route!=="/"&&!["/search","/images","/news","/extract"].includes(route))return out({error:"Not found."},404);
- const rateLimit=await checkApiRateLimit(request,env,route);
- rateLimitState=rateLimit.configured?"active":"degraded";
- if(!rateLimit.allowed){
-  const policy=String(rateLimit.limit)+";w="+String(rateLimit.period);
-  return out({error:"Too many requests. Please wait before trying again."},429,{"Retry-After":String(rateLimit.period),"RateLimit-Limit":String(rateLimit.limit),"RateLimit-Policy":policy});
- }
- if(route==="/")return out({name:"GOZIE SEARCH API",status:"online",endpoints:["/search?q=technology","/images?q=cats","/news?q=technology"]});
- const validation=validateApiRequest(u);
- if(!validation.valid)return out({error:validation.error},400);
- if(route==="/extract"){const target=u.searchParams.get("url")||"";if(!target)return out({error:"Provide a webpage URL using the url parameter."},400);const result=await extractPublicPage(target);return out(result.data,result.status);}
- if(!q)return out({error:"Enter a search query."},400);
- if(q.length>300)return out({error:"Search query must be 300 characters or fewer."},400);
- if(isCacheableSearchRoute(route)&&typeof caches!=="undefined"&&caches.default){
-  try{
-   const cacheKey=buildSearchCacheKey(u);
-   cacheRequest=new Request(cacheKey,{method:"GET"});
-   const cached=await caches.default.match(cacheRequest);
-   if(cached){
-    const headers=new Headers(cached.headers);
-    // Cache entries may outlive the request that populated them. Rebuild
-    // origin-dependent security headers for the current caller on every hit.
-    for(const [name,value] of Object.entries(cors))headers.set(name,value);
-    if(!Object.prototype.hasOwnProperty.call(cors,"Access-Control-Allow-Origin"))headers.delete("Access-Control-Allow-Origin");
-    headers.set("X-GOZIE-RateLimit",rateLimitState);
-    headers.set("X-GOZIE-Cache","HIT");
-    return new Response(cached.body,{status:cached.status,statusText:cached.statusText,headers});
+export async function runSearch(request, env = {}) {
+  const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
+  const cacheable=isCacheableSearchRoute(route);
+  const out=(data,status=200,extraHeaders={})=>new Response(JSON.stringify(data),{
+   status,
+   headers:{
+    "Content-Type":"application/json; charset=UTF-8",
+    "Cache-Control":status===200&&cacheable?"public, max-age=60, s-maxage=60, stale-while-revalidate=300":"no-store",
+    ...extraHeaders
    }
-  }catch{cacheRequest=null;}
- }
- const json=async(url,ms=8000)=>{const r=await fetch(url,{headers:{"Accept":"application/json","User-Agent":"GOZIESearch/1.3"},signal:AbortSignal.timeout(ms)});if(!r.ok)throw Error("HTTP "+r.status);return r.json()};
+  });
+  if(request.method!=="GET")return out({error:"Method not allowed."},405);
+  if(route!=="/"&&!["/search","/images","/news","/extract"].includes(route))return out({error:"Not found."},404);
+  if(route==="/")return out({name:"GOZIE SEARCH API",status:"online",endpoints:["/search?q=technology","/images?q=cats","/news?q=technology"]});
+  const validation=validateApiRequest(u);
+  if(!validation.valid)return out({error:validation.error},400);
+  if(route==="/extract"){const target=u.searchParams.get("url")||"";if(!target)return out({error:"Provide a webpage URL using the url parameter."},400);const result=await extractPublicPage(target);return out(result.data,result.status);}
+  if(!q)return out({error:"Enter a search query."},400);
+  if(q.length>300)return out({error:"Search query must be 300 characters or fewer."},400);
+  const json=async(url,ms=8000)=>{const r=await fetch(url,{headers:{"Accept":"application/json","User-Agent":"GOZIESearch/1.3"},signal:AbortSignal.timeout(ms)});if(!r.ok)throw Error("HTTP "+r.status);return r.json()};
  const decode=s=>String(s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(+n)).replace(/&#x([\da-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)));
  const tag=(s,t)=>{const m=s.match(new RegExp("<"+t+"(?:\\s[^>]*)?>([\\s\\S]*?)</"+t+">","i"));return m?decode(m[1].trim()):""};
  const parseRss=xml=>{const results=[];for(const m of xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)){const x=m[1],title=tag(x,"title"),url=tag(x,"link"),published=tag(x,"pubDate"),source=tag(x,"source"),description=tag(x,"description").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim();if(title&&/^https?:\/\//i.test(url))results.push({title,url,snippet:[source,published,description].filter(Boolean).join(" · "),source,published});if(results.length>=20)break}return results};
@@ -311,4 +283,53 @@ async fetch(request, env = {}, ctx = {}) {
   });
  }catch(e){return out({error:route==="/news"?"News providers are temporarily unavailable. Please try again shortly.":route==="/images"?"Image service is temporarily unavailable. Please try again.":"Search providers are temporarily unavailable. Please try again.",diagnostic:route==="/news"?String(e&&e.message||e).slice(0,240):undefined},502)}
 }
+
+export default {
+ async fetch(request, env = {}, ctx = {}) {
+  const origin=request.headers.get("Origin")||"";
+  const cors=buildApiSecurityHeaders(origin,env);
+  const gatewayOut=(data,status=200,extraHeaders={})=>new Response(JSON.stringify(data),{
+   status,
+   headers:{
+    ...cors,
+    "Content-Type":"application/json; charset=UTF-8",
+    "Cache-Control":"no-store",
+    "X-GOZIE-Cache":"BYPASS",
+    "X-GOZIE-RateLimit":"not-checked",
+    ...extraHeaders
+   }
+  });
+  if(request.method==="OPTIONS")return new Response(null,{status:origin&&!isAllowedApiOrigin(origin,env)?403:204,headers:cors});
+  if(request.method!=="GET")return gatewayOut({error:"Method not allowed."},405);
+  const url=new URL(request.url),route=url.pathname;
+  if(route!=="/"&&!["/search","/images","/news","/extract"].includes(route))return gatewayOut({error:"Not found."},404);
+  const rateLimit=await checkApiRateLimit(request,env,route);
+  const rateLimitState=rateLimit.configured?"active":"degraded";
+  if(!rateLimit.allowed){
+   const policy=String(rateLimit.limit)+";w="+String(rateLimit.period);
+   return gatewayOut({error:"Too many requests. Please wait before trying again."},429,{
+    "X-GOZIE-RateLimit":rateLimitState,
+    "Retry-After":String(rateLimit.period),
+    "RateLimit-Limit":String(rateLimit.limit),
+    "RateLimit-Policy":policy
+   });
+  }
+  let response;
+  const canUseCache=isCacheableSearchRoute(route)&&!request.headers.has("Authorization")&&Boolean(ctx?.exports?.CachedSearch?.fetch);
+  if(canUseCache){
+   const normalizedUrl=new URL(buildSearchCacheKey(url));
+   response=await ctx.exports.CachedSearch.fetch(request,{
+    cf:{cacheKey:normalizedUrl.pathname+normalizedUrl.search}
+   });
+  }else{
+   response=await runSearch(request,env);
+  }
+  const headers=new Headers(response.headers);
+  for(const [name,value] of Object.entries(cors))headers.set(name,value);
+  if(!Object.prototype.hasOwnProperty.call(cors,"Access-Control-Allow-Origin"))headers.delete("Access-Control-Allow-Origin");
+  headers.set("X-GOZIE-RateLimit",rateLimitState);
+  const cacheStatus=response.headers.get("Cf-Cache-Status");
+  headers.set("X-GOZIE-Cache",cacheStatus||(isCacheableSearchRoute(route)&&!request.headers.has("Authorization")?"MISS":"BYPASS"));
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+ }
 };
