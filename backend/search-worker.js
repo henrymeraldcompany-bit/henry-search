@@ -5,6 +5,7 @@ import { safePublicUrl, robotsPathAllowed, extractHtmlMetadata, readTextLimited,
 import { buildApiSecurityHeaders, isAllowedApiOrigin } from "./api-security.js";
 import { validateApiRequest } from "./api-validation.js";
 import { checkApiRateLimit } from "./api-rate-limit.js";
+import { createRequestDiagnostic, recordRequestDiagnostic } from "./diagnostics.js";
 export async function runSearch(request, env = {}) {
   const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
   const cacheable=isCacheableSearchRoute(route)&&!request.headers.has("Authorization");
@@ -286,6 +287,7 @@ export async function runSearch(request, env = {}) {
 
 export default {
  async fetch(request, env = {}, ctx = {}) {
+  const diagnostic = createRequestDiagnostic(request, "henry-search-api");
   const origin=request.headers.get("Origin")||"";
   const cors=buildApiSecurityHeaders(origin,env);
   const gatewayOut=(data,status=200,extraHeaders={})=>new Response(JSON.stringify(data),{
@@ -331,9 +333,10 @@ export default {
   headers.set("X-GOZIE-RateLimit",rateLimitState);
   const cacheStatus=response.headers.get("Cf-Cache-Status");
   headers.set("X-GOZIE-Cache",cacheStatus||(canUseCache?"MISS":"BYPASS"));
+  recordRequestDiagnostic(diagnostic, response.status);
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   } catch(error) {
-   console.error("GOZIE API gateway failure",error&&error.message||error);
+   recordRequestDiagnostic(diagnostic, 503, error);
    return gatewayOut({error:"The search service is temporarily unavailable. Please try again shortly."},503,{
     "Retry-After":"5",
     "X-GOZIE-RateLimit":"degraded",
