@@ -43,7 +43,7 @@
 
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js", { scope: "./" })
+      navigator.serviceWorker.register("./service-worker.js?v=4", { scope: "./" })
         .then(() => say("GOZIE SEARCH is ready to install and can open offline. Search requires internet."))
         .catch(() => say("Install from your browser menu. Offline page caching could not be enabled."));
     });
