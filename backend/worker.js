@@ -4,6 +4,7 @@ import { createWikimediaVideoProvider } from "./wikimedia-video-search.js";
 import { runImageProviders, rankImageResults } from "./image-search.js";
 import { filterImageResults } from "./image-filters.js";
 import { createDailyRequestBudget, discoverDailyNews, discoverDailyWeb } from "./daily-search-discovery.js";
+import { createRequestDiagnostic, recordRequestDiagnostic } from "./diagnostics.js";
 
 /**
  * GOZIE SEARCH Media Worker
@@ -1193,6 +1194,7 @@ async function readIndexStatus(env) {
 
 export default {
   async fetch(request,env) {
+    const diagnostic = createRequestDiagnostic(request, "gozie-search-media");
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET, OPTIONS","access-control-allow-headers":"Content-Type"}});
     if(request.method!=="GET")return reply({error:"Only GET requests are supported."},405);
     const p=new URL(request.url).pathname.replace(/\/+$/,"")||"/";
@@ -1215,7 +1217,7 @@ export default {
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404);
     }catch(e){
-      console.error("Media API request failed",e&&e.message||e);
+      recordRequestDiagnostic(diagnostic, 503, e);
       return reply({error:"The media service is temporarily unavailable. Please try again shortly."},503);
     }
   },
