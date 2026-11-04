@@ -92,11 +92,10 @@ jobs:
             body="$(mktemp)"
             trap 'rm -f "$headers" "$body"' EXIT
             if [[ "$expected" == "MISS" ]]; then
-              origin_args=(--header "Origin: $ALLOWED_ORIGIN")
+              status="$(curl --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 20 --header "Origin: $ALLOWED_ORIGIN" --get --data-urlencode "q=$query" "$API/search")"
             else
-              origin_args=()
+              status="$(curl --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 20 --get --data-urlencode "q=$query" "$API/search")"
             fi
-            status="$(curl --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 20 "${origin_args[@]}" --get --data-urlencode "q=$query" "$API/search")"
             [[ "$status" == "200" ]] || { echo "Cache probe returned HTTP $status on expected $expected"; cat "$body"; exit 1; }
             cache_status="$(awk 'BEGIN { IGNORECASE=1 } $1 == "Cf-Cache-Status:" { gsub("\\r", "", $2); print toupper($2) }' "$headers" | tail -n1)"
             gozie_cache="$(awk 'BEGIN { IGNORECASE=1 } $1 == "X-GOZIE-Cache:" { gsub("\\r", "", $2); print toupper($2) }' "$headers" | tail -n1)"
