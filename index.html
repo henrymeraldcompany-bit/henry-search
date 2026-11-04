@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#080d13">
+  <meta name="theme-color" content="#080d13">\n  <meta name="mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-title" content="GOZIE SEARCH">\n  <link rel="manifest" href="./manifest.webmanifest">\n  <link rel="icon" href="./icons/gozie-search.svg" type="image/svg+xml">\n  <link rel="apple-touch-icon" href="./icons/gozie-search.svg">
   <meta name="description" content="GOZIE SEARCH helps you explore the web, images, news and videos.">
   <title>GOZIE SEARCH — Explore Beyond Limits</title>
   <link rel="stylesheet" href="style.css">
@@ -22,7 +22,7 @@
       <div class="top-actions">
         <button id="menu-toggle" class="icon-button" type="button" aria-label="Open navigation menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
       </div>
-    </header>
+      <p id="pwa-status" class="pwa-status" role="status" aria-live="polite"></p>\n    </header>
 
     <section class="hero" id="hero">
       <div class="hero-orb orb-one"></div>
@@ -194,6 +194,6 @@
     <div class="sidebar-bottom"><span>GOZIE SEARCH</span><small>Explore beyond limits.</small></div>
   </aside>
 
-  <script src="app.js"></script>
+  <script src="app.js"></script>\n  <script src="pwa.js"></script>
 </body>
 </html>
