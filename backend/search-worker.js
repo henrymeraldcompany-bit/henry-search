@@ -7,7 +7,7 @@ import { validateApiRequest } from "./api-validation.js";
 import { checkApiRateLimit } from "./api-rate-limit.js";
 export async function runSearch(request, env = {}) {
   const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
-  const cacheable=isCacheableSearchRoute(route);
+  const cacheable=isCacheableSearchRoute(route)&&!request.headers.has("Authorization");
   const out=(data,status=200,extraHeaders={})=>new Response(JSON.stringify(data),{
    status,
    headers:{
