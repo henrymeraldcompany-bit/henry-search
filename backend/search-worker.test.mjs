@@ -867,44 +867,75 @@ test("applies the general rate limit to the API root status endpoint", async () 
   assert.equal(response.headers.get("X-GOZIE-RateLimit"), "active");
 });
 
-test("cached API responses refresh CORS and rate-limit headers for the current request", async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "caches");
-  Object.defineProperty(globalThis, "caches", {
-    configurable: true,
-    writable: true,
-    value: {
-      default: {
-        match: async () => new Response(JSON.stringify({ query: "solar", results: [] }), {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "https://henrymeraldcompany-bit.github.io",
-            "X-GOZIE-RateLimit": "active",
-            "X-GOZIE-Cache": "MISS"
-          }
-        }),
-        put: async () => {}
+test("cached search entrypoint refreshes CORS and rate-limit headers for every caller", async () => {
+  const cacheKeys = [];
+  let rateLimitCalls = 0;
+  const ctx = {
+    exports: {
+      CachedSearch: {
+        fetch: async (request, options) => {
+          cacheKeys.push(options?.cf?.cacheKey);
+          return new Response(JSON.stringify({ query: "solar energy", results: [] }), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=300",
+              "Cf-Cache-Status": "HIT",
+              "Access-Control-Allow-Origin": "https://henrymeraldcompany-bit.github.io",
+              "X-GOZIE-RateLimit": "stale"
+            }
+          });
+        }
       }
     }
-  });
-  try {
-    const allowed = await worker.fetch(new Request("https://api.example/search?q=solar", {
-      headers: { Origin: "https://preview.example" }
-    }), { ALLOWED_ORIGINS: "https://preview.example" });
-    assert.equal(allowed.status, 200);
-    assert.equal(allowed.headers.get("Access-Control-Allow-Origin"), "https://preview.example");
-    assert.equal(allowed.headers.get("Vary"), "Origin");
-    assert.equal(allowed.headers.get("X-GOZIE-RateLimit"), "degraded");
-    assert.equal(allowed.headers.get("X-GOZIE-Cache"), "HIT");
+  };
+  const env = {
+    ALLOWED_ORIGINS: "https://preview.example",
+    API_RATE_LIMITER: { limit: async () => { rateLimitCalls++; return { success: true }; } },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: true }) }
+  };
+  const allowed = await worker.fetch(new Request("https://api.example/search?q=Solar%20%20Energy", {
+    headers: { Origin: "https://preview.example", "cf-connecting-ip": "203.0.113.20" }
+  }), env, ctx);
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("Access-Control-Allow-Origin"), "https://preview.example");
+  assert.equal(allowed.headers.get("Vary"), "Origin");
+  assert.equal(allowed.headers.get("X-GOZIE-RateLimit"), "active");
+  assert.equal(allowed.headers.get("X-GOZIE-Cache"), "HIT");
 
-    const denied = await worker.fetch(new Request("https://api.example/search?q=solar", {
-      headers: { Origin: "https://attacker.example" }
-    }));
-    assert.equal(denied.status, 200);
-    assert.equal(denied.headers.get("Access-Control-Allow-Origin"), null);
-    assert.equal(denied.headers.get("X-GOZIE-Cache"), "HIT");
-  } finally {
-    if (descriptor) Object.defineProperty(globalThis, "caches", descriptor);
-    else delete globalThis.caches;
-  }
+  const denied = await worker.fetch(new Request("https://api.example/search?q=solar%20energy", {
+    headers: { Origin: "https://attacker.example", "cf-connecting-ip": "203.0.113.20" }
+  }), env, ctx);
+  assert.equal(denied.status, 200);
+  assert.equal(denied.headers.get("Access-Control-Allow-Origin"), null);
+  assert.equal(denied.headers.get("X-GOZIE-Cache"), "HIT");
+  assert.equal(denied.headers.get("X-GOZIE-RateLimit"), "active");
+  assert.equal(cacheKeys.length, 2);
+  assert.equal(cacheKeys[0], cacheKeys[1], "equivalent query whitespace and casing should share a cache key");
+  assert.equal(rateLimitCalls, 2, "the uncached gateway must rate-limit every request");
+});
+
+test("does not call the cached search entrypoint for extraction, root or authenticated requests", async () => {
+  let cachedCalls = 0;
+  const ctx = { exports: { CachedSearch: { fetch: async () => {
+    cachedCalls++;
+    return new Response("unexpected cache call", { status: 200 });
+  } } } };
+  const env = {
+    API_RATE_LIMITER: { limit: async () => ({ success: true }) },
+    API_EXTRACT_RATE_LIMITER: { limit: async () => ({ success: true }) }
+  };
+
+  const root = await worker.fetch(new Request("https://api.example/"), env, ctx);
+  assert.equal(root.status, 200);
+  assert.equal(root.headers.get("X-GOZIE-Cache"), "BYPASS");
+
+  const extraction = await worker.fetch(new Request("https://api.example/extract?url=javascript%3Aalert%281%29"), env, ctx);
+  assert.equal(extraction.status, 400);
+
+  const authenticated = await worker.fetch(new Request("https://api.example/search?q=solar&unexpected=1", {
+    headers: { Authorization: "Bearer test-token" }
+  }), env, ctx);
+  assert.equal(authenticated.status, 400);
+  assert.equal(cachedCalls, 0);
 });
