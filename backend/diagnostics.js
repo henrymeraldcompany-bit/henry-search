@@ -2,7 +2,7 @@
 // Never record query strings, request bodies, cookies, authorization headers,
 // client IP addresses, or provider URLs.
 export function createRequestDiagnostic(request, service) {
-  const route = new URL(request.url).pathname.replace(/\\/+$/, "") || "/";
+  const route = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
   const ray = String(request.headers.get("cf-ray") || "").trim();
   const requestId = ray.slice(0, 80) || crypto.randomUUID();
   return {
