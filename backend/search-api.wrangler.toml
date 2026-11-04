@@ -1,5 +1,5 @@
 name = "henry-search-api"
-main = "search-worker.js"
+main = "search-api-entry.js"
 compatibility_date = "2026-10-19"
 
 # Cloudflare-native approximate limits, scoped to each edge location.
@@ -18,3 +18,20 @@ namespace_id = "760002"
   [ratelimits.simple]
   limit = 12
   period = 60
+
+# Cache only the reusable search entrypoint. The default gateway must run
+# for every request so it can enforce rate limits and rebuild CORS headers.
+[cache]
+enabled = true
+
+[exports.default]
+type = "worker"
+
+  [exports.default.cache]
+  enabled = false
+
+[exports.CachedSearch]
+type = "worker"
+
+  [exports.CachedSearch.cache]
+  enabled = true
