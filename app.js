@@ -272,7 +272,7 @@ async function fetchJson(url, timeoutMs = 12000) {
 let currentWebResults = [];
 let currentWebFilters = { domain: 'all', source: 'all', date: 'any' };
 let currentWebPage = 1;
-let WEB_RESULTS_PER_PAGE = 10;
+const WEB_RESULTS_PER_PAGE = 25;
 function applyWebResultFilters(items) {
  const now=Date.now();
  return items.filter(item=>{
@@ -2224,11 +2224,9 @@ function loadSettings() {
   const newTab = document.querySelector("#setting-new-tab");
   const reduced = document.querySelector("#setting-reduced-motion");
   const category = document.querySelector("#setting-default-category");
-  const count = document.querySelector("#setting-results-count");
   if (newTab) newTab.checked = prefs.newTab !== false;
   if (reduced) reduced.checked = Boolean(prefs.reduceMotion);
   if (category) category.value = prefs.defaultCategory || "all";
-  if (count) count.value = String(prefs.resultsPerPage || 10);
 }
 function announceSettings(message) {
   const status = document.querySelector("#settings-status");
@@ -2241,13 +2239,6 @@ document.querySelector("#setting-reduced-motion")?.addEventListener("change", ev
   announceSettings("Motion preference saved.");
 });
 document.querySelector("#setting-default-category")?.addEventListener("change", event => { savePreference("defaultCategory", event.target.value); announceSettings("Default search category saved."); });
-document.querySelector("#setting-results-count")?.addEventListener("change", event => {
-  WEB_RESULTS_PER_PAGE = Number(event.target.value) === 20 ? 20 : 10;
-  savePreference("resultsPerPage", WEB_RESULTS_PER_PAGE);
-  currentWebPage = 1;
-  if (currentWebResults.length) renderResults(currentWebResults);
-  announceSettings("Results display preference saved.");
-});
 document.querySelector("#clear-search-history")?.addEventListener("click", () => {
   try { localStorage.removeItem("gozie-search-history"); } catch {}
   renderSearchHistory();
@@ -2283,6 +2274,5 @@ function renderSearchHistory() {
   });
 }
 loadSettings();
-WEB_RESULTS_PER_PAGE = Number(getPreference("resultsPerPage", 10)) === 20 ? 20 : 10;
 document.documentElement.classList.toggle("reduce-motion", Boolean(getPreference("reduceMotion", false)));
 setCategory(["all", "images", "news", "videos"].includes(getPreference("defaultCategory", "all")) ? getPreference("defaultCategory", "all") : "all");
