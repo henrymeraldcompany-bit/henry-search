@@ -1136,6 +1136,48 @@ function indexFailureSummary(note) {
   });
 }
 
+
+async function readIndexStatus(env) {
+  // One D1 batch replaces five sequential database round trips. These
+  // statements are read-only and retain the existing response contract.
+  const statements = [
+    env.MEDIA_DB.prepare(indexStatusCountsQuery()),
+    env.MEDIA_DB.prepare(indexFreshnessSummaryQuery()),
+    env.MEDIA_DB.prepare(searchIndexCountsQuery()),
+    env.MEDIA_DB.prepare(searchIndexFreshnessSummaryQuery()),
+    env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1")
+  ];
+  const results = await env.MEDIA_DB.batch(statements);
+  const counts = results[0] || {};
+  const freshness = results[1] || {};
+  const searchCounts = results[2] || {};
+  const searchFreshness = results[3] || {};
+  const latest = Array.isArray(results[4] && results[4].results)
+    ? results[4].results[0] || null
+    : null;
+  return {
+    counts: counts.results || [],
+    searchCounts: searchCounts.results || [],
+    freshness: freshness.results || [],
+    searchFreshness: searchFreshness.results || [],
+    freshnessPolicy: {
+      freshWithinDays: INDEX_FRESH_DAYS,
+      retentionDays: INDEX_RETENTION_DAYS,
+      staleRowsRemainSearchable: true,
+      invalidTimestampsCountAsStale: true
+    },
+    videoSafety: videoSafetySummary(counts.results),
+    latestRun: latest ? {
+      finished_at: latest.finished_at,
+      rows_processed: latest.rows_processed,
+      failure_count: latest.failure_count,
+      note: latest.note,
+      stats: parseIndexRunStats(latest.stats_json)
+    } : null,
+    failureSummary: indexFailureSummary(latest && latest.note)
+  };
+}
+
 export default {
   async fetch(request,env) {
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET, OPTIONS","access-control-allow-headers":"Content-Type"}});
@@ -1156,13 +1198,7 @@ export default {
         return reply({kind,query,count:results.length,results});
       }
       if(p==="/index/status"){
-        const counts=await env.MEDIA_DB.prepare(indexStatusCountsQuery()).all();
-        const freshness=await env.MEDIA_DB.prepare(indexFreshnessSummaryQuery()).all();
-        const searchCounts=await env.MEDIA_DB.prepare(searchIndexCountsQuery()).all();
-        const searchFreshness=await env.MEDIA_DB.prepare(searchIndexFreshnessSummaryQuery()).all();
-        const latest=await env.MEDIA_DB.prepare("SELECT finished_at,rows_processed,failure_count,note,stats_json FROM index_runs ORDER BY id DESC LIMIT 1").first();
-        const latestRun=latest?{finished_at:latest.finished_at,rows_processed:latest.rows_processed,failure_count:latest.failure_count,note:latest.note,stats:parseIndexRunStats(latest.stats_json)}:null;
-        return reply({counts:counts.results||[],searchCounts:searchCounts.results||[],freshness: freshness.results||[],searchFreshness:searchFreshness.results||[],freshnessPolicy:{freshWithinDays:INDEX_FRESH_DAYS,retentionDays:INDEX_RETENTION_DAYS,staleRowsRemainSearchable:true,invalidTimestampsCountAsStale:true},videoSafety:videoSafetySummary(counts.results),latestRun:latestRun,failureSummary:indexFailureSummary(latest&&latest.note)});
+        return reply(await readIndexStatus(env));
       }
       return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404);
     }catch(e){console.error("Media API error",e&&e.message||e);return reply({error:"Media API is not ready. Verify the D1 binding and schema."},500);}
