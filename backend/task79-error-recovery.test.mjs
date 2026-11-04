@@ -34,3 +34,25 @@ test("API gateway converts cache entrypoint failures into retryable JSON", async
  assert.equal(response.headers.get("X-GOZIE-RateLimit"), "degraded");
  assert.equal(JSON.stringify(payload).includes("cache failed"), false);
 });
+
+
+test("image search continues with live providers when the D1 index read fails", async () => {
+ const originalFetch = globalThis.fetch;
+ globalThis.fetch = async input => {
+  const url = new URL(String(input));
+  if (url.hostname === "commons.wikimedia.org") return new Response(JSON.stringify({ query: { pages: {} } }), { status: 200 });
+  if (url.hostname === "api.openverse.org") return new Response(JSON.stringify({ results: [] }), { status: 200 });
+  if (url.hostname === "www.flickr.com") return new Response(JSON.stringify({ items: [] }), { status: 200 });
+  throw new Error("unexpected provider");
+ };
+ try {
+  const env = { MEDIA_DB: { prepare() { return { bind() { return { all: async () => { throw new Error("index unavailable"); } }; } }; } } };
+  const response = await mediaWorker.fetch(new Request("https://media.example/images?q=solar"), env);
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.indexStatus, "temporarily-unavailable");
+  assert.equal(payload.count, 0);
+ } finally {
+  globalThis.fetch = originalFetch;
+ }
+});
