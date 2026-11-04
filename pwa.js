@@ -5,8 +5,15 @@
 
   const installedKey = "gozie-search-pwa-installed";
   let installPrompt = null;
+  let statusTimer = null;
   const say = message => {
-    if (status) status.textContent = message;
+    if (!status) return;
+    if (statusTimer) window.clearTimeout(statusTimer);
+    status.textContent = message;
+    statusTimer = window.setTimeout(() => {
+      status.textContent = "";
+      statusTimer = null;
+    }, 5000);
   };
   const isRunningInstalled = () =>
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -26,7 +33,6 @@
     installButton.removeAttribute("aria-hidden");
   };
 
-  // Installed app windows never need to advertise installation.
   if (isRunningInstalled()) {
     hideInstallButton();
   } else {
