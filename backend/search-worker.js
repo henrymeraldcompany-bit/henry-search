@@ -303,6 +303,7 @@ export default {
   if(request.method!=="GET")return gatewayOut({error:"Method not allowed."},405);
   const url=new URL(request.url),route=url.pathname;
   if(route!=="/"&&!["/search","/images","/news","/extract"].includes(route))return gatewayOut({error:"Not found."},404);
+  try {
   const rateLimit=await checkApiRateLimit(request,env,route);
   const rateLimitState=rateLimit.configured?"active":"degraded";
   if(!rateLimit.allowed){
@@ -331,5 +332,13 @@ export default {
   const cacheStatus=response.headers.get("Cf-Cache-Status");
   headers.set("X-GOZIE-Cache",cacheStatus||(canUseCache?"MISS":"BYPASS"));
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+  } catch(error) {
+   console.error("GOZIE API gateway failure",error&&error.message||error);
+   return gatewayOut({error:"The search service is temporarily unavailable. Please try again shortly."},503,{
+    "Retry-After":"5",
+    "X-GOZIE-RateLimit":"degraded",
+    "X-GOZIE-Cache":"BYPASS"
+   });
+  }
  }
 };
