@@ -2581,3 +2581,6 @@ select:disabled {
 @media (max-width: 420px) {
   .install-app-button { min-height: 36px; padding: 7px 9px; font-size: 11px; }
 }
+
+/* Keep the install control hidden until PWA code confirms it is available. */
+.install-app-button[hidden] { display: none !important; }
