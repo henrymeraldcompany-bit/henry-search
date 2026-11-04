@@ -31,3 +31,15 @@ test("server failures emit structured diagnostic events", () => {
  assert.equal(event.outcome, "error");
  assert.equal(event.route, "/news");
 });
+
+test("slow successful requests emit warning diagnostics", () => {
+ const original = console.warn;
+ let line = "";
+ console.warn = value => { line = String(value); };
+ try { recordRequestDiagnostic({ requestId:"r3", service:"test", method:"GET", route:"/search", startedAt:Date.now()-1600 }, 200); }
+ finally { console.warn = original; }
+ const event = JSON.parse(line);
+ assert.equal(event.outcome, "slow");
+ assert.equal(event.status, 200);
+ assert.ok(event.durationMs >= 1500);
+});
