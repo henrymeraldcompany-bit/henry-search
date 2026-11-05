@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="./icons/gozie-search.svg">
   <meta name="description" content="GOZIE SEARCH helps you explore the web, images, news and videos.">
   <title>GOZIE SEARCH — Explore Beyond Limits</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 
 <body>
@@ -177,6 +177,26 @@
       <div class="utility-heading"><button class="back-home-button" type="button" data-return-home>← Back</button><p class="eyebrow">YOUR ACTIVITY</p><h1 id="history-title">Search history</h1><p>Recent searches saved on this device.</p></div>
       <div id="history-list" class="history-list"></div>
     </section>
+    <section id="google-view" class="utility-view google-view" hidden aria-labelledby="google-title">
+      <div class="utility-heading google-utility-heading">
+        <button class="back-home-button" type="button" data-return-home>← Back</button>
+        <p class="eyebrow">IN-APP SEARCH</p>
+        <h1 id="google-title"><span class="google-title-mark" aria-hidden="true">G</span> Google</h1>
+        <p id="google-query-label">Search in GOZIE SEARCH first, then open Google from the sidebar.</p>
+      </div>
+      <div class="google-browser-frame">
+        <div class="google-browser-bar">
+          <span class="google-browser-lock" aria-hidden="true">●</span>
+          <span class="google-browser-address">google.com</span>
+          <button id="google-reload" class="google-reload-button" type="button" aria-label="Reload Google results" title="Reload Google results" disabled>↻</button>
+        </div>
+        <div class="google-frame-content">
+          <p id="google-empty-state" class="google-empty-state">Search for something in GOZIE SEARCH first. Then open the sidebar and choose Google to view Google's results here.</p>
+          <iframe id="google-frame" title="Google search results" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" hidden></iframe>
+        </div>
+      </div>
+      <p id="google-view-status" class="google-view-status" role="status" aria-live="polite">Google results will be displayed inside GOZIE SEARCH.</p>
+    </section>
     <footer class="footer">
       <a class="footer-brand" href="./">GOZIE SEARCH</a>
       <span>Explore beyond limits.</span>
@@ -195,13 +215,14 @@
     <div class="sidebar-header"><a class="brand-small" href="./"><span class="brand-mark">G</span><span>GOZIE <span class="brand-accent">SEARCH</span></span></a><button id="sidebar-close" class="icon-button" type="button" aria-label="Close sidebar">×</button></div>
     <button id="sidebar-new-search" class="sidebar-item primary-sidebar-item" type="button"><span>＋</span> New search</button>
     <button id="sidebar-history" class="sidebar-item" type="button"><span>◷</span> Search history</button>
+    <button id="sidebar-google" class="sidebar-item" type="button"><span aria-hidden="true">G</span> Google</button>
     <button id="sidebar-settings" class="sidebar-item" type="button"><span>⚙</span> Settings</button>
     <div class="sidebar-divider"></div>
     <button id="theme-toggle" class="sidebar-item theme-sidebar-item" type="button" aria-label="Switch to light mode"><span id="theme-icon">☀</span><span class="theme-label">Light mode</span></button>
     <div class="sidebar-bottom"><span>GOZIE SEARCH</span><small>Explore beyond limits.</small></div>
   </aside>
 
-  <script src="app.js?v=5"></script>
-  <script src="pwa.js?v=5"></script>
+  <script src="app.js?v=6"></script>
+  <script src="pwa.js?v=6"></script>
 </body>
 </html>
