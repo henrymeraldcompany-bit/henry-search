@@ -140,13 +140,20 @@ test("integrates all four search categories through their production API routes"
   await mockSearchApis(page, calls);
 
   const searchIn = async (category, query, expectedPath, expectedHost) => {
-    await page.locator(`.search-tab[data-category='${category}']`).click();
     await page.locator("#query").fill(query);
+    const tab = page.locator(`.search-tab[data-category='${category}']`);
+    const categoryAlreadyActive = await tab.getAttribute("aria-pressed") === "true";
     const response = page.waitForResponse(response => {
       const url = new URL(response.url());
       return url.hostname === expectedHost && url.pathname === expectedPath;
     });
-    await page.locator("#search-form button[type='submit']").click();
+    if (categoryAlreadyActive) {
+      await page.locator("#search-form button[type='submit']").click();
+    } else {
+      // Changing categories automatically reruns the current query; fill it first
+      // so the category-switch request is the integration request under test.
+      await tab.click();
+    }
     assert.equal((await response).status(), 200, `${category} route should return HTTP 200`);
     await page.waitForFunction(() => document.querySelector("#results-list")?.getAttribute("aria-busy") === "false");
   };
