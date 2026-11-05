@@ -5,6 +5,7 @@ import { runImageProviders, rankImageResults } from "./image-search.js";
 import { filterImageResults } from "./image-filters.js";
 import { createDailyRequestBudget, discoverDailyNews, discoverDailyWeb } from "./daily-search-discovery.js";
 import { createRequestDiagnostic, recordRequestDiagnostic } from "./diagnostics.js";
+import { normalizeNewsArticleUrl } from "./news-url.js";
 
 /**
  * GOZIE SEARCH Media Worker
@@ -469,7 +470,15 @@ async function indexedSearch(env, kind, query, limit) {
   const built = indexedSearchQuery(kind, query, limit);
   if (!built) return [];
   const data = await env.MEDIA_DB.prepare(built.sql).bind(...built.params).all();
-  return data.results || [];
+  const rows = data.results || [];
+  if (kind !== "news") return rows;
+  return rows.map(row => {
+    const url = normalizeNewsArticleUrl(row.url);
+    const canonicalUrl = normalizeNewsArticleUrl(row.canonical_url || row.url);
+    let domain = row.domain || "";
+    try { domain = new URL(canonicalUrl || url).hostname.toLowerCase().replace(/^www\\./, ""); } catch {}
+    return { ...row, url: url || row.url, canonical_url: canonicalUrl || row.canonical_url, domain };
+  });
 }
 
 async function save(env, rows) {
