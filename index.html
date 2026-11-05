@@ -187,12 +187,12 @@
       <div class="google-browser-frame">
         <div class="google-browser-bar">
           <span class="google-browser-lock" aria-hidden="true">●</span>
-          <span class="google-browser-address">google.com</span>
+          <span class="google-browser-address">GOZIE in-app browser · links stay here when supported</span>
           <button id="google-reload" class="google-reload-button" type="button" aria-label="Reload Google results" title="Reload Google results" disabled>↻</button>
         </div>
         <div class="google-frame-content">
           <p id="google-empty-state" class="google-empty-state">Search for something in GOZIE SEARCH first. Then open the sidebar and choose Google to view Google's results here.</p>
-          <iframe id="google-frame" title="Google search results" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" hidden></iframe>
+          <iframe id="google-frame" title="Google results and in-app website viewer" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-forms allow-scripts allow-same-origin allow-downloads" hidden></iframe>
         </div>
       </div>
       <p id="google-view-status" class="google-view-status" role="status" aria-live="polite">Google results will be displayed inside GOZIE SEARCH.</p>
