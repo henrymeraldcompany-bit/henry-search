@@ -146,6 +146,10 @@ The daily indexer applies explicit per-invocation limits rather than relying onl
 
 The row and request limits are regression-tested. If providers, seed counts, response caps, or enrichment calls change, update the calculated budgets and tests together.
 
+### Production usage snapshot — 5 November 2026
+
+Cloudflare GraphQL analytics for 29 October–5 November recorded 2,127 combined incoming requests and 3,352 subrequests across the API and Media Workers. The bound D1 database recorded 1,052,773 rows read and 23,685 rows written across the same eight calendar days; its highest observed daily totals were 599,087 rows read and 7,200 rows written. The latest reported database size was 2,789,376 bytes (about 2.79 MB) against the documented 5 GB D1 Free storage allowance. These measurements include test and smoke-test traffic and cover the named Workers and database only; they are a point-in-time baseline, not an account-wide forecast or a dedicated quota allocation.
+
 ## 8. Data model and configuration
 
 - D1 binding: `MEDIA_DB`.
