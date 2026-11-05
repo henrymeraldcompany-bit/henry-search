@@ -119,10 +119,12 @@ test("indexing request budget stays below the Workers Free 50-subrequest ceiling
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3/);
 });
 
-test("both production Workers pin the Free-tier 50 external-subrequest ceiling", () => {
+test("Free-plan Worker configs rely on the built-in 50-subrequest ceiling", () => {
   for (const [name, config] of [["Media", mediaConfig], ["API", apiConfig]]) {
-    assert.match(config, /\[limits\][\s\S]*?subrequests\s*=\s*50/, name + " Worker must pin 50 subrequests");
+    assert.doesNotMatch(config, /^\\[limits\\]/m, name + " Worker must not set unsupported custom limits on Free");
   }
+  assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50/);
+  assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3/);
 });
 
 test("daily indexed rows and retention cleanup have hard per-run caps", () => {
