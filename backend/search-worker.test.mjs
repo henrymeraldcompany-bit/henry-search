@@ -939,3 +939,41 @@ test("does not call the cached search entrypoint for extraction, root or authent
   assert.equal(authenticated.status, 400);
   assert.equal(cachedCalls, 0);
 });
+
+
+test("live news search unwraps Bing News redirect URLs before returning publisher links", async () => {
+  const originalFetch = globalThis.fetch;
+  const target = "https://news.example/education-report";
+  const wrapped = "http://www.bing.com/news/apiclick.aspx?ref=FexRss&url=" +
+    encodeURIComponent(target) + "&c=123";
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.hostname === "api.gdeltproject.org") {
+      return new Response(JSON.stringify({ articles: [] }), {
+        headers: { "content-type": "application/json" }
+      });
+    }
+    if (url.hostname === "www.bing.com") {
+      return new Response("<rss><channel><item><title>Education policy research report</title><link>" +
+        wrapped.replace(/&/g, "&amp;") +
+        "</link><source>Education Publisher</source><description>Education research coverage.</description></item></channel></rss>");
+    }
+    if (["news.google.com", "feeds.bbci.co.uk", "www.aljazeera.com",
+      "www.theguardian.com", "feeds.npr.org"].includes(url.hostname)) {
+      return new Response("<rss><channel></channel></rss>");
+    }
+    throw new Error("Unexpected endpoint " + url.href);
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://search.example/news?q=education%20policy")
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(payload));
+    assert.equal(payload.results.length, 1);
+    assert.equal(payload.results[0].url, target);
+    assert.equal(payload.results[0].originalUrl, target);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
