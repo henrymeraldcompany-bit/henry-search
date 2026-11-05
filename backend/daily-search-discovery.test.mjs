@@ -194,3 +194,31 @@ test("daily web and multi-source news discovery cannot exceed its five-request a
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("daily news discovery unwraps Bing News tracking redirects to publisher URLs", async () => {
+  const originalFetch = globalThis.fetch;
+  const target = "https://news.example/education-report";
+  const wrapped = "http://www.bing.com/news/apiclick.aspx?ref=FexRss&url=" +
+    encodeURIComponent(target) + "&c=123";
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    if (url.hostname === "api.gdeltproject.org") return json({ articles: [] });
+    if (url.hostname === "news.google.com") return new Response("<rss><channel></channel></rss>");
+    if (url.hostname === "www.bing.com") {
+      return new Response("<rss><channel><item><title>Education policy research report</title><link>" +
+        wrapped + "</link><source>Education Publisher</source><description>Education research coverage.</description></item></channel></rss>");
+    }
+    throw new Error("Unexpected endpoint " + url.href);
+  };
+  try {
+    const result = await discoverDailyNews("education policy", {
+      budget: createDailyRequestBudget(5)
+    });
+    assert.equal(result.results.length, 1);
+    assert.equal(result.results[0].url, target);
+    assert.equal(result.results[0].canonicalUrl, target);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
