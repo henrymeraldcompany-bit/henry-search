@@ -220,7 +220,8 @@ test("mobile layouts remain usable without horizontal overflow at common phone w
 
     await page.locator("#menu-toggle").click();
     assert.equal(await page.locator("#app-sidebar").getAttribute("aria-hidden"), "false");
-    await page.locator("#menu-toggle").click();
+    await page.locator("#sidebar-close").click();
+    assert.equal(await page.locator("#app-sidebar").getAttribute("aria-hidden"), "true");
     assert.deepEqual(errors, [], `No browser errors expected at ${width}px`);
     await page.close();
   }
