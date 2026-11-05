@@ -87,6 +87,31 @@ jobs:
           NODE
           echo "Live web search response time: ${elapsed}s (limit 15s)"
 
+
+      - name: Verify production news links resolve to publisher pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 20 --output "$body" --write-out '%{http_code}' --get --data-urlencode 'q=education policy' "$API/news")"
+          [[ "$status" == "200" ]] || { echo "Live news search returned HTTP $status"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (!Array.isArray(data.results) || !Array.isArray(data.providers)) throw new Error("Live news response contract failed");
+          if (!data.results.length) throw new Error("Live news search returned no results");
+          for (const item of data.results) {
+            if (!item.title || !item.url) throw new Error("News result is missing title or URL");
+            const url = new URL(item.url);
+            if (url.hostname.toLowerCase().replace(/^www\\./, "") === "bing.com" &&
+                url.pathname.toLowerCase() === "/news/apiclick.aspx") {
+              throw new Error("Bing tracking redirect leaked into a publisher result");
+            }
+          }
+          console.log("Live news publisher-link normalization passed:", data.results.length, "results");
+          NODE
+
       - name: Reject untrusted browser origins
         shell: bash
         run: |
