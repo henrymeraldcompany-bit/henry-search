@@ -165,7 +165,7 @@ test("integrates all four search categories through their production API routes"
 
   const history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-search-history") || "[]"));
   for (const category of ["all", "images", "news", "videos"]) {
-    assert.equal(history.some(item => item.category === category), true, `${category} searches should be saved in history`);
+    assert.equal(history.some(item => item.category === category), true, `${category} searches should be saved in history; actual history: ${JSON.stringify(history)}`);
   }
   assert.deepEqual(errors, []);
   assert.equal(calls.filter(call => ["/search", "/images", "/news", "/videos"].includes(call.path)).length, 4);
