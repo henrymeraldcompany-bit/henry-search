@@ -1,0 +1,49 @@
+name: Frontend browser regression tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "app.js"
+      - "style.css"
+      - "pwa.js"
+      - "manifest.webmanifest"
+      - "icons/**"
+      - "frontend-regression.test.cjs"
+      - ".github/workflows/frontend-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "app.js"
+      - "style.css"
+      - "pwa.js"
+      - "manifest.webmanifest"
+      - "icons/**"
+      - "frontend-regression.test.cjs"
+      - ".github/workflows/frontend-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned Playwright browser runner
+        run: |
+          npm install --global playwright@1.56.1
+          npx --yes playwright@1.56.1 install --with-deps chromium
+      - name: Run real-browser frontend regression tests
+        run: |
+          export NODE_PATH="$(npm root -g)"
+          node --test frontend-regression.test.cjs
