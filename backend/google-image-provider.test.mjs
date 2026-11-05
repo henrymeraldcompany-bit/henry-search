@@ -47,6 +47,6 @@ test("uses official Google image search with safe search and reusable license fi
   assert.match(rows[0].license, /not supplied by Google/);
 });
 test("does not call Google when existing-customer credentials are absent", async () => {
-  assert.deepEqual(await harness.googleImages("solar system", {}, 10), []);
-  assert.deepEqual(await harness.googleImages("solar system", {GOOGLE_CSE_API_KEY:"only-key"}, 10), []);
+  assert.equal((await harness.googleImages("solar system", {}, 10)).length, 0);
+  assert.equal((await harness.googleImages("solar system", {GOOGLE_CSE_API_KEY:"only-key"}, 10)).length, 0);
 });
