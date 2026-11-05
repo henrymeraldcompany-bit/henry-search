@@ -121,7 +121,7 @@ test("indexing request budget stays below the Workers Free 50-subrequest ceiling
 
 test("both production Workers pin the Free-tier 50 external-subrequest ceiling", () => {
   for (const [name, config] of [["Media", mediaConfig], ["API", apiConfig]]) {
-    assert.match(config, /\\[limits\\]\\s*subrequests\\s*=\\s*50/, name + " Worker must pin 50 subrequests");
+    assert.match(config, /\[limits\][\s\S]*?subrequests\s*=\s*50/, name + " Worker must pin 50 subrequests");
   }
 });
 
@@ -136,8 +136,8 @@ test("D1 batch-request budget reserves capacity for operational headroom", () =>
   const budget = budgetApi.createIndexD1BatchRequestBudget(50, 5);
   assert.equal(budget.remaining, 45);
   assert.equal(budgetApi.reserveIndexD1BatchRequestBudget(budget, 40), true);
-  assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 5), true);
-  assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 1), false);
+  assert.equal(budgetApi.reserveIndexD1BatchRequestBudget(budget, 5), true);
+  assert.equal(budgetApi.reserveIndexD1BatchRequestBudget(budget, 1), false);
   assert.equal(budget.used, 45);
   assert.equal(budget.reserved, 5);
 });
