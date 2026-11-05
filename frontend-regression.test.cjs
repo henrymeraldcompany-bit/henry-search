@@ -125,7 +125,7 @@ test("sidebar, settings, theme and history controls remain functional", async ()
     const rect = el.getBoundingClientRect();
     return { left: rect.left, right: rect.right, width: rect.width };
   });
-  assert.ok(Math.abs(sidebarPosition.right -  (await page.evaluate(() => window.innerWidth))) <= 1, "sidebar should be flush with the right edge");
+  assert.ok(Math.abs(sidebarPosition.right -  (await page.evaluate(() => document.documentElement.clientWidth))) <= 1, "sidebar should be flush with the right edge");
   await page.locator("#sidebar-settings").click();
   assert.equal(await page.locator("#settings-view").isVisible(), true);
   await page.locator("#setting-reduced-motion").check();
