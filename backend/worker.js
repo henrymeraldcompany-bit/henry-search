@@ -53,6 +53,11 @@ const MAX_INDEX_RETRIES_PER_RUN = calculateIndexRetryBudget(
   INDEX_EXTERNAL_SUBREQUEST_LIMIT, INDEX_EXTERNAL_SUBREQUEST_RESERVE,
   DAILY_SEED_BATCH_SIZE, PEERTUBE_INSTANCES.length, 2, MAX_DAILY_WEB_NEWS_REQUESTS
 );
+const INDEX_EXTERNAL_SUBREQUEST_WORST_CASE =
+  DAILY_SEED_BATCH_SIZE * (3 + PEERTUBE_INSTANCES.length) + 2 +
+  MAX_DAILY_WEB_NEWS_REQUESTS + MAX_INDEX_RETRIES_PER_RUN * PEERTUBE_INSTANCES.length;
+const INDEX_EXTERNAL_SUBREQUEST_HEADROOM =
+  INDEX_EXTERNAL_SUBREQUEST_LIMIT - INDEX_EXTERNAL_SUBREQUEST_WORST_CASE;
 function createIndexD1BatchRequestBudget(limit, reserve) {
   const total = Math.max(0, Math.floor(Number(limit) || 0));
   const held = Math.max(0, Math.min(total, Math.floor(Number(reserve) || 0)));
@@ -877,8 +882,39 @@ function parseIndexRunStats(value) {
   try { parsed = JSON.parse(value); } catch (_) { return null; }
   if (!parsed || parsed.version !== 1 || !parsed.providers ||
       typeof parsed.providers !== "object" || Array.isArray(parsed.providers)) return null;
-  return buildIndexRunStats(parsed.providers, parsed.seedsProcessed,
+  const normalized = buildIndexRunStats(parsed.providers, parsed.seedsProcessed,
     parsed.disabledProviders, parsed.durationMs);
+  const rawBudget = parsed.resourceBudget;
+  if (rawBudget && typeof rawBudget === "object" && !Array.isArray(rawBudget)) {
+    const keys = [
+      "externalSubrequestLimit", "externalSubrequestReserve",
+      "externalSubrequestsWorstCase", "externalSubrequestsHeadroom",
+      "retryBudgetRemaining", "d1BatchRequestLimit", "d1BatchRequestsUsed",
+      "d1BatchRequestsReserved", "d1BatchRequestsRemaining", "indexRowsQueued",
+      "indexRowsLimit", "searchRowsQueued", "searchRowsSaved", "searchRowsSkipped",
+      "searchRowsLimit", "retentionRowsPrunedMaximum",
+      "searchIndexRetentionRowsPrunedMaximum"
+    ];
+    const values = Object.create(null);
+    let valid = true;
+    for (const key of keys) {
+      const number = Number(rawBudget[key]);
+      if (!Number.isSafeInteger(number) || number < 0) { valid = false; break; }
+      values[key] = number;
+    }
+    const web = rawBudget.webNewsRequests;
+    if (!web || typeof web !== "object" || Array.isArray(web)) valid = false;
+    else {
+      for (const key of ["limit", "used", "remaining"]) {
+        const number = Number(web[key]);
+        if (!Number.isSafeInteger(number) || number < 0) { valid = false; break; }
+        if (!values.webNewsRequests) values.webNewsRequests = {};
+        values.webNewsRequests[key] = number;
+      }
+    }
+    if (valid) normalized.resourceBudget = values;
+  }
+  return normalized;
 }
 
 async function refresh(env) {
@@ -1028,10 +1064,31 @@ async function refresh(env) {
   await env.MEDIA_DB.prepare(
     "DELETE FROM search_index_items WHERE rowid IN (SELECT rowid FROM search_index_items WHERE indexed_at < ? ORDER BY indexed_at ASC LIMIT ?)"
   ).bind(retentionCutoff, INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
-  const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
   if (!reserveIndexD1BatchRequestBudget(d1BatchRequestBudget, 1)) {
     throw new Error("D1 indexing batch-request budget exhausted before run summary");
   }
+  const resourceBudget = {
+    externalSubrequestLimit: INDEX_EXTERNAL_SUBREQUEST_LIMIT,
+    externalSubrequestReserve: INDEX_EXTERNAL_SUBREQUEST_RESERVE,
+    externalSubrequestsWorstCase: INDEX_EXTERNAL_SUBREQUEST_WORST_CASE,
+    externalSubrequestsHeadroom: INDEX_EXTERNAL_SUBREQUEST_HEADROOM,
+    retryBudgetRemaining: retryBudget.remaining,
+    d1BatchRequestLimit: INDEX_D1_BATCH_REQUEST_LIMIT,
+    d1BatchRequestsUsed: d1BatchRequestBudget.used,
+    d1BatchRequestsReserved: d1BatchRequestBudget.reserved,
+    d1BatchRequestsRemaining: d1BatchRequestBudget.remaining,
+    indexRowsQueued: indexRowsQueued,
+    indexRowsLimit: INDEX_MAX_ROWS_PER_RUN,
+    searchRowsQueued: boundedSearchRows.length,
+    searchRowsSaved: searchRowsSaved,
+    searchRowsSkipped: searchRowsSkipped,
+    searchRowsLimit: INDEX_MAX_SEARCH_ROWS_PER_RUN,
+    webNewsRequests: searchRequestBudget.snapshot(),
+    retentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE,
+    searchIndexRetentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE
+  };
+  const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
+  stats.resourceBudget = resourceBudget;
   await env.MEDIA_DB.prepare(
     "INSERT INTO index_runs (finished_at,rows_processed,failure_count,note,stats_json) VALUES (?,?,?,?,?)"
   ).bind(new Date().toISOString(), saved, failures.length,
@@ -1043,23 +1100,7 @@ async function refresh(env) {
     seedsProcessed: dailySeeds.length,
     disabledProviders: disabledProviders,
     stats: stats,
-    resourceBudget: {
-      externalSubrequestLimit: INDEX_EXTERNAL_SUBREQUEST_LIMIT,
-      externalSubrequestReserve: INDEX_EXTERNAL_SUBREQUEST_RESERVE,
-      retryBudgetRemaining: retryBudget.remaining,
-      d1BatchRequestLimit: INDEX_D1_BATCH_REQUEST_LIMIT,
-      d1BatchRequestsUsed: d1BatchRequestBudget.used,
-      d1BatchRequestsReserved: d1BatchRequestBudget.reserved,
-      indexRowsQueued: indexRowsQueued,
-      indexRowsLimit: INDEX_MAX_ROWS_PER_RUN,
-      searchRowsQueued: boundedSearchRows.length,
-      searchRowsSaved: searchRowsSaved,
-      searchRowsSkipped: searchRowsSkipped,
-      searchRowsLimit: INDEX_MAX_SEARCH_ROWS_PER_RUN,
-      webNewsRequests: searchRequestBudget.snapshot(),
-      retentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE,
-      searchIndexRetentionRowsPrunedMaximum: INDEX_RETENTION_PRUNE_BATCH_SIZE
-    }
+    resourceBudget: resourceBudget
   }));
 }
 function searchIndexCountsQuery() {
