@@ -1,0 +1,79 @@
+name: Task 80 production smoke verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/task80-production-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      API: https://henry-search-api.henrymeraldcompany.workers.dev
+      MEDIA: https://gozie-search-media.henrymeraldcompany.workers.dev
+    steps:
+      - name: Verify API gateway production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          trap 'rm -f "$headers" "$body"' EXIT
+          status="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 20 --dump-header "$headers" --output "$body" --write-out '%{http_code}' "$API/")"
+          [[ "$status" == "200" ]] || { echo "API root returned HTTP $status"; cat "$body"; exit 1; }
+          grep -Fqi "X-GOZIE-RateLimit: active" "$headers"
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const d = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (d.status !== "online" || !Array.isArray(d.endpoints)) throw new Error("API root response contract failed");
+          console.log("API gateway: online");
+          NODE
+
+      - name: Verify API request validation after deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --max-time 20 --output "$body" --write-out '%{http_code}' "$API/search")"
+          [[ "$status" == "400" ]] || { echo "Malformed API request returned HTTP $status; expected 400"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const d = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (typeof d.error !== "string" || !d.error) throw new Error("API validation error contract failed");
+          console.log("API validation: ok");
+          NODE
+
+      - name: Verify Media Worker and D1 index status
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 20 "$MEDIA/health" |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(d.status!=="ok")throw new Error("Media health contract failed");console.log("Media Worker: healthy")})'
+          curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 20 "$MEDIA/index/status" |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(!Array.isArray(d.counts)||!Array.isArray(d.searchCounts)||!Array.isArray(d.searchFreshness)||!("latestRun" in d))throw new Error("D1 index status contract failed");console.log("D1 index status: ok")})'
+
+      - name: Verify indexed news fallback route
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 20 --output "$body" --write-out '%{http_code}' --get --data-urlencode 'kind=news' --data-urlencode 'q=technology' "$MEDIA/index/search")"
+          [[ "$status" == "200" ]] || { echo "Indexed news route returned HTTP $status"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const d = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (d.kind !== "news" || typeof d.query !== "string" ||
+              !Number.isSafeInteger(d.count) || d.count < 0 ||
+              !Array.isArray(d.results) || d.count !== d.results.length) {
+            throw new Error("Indexed news response contract failed");
+          }
+          console.log("Indexed news fallback: " + d.count + " results");
+          NODE
