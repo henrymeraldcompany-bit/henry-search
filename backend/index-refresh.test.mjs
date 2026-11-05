@@ -121,7 +121,7 @@ test("indexing request budget stays below the Workers Free 50-subrequest ceiling
 
 test("Free-plan Worker configs rely on the built-in 50-subrequest ceiling", () => {
   for (const [name, config] of [["Media", mediaConfig], ["API", apiConfig]]) {
-    assert.doesNotMatch(config, /^\\[limits\\]/m, name + " Worker must not set unsupported custom limits on Free");
+    assert.doesNotMatch(config, /^\[limits\]/m, name + " Worker must not set unsupported custom limits on Free");
   }
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50/);
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3/);
