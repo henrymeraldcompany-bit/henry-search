@@ -1636,6 +1636,23 @@ input:focus-visible {
 .history-item{display:grid;gap:6px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer}
 .history-item:hover{border-color:var(--accent)}
 .history-item small{color:var(--muted)}
+/* Google search is presented as an in-app browser view, never a top-level redirect. */
+.google-view{width:min(1120px,100%);min-height:70vh}
+.google-utility-heading h1{display:flex;align-items:center;gap:10px}
+.google-title-mark{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#fff;color:#4285f4;font-size:30px;font-weight:800;letter-spacing:-2px}
+.google-browser-frame{overflow:hidden;border:1px solid var(--border);border-radius:15px;background:#fff;box-shadow:0 12px 34px rgba(0,0,0,.12)}
+.google-browser-bar{display:flex;align-items:center;gap:10px;min-height:43px;padding:5px 12px;background:#f3f5f7;color:#52606d;border-bottom:1px solid #e0e4e8;font-size:12px}
+.google-browser-lock{color:#249b62;font-size:10px}
+.google-browser-address{flex:1;font-weight:650}
+.google-reload-button{width:34px;height:32px;border:1px solid #d9e0e6;border-radius:9px;background:#fff;color:#334155;font:inherit;font-size:19px;cursor:pointer}
+.google-reload-button:disabled{opacity:.4;cursor:not-allowed}
+.google-frame-content{min-height:66vh;background:#fff}
+#google-frame{display:block;width:100%;height:78vh;min-height:560px;border:0;background:#fff}
+#google-frame[hidden]{display:none}
+.google-empty-state{display:grid;place-items:center;min-height:420px;margin:0;padding:30px;color:#52606d;text-align:center;line-height:1.7}
+.google-empty-state[hidden]{display:none}
+.google-view-status{min-height:22px;margin:10px 2px;color:var(--muted);font-size:12px;line-height:1.5}
+@media(max-width:600px){.google-view{margin-top:22px}.google-browser-frame{border-radius:11px}.google-frame-content{min-height:68vh}#google-frame{height:72vh;min-height:520px}.google-empty-state{min-height:360px;padding:24px}}
 .page.utility-open .hero,.page.utility-open .search-area,.page.utility-open .results-section,.page.utility-open .footer{display:none}
 html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}
 @media(max-width:600px){.utility-view{margin:22px auto 40px}.settings-group{padding:4px 13px}.setting-row{gap:10px}.setting-row strong{font-size:13px}.setting-row select{max-width:125px}}
