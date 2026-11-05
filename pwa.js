@@ -32,7 +32,7 @@
 
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=5", { scope: "./" }).catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=6", { scope: "./" }).catch(() => {});
     });
   }
 
