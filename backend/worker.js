@@ -1195,30 +1195,33 @@ async function readIndexStatus(env) {
 export default {
   async fetch(request,env) {
     const diagnostic = createRequestDiagnostic(request, "gozie-search-media");
-    if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET, OPTIONS","access-control-allow-headers":"Content-Type"}});
-    if(request.method!=="GET")return reply({error:"Only GET requests are supported."},405);
+    const finish = (response, error) => {
+      recordRequestDiagnostic(diagnostic, response && response.status, error);
+      return response;
+    };
+    if(request.method==="OPTIONS")return finish(new Response(null,{status:204,headers:{"access-control-allow-origin":"*","access-control-allow-methods":"GET, OPTIONS","access-control-allow-headers":"Content-Type"}}));
+    if(request.method!=="GET")return finish(reply({error:"Only GET requests are supported."},405));
     const p=new URL(request.url).pathname.replace(/\/+$/,"")||"/";
     try {
-      if(p==="/"||p==="/health")return reply({name:"GOZIE SEARCH Media API",status:"ok"});
-      if(p==="/images")return await search(request,env,"image");
-      if(p==="/videos")return await search(request,env,"video");
+      if(p==="/"||p==="/health")return finish(reply({name:"GOZIE SEARCH Media API",status:"ok"}));
+      if(p==="/images")return finish(await search(request,env,"image"));
+      if(p==="/videos")return finish(await search(request,env,"video"));
       if(p==="/index/search"){
         const params=new URL(request.url).searchParams;
         const kind=(params.get("kind")||"").trim().toLowerCase();
         const query=(params.get("q")||"").trim().slice(0,180);
         const limit=Number(params.get("limit"))||20;
-        if(!["web","news"].includes(kind))return reply({error:"Choose kind=web or kind=news."},400);
-        if(!query)return reply({error:"Provide a search query."},400);
+        if(!["web","news"].includes(kind))return finish(reply({error:"Choose kind=web or kind=news."},400));
+        if(!query)return finish(reply({error:"Provide a search query."},400));
         const results=await indexedSearch(env,kind,query,limit);
-        return reply({kind,query,count:results.length,results});
+        return finish(reply({kind,query,count:results.length,results}));
       }
       if(p==="/index/status"){
-        return reply(await readIndexStatus(env));
+        return finish(reply(await readIndexStatus(env)));
       }
-      return reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404);
+      return finish(reply({error:"Not found",availableRoutes:["/health","/images?q=...","/videos?q=...","/index/search?kind=web|news&q=...","/index/status"]},404));
     }catch(e){
-      recordRequestDiagnostic(diagnostic, 503, e);
-      return reply({error:"The media service is temporarily unavailable. Please try again shortly."},503);
+      return finish(reply({error:"The media service is temporarily unavailable. Please try again shortly."},503), e);
     }
   },
   async scheduled(controller,env,ctx) {
