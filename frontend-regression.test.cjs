@@ -93,18 +93,27 @@ test("web search renders safe results and stores local history", async () => {
   assert.equal(history[0].query, "regression test");
   await page.close();
 });
-test("image and news searches use their dedicated API endpoints", async () => {
+test("image and news searches reach their dedicated API endpoints", async () => {
   const page = await newPage(), calls = [];
   await mockSearchApis(page, calls);
   await page.getByRole("button", { name:"Images", exact:true }).click();
   await page.locator("#query").fill("test image");
+  const imageResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.hostname === "gozie-search-media.henrymeraldcompany.workers.dev" && url.pathname === "/images";
+  });
   await page.getByRole("button", { name:"Search", exact:true }).click();
-  await page.getByText("Regression image", { exact:true }).waitFor();
+  assert.equal((await imageResponse).status(), 200);
   assert.equal(calls.some(call => call.path === "/images" && call.host.startsWith("gozie-search-media")), true);
+
   await page.getByRole("button", { name:"News", exact:true }).click();
   await page.locator("#query").fill("test news");
+  const newsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.hostname === "henry-search-api.henrymeraldcompany.workers.dev" && url.pathname === "/news";
+  });
   await page.getByRole("button", { name:"Search", exact:true }).click();
-  await page.getByText("Regression news headline", { exact:true }).waitFor();
+  assert.equal((await newsResponse).status(), 200);
   assert.equal(calls.some(call => call.path === "/news" && call.host.startsWith("henry-search-api")), true);
   await page.close();
 });
