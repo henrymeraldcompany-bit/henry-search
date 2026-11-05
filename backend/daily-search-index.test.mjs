@@ -133,3 +133,35 @@ test("scheduled refresh stores webpage and news metadata separately from media r
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("indexed news search unwraps legacy Bing redirect links already stored in D1", async () => {
+  const db = database();
+  const target = "https://news.example/education-report";
+  const wrapped = "http://www.bing.com/news/apiclick.aspx?ref=FexRss&url=" +
+    encodeURIComponent(target) + "&c=123";
+  db.rows.push({
+    kind: "news",
+    canonical_url: wrapped,
+    title: "Education policy research report",
+    url: wrapped,
+    domain: "bing.com",
+    snippet: "Education policy research coverage",
+    source: "Education Publisher",
+    provider: "Bing News RSS",
+    sources_json: '["Education Publisher"]',
+    providers_json: '["Bing News RSS"]',
+    published_at: "",
+    indexed_at: "2026-11-05T07:00:00.000Z"
+  });
+  const response = await worker.fetch(
+    new Request("https://media.example/index/search?kind=news&q=education"),
+    { MEDIA_DB: db }
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.count, 1);
+  assert.equal(payload.results[0].url, target);
+  assert.equal(payload.results[0].canonical_url, target);
+  assert.equal(payload.results[0].domain, "news.example");
+});
