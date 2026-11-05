@@ -139,6 +139,38 @@ test("sidebar, settings, theme and history controls remain functional", async ()
   await page.close();
 });
 
+test("history supports starring, individual deletion and confirmed bulk deletion", async () => {
+  const page = await newPage();
+  await page.evaluate(() => localStorage.setItem("gozie-search-history", JSON.stringify([
+    { query:"first saved search", category:"all", date:"2026-11-01T10:00:00.000Z" },
+    { query:"second saved search", category:"news", date:"2026-11-02T10:00:00.000Z" },
+    { query:"third saved search", category:"images", date:"2026-11-03T10:00:00.000Z" }
+  ])));
+  await page.reload({ waitUntil:"networkidle" });
+  await page.locator("#menu-toggle").click();
+  await page.locator("#sidebar-history").click();
+  await page.getByRole("button", { name:"More options for first saved search" }).click();
+  await page.getByRole("button", { name:"Star search" }).click();
+  let history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-search-history") || "[]"));
+  assert.equal(history[0].starred, true);
+  assert.match(await page.locator(".history-item").first().innerText(), /★ first saved search/);
+
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name:"More options for second saved search" }).click();
+  await page.getByRole("button", { name:"Delete", exact:true }).click();
+  history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-search-history") || "[]"));
+  assert.deepEqual(history.map(item => item.query), ["first saved search", "third saved search"]);
+
+  await page.locator("#history-select-all").check();
+  assert.equal(await page.locator(".history-select:checked").count(), 2);
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name:/Delete selected/ }).click();
+  history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-search-history") || "[]"));
+  assert.equal(history.length, 0);
+  assert.match(await page.locator("#history-list").innerText(), /No searches saved yet/);
+  await page.close();
+});
+
 test("Google sidebar opens Google results inside GOZIE SEARCH for the last searched query", async () => {
   const page = await newPage(), calls = [];
   await mockSearchApis(page, calls);
