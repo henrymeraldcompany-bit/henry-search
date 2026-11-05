@@ -133,3 +133,41 @@ test("sidebar, settings, theme and history controls remain functional", async ()
   assert.equal(await page.locator("#history-view").isVisible(), true);
   await page.close();
 });
+
+test("integrates all four search categories through their production API routes", async () => {
+  const page = await newPage(), calls = [], errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockSearchApis(page, calls);
+
+  const searchIn = async (category, query, expectedPath, expectedHost) => {
+    await page.locator(`.search-tab[data-category='${category}']`).click();
+    await page.locator("#query").fill(query);
+    const response = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.hostname === expectedHost && url.pathname === expectedPath;
+    });
+    await page.locator("#search-form button[type='submit']").click();
+    assert.equal((await response).status(), 200, `${category} route should return HTTP 200`);
+    await page.waitForFunction(() => document.querySelector("#results-list")?.getAttribute("aria-busy") === "false");
+  };
+
+  await searchIn("all", "integrated web", "/search", "henry-search-api.henrymeraldcompany.workers.dev");
+  assert.equal(await page.locator(".web-result-card").count(), 1);
+
+  await searchIn("images", "integrated images", "/images", "gozie-search-media.henrymeraldcompany.workers.dev");
+  assert.equal(await page.locator("#results-list img").count(), 1);
+
+  await searchIn("news", "integrated news", "/news", "henry-search-api.henrymeraldcompany.workers.dev");
+  assert.equal(await page.locator(".news-preview-card").count(), 1);
+
+  await searchIn("videos", "integrated videos", "/videos", "gozie-search-media.henrymeraldcompany.workers.dev");
+  assert.match(await page.locator("#results-list").innerText(), /No matching videos|Search YouTube/);
+
+  const history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-search-history") || "[]"));
+  for (const category of ["all", "images", "news", "videos"]) {
+    assert.equal(history.some(item => item.category === category), true, `${category} searches should be saved in history`);
+  }
+  assert.deepEqual(errors, []);
+  assert.equal(calls.filter(call => ["/search", "/images", "/news", "/videos"].includes(call.path)).length, 4);
+  await page.close();
+});
