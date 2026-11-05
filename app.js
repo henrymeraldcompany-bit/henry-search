@@ -1716,6 +1716,8 @@ searchTabs.forEach(tab => {
 // SEARCH SUBMISSION
 // ========================================
 
+let lastSubmittedQuery = "";
+
 if (form && queryInput && resultsList) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1727,6 +1729,7 @@ if (form && queryInput && resultsList) {
       return;
     }
 
+    lastSubmittedQuery = query;
     const requestId = ++activeSearchRequest;
     saveSearchHistory(query, currentCategory);
     if (hero) hero.hidden = true;
@@ -2131,6 +2134,12 @@ const page = document.querySelector(".page");
 const settingsView = document.querySelector("#settings-view");
 const historyView = document.querySelector("#history-view");
 const historyList = document.querySelector("#history-list");
+const googleView = document.querySelector("#google-view");
+const googleFrame = document.querySelector("#google-frame");
+const googleQueryLabel = document.querySelector("#google-query-label");
+const googleEmptyState = document.querySelector("#google-empty-state");
+const googleViewStatus = document.querySelector("#google-view-status");
+const googleReloadButton = document.querySelector("#google-reload");
 let sidebarOpener = null;
 function getSidebarFocusableItems() {
   if (!sidebar) return [];
@@ -2196,6 +2205,7 @@ function showUtilityView(view) {
   if (page) page.classList.toggle("utility-open", Boolean(view));
   if (settingsView) settingsView.hidden = view !== "settings";
   if (historyView) historyView.hidden = view !== "history";
+  if (googleView) googleView.hidden = view !== "google";
   if (!view) {
     if (hero) hero.hidden = false;
     if (resultsSection) resultsSection.hidden = true;
@@ -2205,6 +2215,47 @@ function showUtilityView(view) {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 }
+function buildGoogleSearchUrl(query) {
+  const url = new URL("https://www.google.com/search");
+  url.searchParams.set("igu", "1");
+  url.searchParams.set("q", query);
+  return url.toString();
+}
+function openGoogleSearchView() {
+  const query = lastSubmittedQuery.trim();
+  showUtilityView("google");
+
+  if (!query) {
+    if (googleFrame) {
+      googleFrame.hidden = true;
+      googleFrame.removeAttribute("src");
+      delete googleFrame.dataset.query;
+    }
+    if (googleEmptyState) googleEmptyState.hidden = false;
+    if (googleQueryLabel) googleQueryLabel.textContent = "No recent search yet";
+    if (googleViewStatus) googleViewStatus.textContent = "Search in GOZIE SEARCH first, then choose Google from the sidebar.";
+    if (googleReloadButton) googleReloadButton.disabled = true;
+    return;
+  }
+
+  if (googleQueryLabel) googleQueryLabel.textContent = 'Google results for "' + query + '"';
+  if (googleEmptyState) googleEmptyState.hidden = true;
+  if (googleFrame) {
+    googleFrame.hidden = false;
+    if (googleFrame.dataset.query !== query) {
+      googleFrame.dataset.query = query;
+      googleFrame.src = buildGoogleSearchUrl(query);
+    }
+  }
+  if (googleViewStatus) googleViewStatus.textContent = "Google is opening inside GOZIE SEARCH. If the results area stays blank, Google may be restricting embedded display.";
+  if (googleReloadButton) googleReloadButton.disabled = false;
+}
+googleReloadButton?.addEventListener("click", () => {
+  const query = lastSubmittedQuery.trim();
+  if (!query || !googleFrame) return;
+  googleFrame.src = buildGoogleSearchUrl(query);
+  if (googleViewStatus) googleViewStatus.textContent = 'Reloading Google results for "' + query + '" inside GOZIE SEARCH.';
+});
 document.querySelector("#sidebar-new-search")?.addEventListener("click", () => {
   showUtilityView(null);
   if (queryInput) queryInput.value = "";
@@ -2217,6 +2268,7 @@ document.querySelector("#sidebar-history")?.addEventListener("click", () => {
   renderSearchHistory();
   showUtilityView("history");
 });
+document.querySelector("#sidebar-google")?.addEventListener("click", openGoogleSearchView);
 document.querySelectorAll("[data-return-home]").forEach(button => button.addEventListener("click", () => showUtilityView(null)));
 
 function loadSettings() {
