@@ -1,0 +1,66 @@
+name: Image search production smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/image-search-live-smoke.yml"
+      - "backend/worker.js"
+      - "backend/image-search.js"
+      - "backend/image-providers.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MEDIA: https://gozie-search-media.henrymeraldcompany.workers.dev
+    steps:
+      - name: Verify live image search response
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 40 --output "$body" --write-out '%{http_code}' --get --data-urlencode 'q=red panda' "$MEDIA/images")"
+          [[ "$status" == "200" ]] || { echo "Image search returned HTTP $status"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (data.query !== "red panda") throw new Error("Image search query was not preserved");
+          if (!Array.isArray(data.providers) || data.providers.length < 1) throw new Error("No image provider succeeded");
+          if (!Array.isArray(data.failedProviders)) throw new Error("Provider failure details missing");
+          if (!Array.isArray(data.results) || data.results.length < 1) throw new Error("Live image search returned no results");
+          if (data.count !== data.results.length) throw new Error("Image result count does not match results array");
+          for (const item of data.results) {
+            if (typeof item.title !== "string" || !item.title.trim()) throw new Error("An image result has no title");
+            for (const field of ["page", "image", "thumbnail"]) {
+              let url;
+              try { url = new URL(item[field]); } catch { throw new Error("Image result has invalid " + field + " URL"); }
+              if (url.protocol !== "https:") throw new Error("Image result " + field + " URL is not HTTPS");
+            }
+            if (typeof item.source !== "string" || !item.source) throw new Error("Image result source attribution is missing");
+          }
+          console.log("Live image search passed:", data.count, "results from", data.providers.join(", "));
+          if (data.failedProviders.length) console.log("Isolated provider failures:", data.failedProviders.length);
+          NODE
+      - name: Verify image search input validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --max-time 20 --output "$body" --write-out '%{http_code}' "$MEDIA/images")"
+          [[ "$status" == "400" ]] || { echo "Empty image query returned HTTP $status"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (typeof data.error !== "string" || !data.error || !Array.isArray(data.results)) {
+            throw new Error("Image search validation error contract failed");
+          }
+          console.log("Image search input validation passed");
+          NODE
