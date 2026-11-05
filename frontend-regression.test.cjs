@@ -151,16 +151,16 @@ test("integrates all four search categories through their production API routes"
     await page.waitForFunction(() => document.querySelector("#results-list")?.getAttribute("aria-busy") === "false");
   };
 
-  await searchIn("all", "integrated web", "/search", "henry-search-api.henrymeraldcompany.workers.dev");
+  await searchIn("all", "regression", "/search", "henry-search-api.henrymeraldcompany.workers.dev");
   assert.equal(await page.locator(".web-result-card").count(), 1);
 
-  await searchIn("images", "integrated images", "/images", "gozie-search-media.henrymeraldcompany.workers.dev");
+  await searchIn("images", "regression image", "/images", "gozie-search-media.henrymeraldcompany.workers.dev");
   assert.equal(await page.locator("#results-list img").count(), 1);
 
-  await searchIn("news", "integrated news", "/news", "henry-search-api.henrymeraldcompany.workers.dev");
+  await searchIn("news", "regression news", "/news", "henry-search-api.henrymeraldcompany.workers.dev");
   assert.equal(await page.locator(".news-preview-card").count(), 1);
 
-  await searchIn("videos", "integrated videos", "/videos", "gozie-search-media.henrymeraldcompany.workers.dev");
+  await searchIn("videos", "regression video", "/videos", "gozie-search-media.henrymeraldcompany.workers.dev");
   assert.match(await page.locator("#results-list").innerText(), /No matching videos|Search YouTube/);
 
   const history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-search-history") || "[]"));
