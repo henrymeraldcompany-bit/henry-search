@@ -167,6 +167,17 @@ test("Google sidebar opens Google results inside GOZIE SEARCH for the last searc
   await googleResponse;
   await page.frameLocator("#google-frame").locator("#google-frame-fixture").waitFor();
   assert.match(await page.locator("#google-query-label").textContent(), /GOZIE in-app Google test/);
+  const initialTheme = await page.locator("html").getAttribute("data-theme");
+  assert.equal(await page.locator("#google-view").getAttribute("data-theme"), initialTheme);
+  assert.equal(await page.locator("#google-frame").evaluate(el => el.style.colorScheme), initialTheme);
+  const nextTheme = initialTheme === "dark" ? "light" : "dark";
+  await page.locator("#menu-toggle").click();
+  await page.locator("#theme-toggle").click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), nextTheme);
+  assert.equal(await page.locator("#google-view").getAttribute("data-theme"), nextTheme);
+  assert.equal(await page.locator("#google-frame").evaluate(el => el.style.colorScheme), nextTheme);
+  const googleSurface = await page.locator(".google-frame-content").evaluate(el => getComputedStyle(el).backgroundColor);
+  assert.equal(googleSurface, nextTheme === "dark" ? "rgb(16, 24, 32)" : "rgb(255, 255, 255)");
   await page.close();
 });
 
