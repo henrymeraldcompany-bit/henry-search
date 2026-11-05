@@ -66,6 +66,56 @@ jobs:
           curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 15 "$MEDIA_API/index/status" |
             node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const d=JSON.parse(s);if(!Array.isArray(d.counts)||!("latestRun" in d))throw new Error("Index status response is missing expected fields");const v=d.videoSafety;if(!v&&process.env.GITHUB_EVENT_NAME==="pull_request"){console.log("Index status legacy contract: ok; safety fields await backend deployment");return;}if(!v||!Number.isSafeInteger(v.verifiedSafe)||v.verifiedSafe<0||!Number.isSafeInteger(v.unverified)||v.unverified<0)throw new Error("Index status is missing valid video safety counts");const failures=d.failureSummary;if(!Array.isArray(failures)){if(process.env.GITHUB_EVENT_NAME!=="pull_request")throw new Error("Index status is missing provider failure summary");}else if(failures.some(f=>!f||typeof f.provider!=="string"||!f.provider||!["request","database-save","unknown"].includes(f.stage)||!Number.isSafeInteger(f.count)||f.count<1||typeof f.lastError!=="string"))throw new Error("Index status provider failure summary is malformed");const stats=d.latestRun&&d.latestRun.stats;if(stats&&(stats.version!==1||!Number.isSafeInteger(stats.seedsProcessed)||stats.seedsProcessed<0||!Number.isSafeInteger(stats.providerCalls)||stats.providerCalls<0||!stats.providers||typeof stats.providers!=="object"||Array.isArray(stats.providers)))throw new Error("Index run metrics are malformed");console.log("Index status contract: ok; verified-safe videos "+v.verifiedSafe+"; unverified videos "+v.unverified+"; failure groups "+(Array.isArray(failures)?failures.length:"pending deployment")+"; provider metrics "+(stats?"available":"awaiting next scheduled run"))})'
 
+      - name: Check persisted Free-tier resource budget telemetry
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          curl --fail --silent --show-error --retry 2 --retry-delay 2 --max-time 15 "$MEDIA_API/index/status" --output "$tmp"
+          node - "$tmp" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const budget = data.latestRun && data.latestRun.stats && data.latestRun.stats.resourceBudget;
+          if (!budget) {
+            console.log("Resource budget snapshot awaits the next successful scheduled refresh");
+            process.exit(0);
+          }
+          const integer = value => Number.isSafeInteger(value) && value >= 0;
+          const required = [
+            "externalSubrequestLimit", "externalSubrequestReserve",
+            "externalSubrequestsWorstCase", "externalSubrequestsHeadroom",
+            "d1BatchRequestLimit", "d1BatchRequestsUsed",
+            "d1BatchRequestsReserved", "d1BatchRequestsRemaining",
+            "indexRowsQueued", "indexRowsLimit", "searchRowsQueued", "searchRowsLimit"
+          ];
+          for (const key of required) {
+            if (!integer(budget[key])) throw new Error("Invalid resource budget field: " + key);
+          }
+          const web = budget.webNewsRequests;
+          if (!web || !integer(web.limit) || !integer(web.used) || !integer(web.remaining) ||
+              web.used + web.remaining !== web.limit) {
+            throw new Error("Invalid daily web/news request budget");
+          }
+          if (budget.externalSubrequestLimit !== 50 ||
+              budget.externalSubrequestReserve !== 3 ||
+              budget.externalSubrequestsWorstCase + budget.externalSubrequestReserve > budget.externalSubrequestLimit ||
+              budget.externalSubrequestsHeadroom !== budget.externalSubrequestLimit - budget.externalSubrequestsWorstCase) {
+            throw new Error("External subrequest budget exceeds the Free-plan ceiling");
+          }
+          if (budget.d1BatchRequestLimit !== 50 ||
+              budget.d1BatchRequestsUsed + budget.d1BatchRequestsReserved + budget.d1BatchRequestsRemaining !== budget.d1BatchRequestLimit ||
+              budget.d1BatchRequestsUsed > 45 ||
+              budget.indexRowsQueued > budget.indexRowsLimit ||
+              budget.searchRowsQueued > budget.searchRowsLimit ||
+              web.used > web.limit) {
+            throw new Error("D1 or scheduled discovery resource budget exceeded");
+          }
+          console.log("Persisted Free-tier resource budget: external worst case " +
+            budget.externalSubrequestsWorstCase + "/50; D1 batch requests " +
+            budget.d1BatchRequestsUsed + "/45; web/news requests " + web.used + "/" + web.limit);
+          NODE
+
       - name: Check webpage and news index freshness
         shell: bash
         run: |
