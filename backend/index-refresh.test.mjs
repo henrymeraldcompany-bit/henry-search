@@ -113,6 +113,8 @@ test("indexing request budget stays below the Workers Free 50-subrequest ceiling
   assert.equal(budgetApi.calculateIndexRetryBudget(50, 3, 6, 3, 2), 3);
   assert.equal(budgetApi.calculateIndexRetryBudget(50, 3, 6, 3, 2, 5), 1);
   assert.equal(6 * (3 + 3) + 2 + 5 + 1 * 3, 46);
+  assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_WORST_CASE =/);
+  assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_HEADROOM =/);
   assert.match(source, /MAX_DAILY_WEB_NEWS_REQUESTS = 5/);
   assert.match(source, /INDEX_MAX_SEARCH_ROWS_PER_RUN = 40/);
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50/);
@@ -180,9 +182,34 @@ test("index-run metrics parser accepts valid JSON and safely ignores legacy or m
     seedsProcessed: 6,
     disabledProviders: [],
     durationMs: 1000,
-    providers: { "PeerTube": { attempted: 6, succeeded: 6, rowsReceived: 20, rowsSaved: 18 } }
+    providers: { "PeerTube": { attempted: 6, succeeded: 6, rowsReceived: 20, rowsSaved: 18 } },
+    resourceBudget: {
+      externalSubrequestLimit: 50,
+      externalSubrequestReserve: 3,
+      externalSubrequestsWorstCase: 46,
+      externalSubrequestsHeadroom: 4,
+      retryBudgetRemaining: 0,
+      d1BatchRequestLimit: 50,
+      d1BatchRequestsUsed: 29,
+      d1BatchRequestsReserved: 5,
+      d1BatchRequestsRemaining: 16,
+      indexRowsQueued: 300,
+      indexRowsLimit: 440,
+      searchRowsQueued: 40,
+      searchRowsSaved: 38,
+      searchRowsSkipped: 2,
+      searchRowsLimit: 40,
+      retentionRowsPrunedMaximum: 500,
+      searchIndexRetentionRowsPrunedMaximum: 500,
+      webNewsRequests: { limit: 5, used: 5, remaining: 0 }
+    }
   });
-  assert.equal(statsApi.parseIndexRunStats(valid).providerCalls, 6);
+  const parsed = statsApi.parseIndexRunStats(valid);
+  assert.equal(parsed.providerCalls, 6);
+  assert.equal(parsed.resourceBudget.externalSubrequestsWorstCase, 46);
+  assert.equal(parsed.resourceBudget.externalSubrequestsHeadroom, 4);
+  assert.equal(parsed.resourceBudget.d1BatchRequestsUsed, 29);
+  assert.deepEqual(JSON.parse(JSON.stringify(parsed.resourceBudget.webNewsRequests)), { limit: 5, used: 5, remaining: 0 });
   assert.equal(statsApi.parseIndexRunStats("{}"), null);
   assert.equal(statsApi.parseIndexRunStats("{broken"), null);
   assert.equal(statsApi.parseIndexRunStats("x".repeat(16001)), null);
