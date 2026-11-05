@@ -4,6 +4,8 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = await readFile(new URL("./worker.js", import.meta.url), "utf8");
+const mediaConfig = await readFile(new URL("./wrangler.toml", import.meta.url), "utf8");
+const apiConfig = await readFile(new URL("./search-api.wrangler.toml", import.meta.url), "utf8");
 const start = source.indexOf("function indexFailure(provider, error) {");
 assert.notEqual(start, -1, "indexFailure must exist in worker.js");
 const end = source.indexOf("\n}", start);
@@ -83,7 +85,7 @@ test("provider retry stops at shared budget and does not retry permanent errors"
   }, { remaining: 3 }, async () => {}), error => error.status === 400);
   assert.equal(attempts, 1);
 });
-test("retry budget is globally bounded to three additional attempts", () => {
+test("retry budget is derived from the complete scheduled request fan-out", () => {
   assert.match(source, /calculateIndexRetryBudget\(/);
   assert.match(source, /MAX_INDEX_RETRIES_PER_RUN = calculateIndexRetryBudget/);
   assert.match(source, /const retryBudget = \{ remaining: MAX_INDEX_RETRIES_PER_RUN \}/);
@@ -103,8 +105,8 @@ function extractFunction(name) {
   assert.fail("Could not isolate " + name);
 }
 const budgetApi = vm.runInNewContext(
-  "(function(){ " + ["calculateIndexRetryBudget","createIndexD1QueryBudget","reserveIndexD1QueryBudget"].map(extractFunction).join("\n") +
-  "; return {calculateIndexRetryBudget,createIndexD1QueryBudget,reserveIndexD1QueryBudget}; })()",
+  "(function(){ " + ["calculateIndexRetryBudget","createIndexD1BatchRequestBudget","reserveIndexD1BatchRequestBudget"].map(extractFunction).join("\n") +
+  "; return {calculateIndexRetryBudget,createIndexD1BatchRequestBudget,reserveIndexD1BatchRequestBudget}; })()",
   { Math, Number }
 );
 test("indexing request budget stays below the Workers Free 50-subrequest ceiling with reserve", () => {
@@ -116,6 +118,13 @@ test("indexing request budget stays below the Workers Free 50-subrequest ceiling
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50/);
   assert.match(source, /INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3/);
 });
+
+test("both production Workers pin the Free-tier 50 external-subrequest ceiling", () => {
+  for (const [name, config] of [["Media", mediaConfig], ["API", apiConfig]]) {
+    assert.match(config, /\\[limits\\]\\s*subrequests\\s*=\\s*50/, name + " Worker must pin 50 subrequests");
+  }
+});
+
 test("daily indexed rows and retention cleanup have hard per-run caps", () => {
   assert.match(source, /INDEX_MAX_ROWS_PER_RUN = DAILY_SEED_BATCH_SIZE/);
   assert.match(source, /INDEX_RETENTION_PRUNE_BATCH_SIZE = 500/);
@@ -123,10 +132,10 @@ test("daily indexed rows and retention cleanup have hard per-run caps", () => {
   assert.match(source, /LIMIT \?/);
   assert.match(source, /INDEX_D1_BATCH_SIZE = 40/);
 });
-test("D1 query budget reserves capacity for retention cleanup and run summary", () => {
-  const budget = budgetApi.createIndexD1QueryBudget(50, 5);
+test("D1 batch-request budget reserves capacity for operational headroom", () => {
+  const budget = budgetApi.createIndexD1BatchRequestBudget(50, 5);
   assert.equal(budget.remaining, 45);
-  assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 40), true);
+  assert.equal(budgetApi.reserveIndexD1BatchRequestBudget(budget, 40), true);
   assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 5), true);
   assert.equal(budgetApi.reserveIndexD1QueryBudget(budget, 1), false);
   assert.equal(budget.used, 45);
