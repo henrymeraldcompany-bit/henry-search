@@ -178,7 +178,7 @@ test("Google sidebar opens Google results inside GOZIE SEARCH for the last searc
   await page.route("https://www.google.com/**", route => route.fulfill({
     status:200,
     contentType:"text/html; charset=utf-8",
-    body:"<!doctype html><html><body><main id='google-frame-fixture'>Google embedded test results</main></body></html>"
+    body:"<!doctype html><html><body><main id='google-frame-fixture'>Google embedded test results <a id='result-link' href='https://example.com/in-app-result'>Open result inside this panel</a></main></body></html>"
   }));
 
   await page.locator("#query").fill("GOZIE in-app Google test");
@@ -204,6 +204,20 @@ test("Google sidebar opens Google results inside GOZIE SEARCH for the last searc
   assert.equal(page.context().pages().length, 1, "Google must remain inside the current app tab");
   await googleResponse;
   await page.frameLocator("#google-frame").locator("#google-frame-fixture").waitFor();
+  const sandboxTokens = await page.locator("#google-frame").getAttribute("sandbox");
+  assert.ok(sandboxTokens.includes("allow-scripts"));
+  assert.ok(!sandboxTokens.includes("allow-top-navigation"), "embedded result pages must not navigate the whole GOZIE tab");
+  assert.ok(!sandboxTokens.includes("allow-popups"), "embedded result pages must not open external pop-up tabs");
+  await page.route("https://example.com/in-app-result", route => route.fulfill({
+    status:200,
+    contentType:"text/html; charset=utf-8",
+    body:"<!doctype html><html><body><h1 id='in-app-destination'>Destination loaded inside GOZIE</h1></body></html>"
+  }));
+  await page.frameLocator("#google-frame").locator("#result-link").click();
+  await page.frameLocator("#google-frame").locator("#in-app-destination").waitFor();
+  assert.equal(page.url(), mainPageUrl, "opening a result must keep the main GOZIE tab in place");
+  assert.equal(page.context().pages().length, 1, "opening a result must not create another browser tab");
+
   assert.match(await page.locator("#google-query-label").textContent(), /GOZIE in-app Google test/);
   const initialTheme = await page.locator("html").getAttribute("data-theme");
   assert.equal(await page.locator("#google-view").getAttribute("data-theme"), initialTheme);
