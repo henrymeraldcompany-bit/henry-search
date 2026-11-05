@@ -35,3 +35,18 @@ type = "worker"
 
   [exports.CachedSearch.cache]
   enabled = true
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+redact_query_string = true
+
+  [observability.logs]
+  enabled = true
+  invocation_logs = true
+  head_sampling_rate = 0.1
+  persist = true
+  destinations = ["cloudflare"]
+
+  [observability.issues]
+  enabled = true
