@@ -32,7 +32,7 @@ function formatValue(value, url) {
   format = format.replace("jpeg", "jpg").replace("svg+xml", "svg");
   if (FORMATS.has(format)) return format;
   try {
-    const match = new URL(String(url || "")).pathname.match(/\\.([a-z0-9]{2,5})$/i);
+    const match = new URL(String(url || "")).pathname.match(/\.([a-z0-9]{2,5})$/i);
     const ext = match ? match[1].toLowerCase().replace("jpeg", "jpg") : "";
     return FORMATS.has(ext) ? ext : "";
   } catch (_) { return ""; }
