@@ -1,3 +1,4 @@
+import { normalizeNewsArticleUrl } from "./news-url.js";
 import {
   canonicalizeResultUrl,
   rankArticles,
@@ -98,7 +99,7 @@ function parseRss(xml, providerName) {
   for (const match of String(xml || "").matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)) {
     const item = match[1];
     const title = xmlTag(item, "title");
-    const url = xmlTag(item, "link");
+    const url = normalizeNewsArticleUrl(xmlTag(item, "link"));
     const source = xmlTag(item, "source") || providerName;
     const published = normalizePublished(xmlTag(item, "pubDate"));
     const description = xmlTag(item, "description");
@@ -118,7 +119,7 @@ function parseRss(xml, providerName) {
 
 function normalizeNewsItems(items, providerName) {
   return (Array.isArray(items) ? items : []).map(function (item) {
-    const url = String(item && (item.url || item.url_mobile) || "").trim();
+    const url = normalizeNewsArticleUrl(item && (item.url || item.url_mobile) || "");
     const title = stripMarkup(item && (item.title || item.domain) || "News article");
     const domain = String(item && item.domain || "").trim();
     const published = normalizePublished(item && (item.seendate || item.published || item.publishedAt) || "");
