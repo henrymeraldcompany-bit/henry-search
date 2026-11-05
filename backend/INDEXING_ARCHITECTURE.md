@@ -136,7 +136,7 @@ The current design does not persist per-seed checkpoints, resume a partially com
 
 The daily indexer applies explicit per-invocation limits rather than relying only on provider defaults:
 
-- External provider requests: each Worker pins `limits.subrequests = 50`, matching the Workers Free external-subrequest ceiling. The scheduled index reserves three requests; the current complete fan-out and retry formula caps the worst-case planned run at 46.
+- External provider requests: Workers Free enforces its built-in 50 external-subrequest ceiling. Custom Worker `limits` settings are not applied on this Free account, so the scheduled index uses code-level budgeting instead: three requests are reserved and the current complete fan-out/retry formula caps the worst-case planned run at 46.
 - Discovery: at most six rotating seeds per day.
 - Indexed metadata: at most 440 rows are queued for D1 writes per run (432 possible image/PeerTube rows plus up to eight optional YouTube rows). Excess provider results are counted as skipped, not written.
 - D1 writes: prepared statements are sent in batches of at most 40. The shared D1 batch-request budget permits at most 45 `MEDIA_DB.batch()`/D1 write calls per run, holding five of the 50-call allowance as safety headroom. This is a batch API-call budget, not a count of individual SQL statements inside each batch.
