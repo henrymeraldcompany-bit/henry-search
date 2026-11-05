@@ -35,8 +35,8 @@ const PEERTUBE_INSTANCES = [
 // Explicit Workers Free / D1 resource envelope for one scheduled refresh.
 const INDEX_EXTERNAL_SUBREQUEST_LIMIT = 50;
 const INDEX_EXTERNAL_SUBREQUEST_RESERVE = 3;
-const INDEX_D1_QUERY_LIMIT = 50;
-const INDEX_D1_QUERY_RESERVE = 5;
+const INDEX_D1_BATCH_REQUEST_LIMIT = 50;
+const INDEX_D1_BATCH_REQUEST_RESERVE = 5;
 const INDEX_D1_BATCH_SIZE = 40;
 const INDEX_RETENTION_PRUNE_BATCH_SIZE = 500;
 const MAX_DAILY_WEB_NEWS_REQUESTS = 5;
@@ -53,12 +53,12 @@ const MAX_INDEX_RETRIES_PER_RUN = calculateIndexRetryBudget(
   INDEX_EXTERNAL_SUBREQUEST_LIMIT, INDEX_EXTERNAL_SUBREQUEST_RESERVE,
   DAILY_SEED_BATCH_SIZE, PEERTUBE_INSTANCES.length, 2, MAX_DAILY_WEB_NEWS_REQUESTS
 );
-function createIndexD1QueryBudget(limit, reserve) {
+function createIndexD1BatchRequestBudget(limit, reserve) {
   const total = Math.max(0, Math.floor(Number(limit) || 0));
   const held = Math.max(0, Math.min(total, Math.floor(Number(reserve) || 0)));
   return { remaining: total - held, used: 0, reserved: held };
 }
-function reserveIndexD1QueryBudget(budget, count) {
+function reserveIndexD1BatchRequestBudget(budget, count) {
   const requested = Math.max(0, Math.floor(Number(count) || 0));
   if (!budget || requested > budget.remaining) return false;
   budget.remaining -= requested;
@@ -898,7 +898,7 @@ async function refresh(env) {
   const dailySeeds = getDailySeedBatch(daySlot, SEEDS, DAILY_SEED_BATCH_SIZE);
   const circuit = createIndexCircuitBreaker(2);
   const retryBudget = { remaining: MAX_INDEX_RETRIES_PER_RUN };
-  const d1QueryBudget = createIndexD1QueryBudget(INDEX_D1_QUERY_LIMIT, INDEX_D1_QUERY_RESERVE);
+  const d1BatchRequestBudget = createIndexD1BatchRequestBudget(INDEX_D1_BATCH_REQUEST_LIMIT, INDEX_D1_BATCH_REQUEST_RESERVE);
   let indexRowsQueued = 0;
   for (let index = 0; index < dailySeeds.length; index++) {
     const q = dailySeeds[index];
@@ -941,8 +941,8 @@ async function refresh(env) {
       if (!boundedRows.length) continue;
       try {
         const batchesNeeded = Math.ceil(boundedRows.length / INDEX_D1_BATCH_SIZE);
-        if (!reserveIndexD1QueryBudget(d1QueryBudget, batchesNeeded)) {
-          throw new Error("D1 indexing query budget exhausted");
+        if (!reserveIndexD1BatchRequestBudget(d1BatchRequestBudget, batchesNeeded)) {
+          throw new Error("D1 indexing batch-request budget exhausted");
         }
         const savedCount = await save(env, boundedRows);
         saved += savedCount;
@@ -988,8 +988,8 @@ async function refresh(env) {
   if (boundedSearchRows.length) {
     try {
       const batchesNeeded = Math.ceil(boundedSearchRows.length / INDEX_D1_BATCH_SIZE);
-      if (!reserveIndexD1QueryBudget(d1QueryBudget, batchesNeeded)) {
-        throw new Error("D1 search-index query budget exhausted");
+      if (!reserveIndexD1BatchRequestBudget(d1BatchRequestBudget, batchesNeeded)) {
+        throw new Error("D1 search-index batch-request budget exhausted");
       }
       searchRowsSaved = await saveSearchIndexRows(env, boundedSearchRows);
       saved += searchRowsSaved;
@@ -1018,8 +1018,8 @@ async function refresh(env) {
   }
   // Keep stale rows searchable as a fallback, but prune both media and
   // webpage/news metadata indexes beyond the shared retention horizon.
-  if (!reserveIndexD1QueryBudget(d1QueryBudget, 2)) {
-    throw new Error("D1 indexing query budget exhausted before retention cleanup");
+  if (!reserveIndexD1BatchRequestBudget(d1BatchRequestBudget, 2)) {
+    throw new Error("D1 indexing batch-request budget exhausted before retention cleanup");
   }
   const retentionCutoff = new Date(Date.now() - INDEX_RETENTION_DAYS * 86400000).toISOString();
   await env.MEDIA_DB.prepare(
@@ -1029,8 +1029,8 @@ async function refresh(env) {
     "DELETE FROM search_index_items WHERE rowid IN (SELECT rowid FROM search_index_items WHERE indexed_at < ? ORDER BY indexed_at ASC LIMIT ?)"
   ).bind(retentionCutoff, INDEX_RETENTION_PRUNE_BATCH_SIZE).run();
   const stats = buildIndexRunStats(providerStats, dailySeeds.length, disabledProviders, Date.now() - startedAt);
-  if (!reserveIndexD1QueryBudget(d1QueryBudget, 1)) {
-    throw new Error("D1 indexing query budget exhausted before run summary");
+  if (!reserveIndexD1BatchRequestBudget(d1BatchRequestBudget, 1)) {
+    throw new Error("D1 indexing batch-request budget exhausted before run summary");
   }
   await env.MEDIA_DB.prepare(
     "INSERT INTO index_runs (finished_at,rows_processed,failure_count,note,stats_json) VALUES (?,?,?,?,?)"
@@ -1047,9 +1047,9 @@ async function refresh(env) {
       externalSubrequestLimit: INDEX_EXTERNAL_SUBREQUEST_LIMIT,
       externalSubrequestReserve: INDEX_EXTERNAL_SUBREQUEST_RESERVE,
       retryBudgetRemaining: retryBudget.remaining,
-      d1QueryLimit: INDEX_D1_QUERY_LIMIT,
-      d1QueriesUsed: d1QueryBudget.used,
-      d1QueriesReserved: d1QueryBudget.reserved,
+      d1QueryLimit: INDEX_D1_BATCH_REQUEST_LIMIT,
+      d1BatchRequestsUsed: d1BatchRequestBudget.used,
+      d1BatchRequestsReserved: d1BatchRequestBudget.reserved,
       indexRowsQueued: indexRowsQueued,
       indexRowsLimit: INDEX_MAX_ROWS_PER_RUN,
       searchRowsQueued: boundedSearchRows.length,
