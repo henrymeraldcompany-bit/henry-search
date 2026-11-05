@@ -180,3 +180,48 @@ test("integrates all four search categories through their production API routes"
   assert.equal(calls.filter(call => ["/search", "/images", "/news", "/videos"].includes(call.path)).length, 4);
   await page.close();
 });
+
+
+test("mobile layouts remain usable without horizontal overflow at common phone widths", async () => {
+  for (const width of [320, 360, 390]) {
+    const page = await browser.newPage({
+      viewport: { width, height: 800 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true
+    });
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(baseUrl, { waitUntil:"networkidle" });
+
+    const dimensions = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth
+    }));
+    assert.equal(dimensions.viewport, width, `Mobile viewport should be ${width}px`);
+    assert.ok(dimensions.document <= width + 1, `Document overflows at ${width}px: ${JSON.stringify(dimensions)}`);
+    assert.ok(dimensions.body <= width + 1, `Body overflows at ${width}px: ${JSON.stringify(dimensions)}`);
+
+    const query = page.locator("#query");
+    const submit = page.locator("#search-form button[type='submit']");
+    const tabs = page.locator(".search-tab");
+    assert.equal(await query.isVisible(), true, `Search input should be visible at ${width}px`);
+    assert.equal(await submit.isVisible(), true, `Search button should be visible at ${width}px`);
+    assert.equal(await tabs.count(), 4);
+    for (let index = 0; index < await tabs.count(); index++) {
+      assert.equal(await tabs.nth(index).isVisible(), true, `Search category tab ${index} should be visible at ${width}px`);
+    }
+
+    const searchBox = await query.boundingBox();
+    const submitBox = await submit.boundingBox();
+    assert.ok(searchBox && searchBox.width > 0 && searchBox.height >= 32, `Search input has unusable dimensions at ${width}px`);
+    assert.ok(submitBox && submitBox.width > 0 && submitBox.height >= 32, `Search button has unusable dimensions at ${width}px`);
+
+    await page.locator("#menu-toggle").click();
+    assert.equal(await page.locator("#app-sidebar").getAttribute("aria-hidden"), "false");
+    await page.locator("#menu-toggle").click();
+    assert.deepEqual(errors, [], `No browser errors expected at ${width}px`);
+    await page.close();
+  }
+});
