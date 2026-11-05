@@ -1047,7 +1047,7 @@ async function refresh(env) {
       externalSubrequestLimit: INDEX_EXTERNAL_SUBREQUEST_LIMIT,
       externalSubrequestReserve: INDEX_EXTERNAL_SUBREQUEST_RESERVE,
       retryBudgetRemaining: retryBudget.remaining,
-      d1QueryLimit: INDEX_D1_BATCH_REQUEST_LIMIT,
+      d1BatchRequestLimit: INDEX_D1_BATCH_REQUEST_LIMIT,
       d1BatchRequestsUsed: d1BatchRequestBudget.used,
       d1BatchRequestsReserved: d1BatchRequestBudget.reserved,
       indexRowsQueued: indexRowsQueued,
