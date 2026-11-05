@@ -2116,6 +2116,7 @@ applyTheme(savedTheme === "light" || savedTheme === "dark" ? savedTheme : system
 themeToggle?.addEventListener("click", () => {
   const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   applyTheme(nextTheme);
+  syncGoogleTheme(true);
   try { localStorage.setItem("gozie-theme", nextTheme); } catch {}
 });
 const systemThemeQuery = window.matchMedia?.("(prefers-color-scheme: light)");
@@ -2124,6 +2125,7 @@ systemThemeQuery?.addEventListener?.("change", event => {
   try { explicitTheme = localStorage.getItem("gozie-theme"); } catch {}
   if (explicitTheme !== "light" && explicitTheme !== "dark") {
     applyTheme(event.matches ? "light" : "dark");
+    syncGoogleTheme(true);
   }
 });
 
@@ -2140,6 +2142,19 @@ const googleQueryLabel = document.querySelector("#google-query-label");
 const googleEmptyState = document.querySelector("#google-empty-state");
 const googleViewStatus = document.querySelector("#google-view-status");
 const googleReloadButton = document.querySelector("#google-reload");
+function syncGoogleTheme(reloadFrame = false) {
+  const theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  if (googleView) googleView.dataset.theme = theme;
+  if (googleFrame) {
+    // The embedded page may honor the inherited preferred color scheme.
+    // Google controls its own page styles, so it may ignore this preference.
+    googleFrame.style.colorScheme = theme;
+    googleFrame.setAttribute("data-gozie-theme", theme);
+    if (reloadFrame && googleFrame.getAttribute("src")) {
+      googleFrame.setAttribute("src", googleFrame.getAttribute("src"));
+    }
+  }
+}
 let sidebarOpener = null;
 function getSidebarFocusableItems() {
   if (!sidebar) return [];
@@ -2240,6 +2255,7 @@ function openGoogleSearchView() {
 
   if (googleQueryLabel) googleQueryLabel.textContent = 'Google results for "' + query + '"';
   if (googleEmptyState) googleEmptyState.hidden = true;
+  syncGoogleTheme();
   if (googleFrame) {
     googleFrame.hidden = false;
     if (googleFrame.dataset.query !== query) {
