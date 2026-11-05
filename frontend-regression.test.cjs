@@ -121,6 +121,11 @@ test("sidebar, settings, theme and history controls remain functional", async ()
   const page = await newPage();
   await page.locator("#menu-toggle").click();
   assert.equal(await page.locator("#app-sidebar").getAttribute("aria-hidden"), "false");
+  const sidebarPosition = await page.locator("#app-sidebar").evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, width: rect.width };
+  });
+  assert.ok(Math.abs(sidebarPosition.right -  (await page.evaluate(() => window.innerWidth))) <= 1, "sidebar should be flush with the right edge");
   await page.locator("#sidebar-settings").click();
   assert.equal(await page.locator("#settings-view").isVisible(), true);
   await page.locator("#setting-reduced-motion").check();
