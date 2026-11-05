@@ -24,7 +24,7 @@ before(async () => {
     fs.createReadStream(target).pipe(response);
   });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-  baseUrl = \`http://127.0.0.1:\${server.address().port}/\`;
+  baseUrl = "http://127.0.0.1:" + server.address().port + "/";
   browser = await chromium.launch({ headless:true, args:["--no-sandbox"] });
 });
 after(async () => {
