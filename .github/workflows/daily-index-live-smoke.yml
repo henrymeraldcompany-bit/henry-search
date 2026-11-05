@@ -79,5 +79,12 @@ jobs:
             throw new Error("Indexed news search did not return matching records");
           }
           if (data.results.some(row => !row.title || !row.url)) throw new Error("Indexed news result is missing its title or URL");
-          console.log("Indexed news search passed:", data.count, "records");
+          for (const row of data.results) {
+            const url = new URL(row.url);
+            if (url.hostname.toLowerCase().replace(/^www\\./, "") === "bing.com" &&
+                url.pathname.toLowerCase() === "/news/apiclick.aspx") {
+              throw new Error("Legacy Bing tracking redirect leaked from indexed news");
+            }
+          }
+          console.log("Indexed news search passed:", data.count, "records; publisher links normalized");
           NODE
