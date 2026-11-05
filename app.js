@@ -2091,8 +2091,9 @@ function readSearchHistory() {
   } catch { return []; }
 }
 function saveSearchHistory(query, category) {
+  const previous = readSearchHistory().find(item => item.query.toLowerCase() === query.toLowerCase());
   const history = readSearchHistory().filter(item => item.query.toLowerCase() !== query.toLowerCase());
-  history.unshift({ query, category, date: new Date().toISOString() });
+  history.unshift({ query, category, date: new Date().toISOString(), starred: Boolean(previous?.starred) });
   try { localStorage.setItem("gozie-search-history", JSON.stringify(history.slice(0, 40))); } catch {}
 }
 function applyTheme(theme) {
@@ -2308,14 +2309,58 @@ document.querySelector("#setting-reduced-motion")?.addEventListener("change", ev
 });
 document.querySelector("#setting-default-category")?.addEventListener("change", event => { savePreference("defaultCategory", event.target.value); announceSettings("Default search category saved."); });
 document.querySelector("#clear-search-history")?.addEventListener("click", () => {
-  try { localStorage.removeItem("gozie-search-history"); } catch {}
   renderSearchHistory();
-  announceSettings("Search history cleared from this device.");
+  showUtilityView("history");
+  announceSettings("Choose the searches you want to delete.");
 });
+function writeSearchHistory(history) {
+  try { localStorage.setItem("gozie-search-history", JSON.stringify(history)); } catch {}
+}
+function removeSearchHistoryItem(item) {
+  const history = readSearchHistory();
+  const next = history.filter(entry => !(entry.query === item.query && entry.date === item.date));
+  writeSearchHistory(next);
+  renderSearchHistory();
+}
 function renderSearchHistory() {
   if (!historyList) return;
   historyList.replaceChildren();
   const history = readSearchHistory();
+  const selectionBar = document.createElement("div");
+  selectionBar.className = "history-selection-bar";
+  const selectAllLabel = document.createElement("label");
+  selectAllLabel.className = "history-select-all";
+  const selectAll = document.createElement("input");
+  selectAll.type = "checkbox";
+  selectAll.id = "history-select-all";
+  selectAll.setAttribute("aria-label", "Select all search history");
+  selectAllLabel.append(selectAll, document.createTextNode("Select all"));
+  const deleteSelected = document.createElement("button");
+  deleteSelected.type = "button";
+  deleteSelected.className = "settings-action danger-action";
+  deleteSelected.textContent = "Delete selected";
+  deleteSelected.disabled = true;
+  selectionBar.append(selectAllLabel, deleteSelected);
+  historyList.appendChild(selectionBar);
+  const selected = new Set();
+  const updateSelection = () => {
+    deleteSelected.disabled = selected.size === 0;
+    deleteSelected.textContent = selected.size ? "Delete selected (" + selected.size + ")" : "Delete selected";
+    selectAll.checked = history.length > 0 && selected.size === history.length;
+    selectAll.indeterminate = selected.size > 0 && selected.size < history.length;
+  };
+  selectAll.addEventListener("change", () => {
+    history.forEach((item, index) => selectAll.checked ? selected.add(index) : selected.delete(index));
+    historyList.querySelectorAll(".history-select").forEach((checkbox, index) => { checkbox.checked = selected.has(index); });
+    updateSelection();
+  });
+  deleteSelected.addEventListener("click", () => {
+    if (!selected.size) return;
+    const count = selected.size;
+    if (!window.confirm("Delete " + count + " selected search " + (count === 1 ? "history item" : "history items") + "? This cannot be undone.")) return;
+    writeSearchHistory(history.filter((item, index) => !selected.has(index)));
+    renderSearchHistory();
+  });
   if (!history.length) {
     const empty = document.createElement("p");
     empty.className = "settings-note";
@@ -2323,23 +2368,74 @@ function renderSearchHistory() {
     historyList.appendChild(empty);
     return;
   }
-  history.forEach(item => {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "history-item";
+  history.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "history-row";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "history-select";
+    checkbox.setAttribute("aria-label", "Select " + item.query);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selected.add(index); else selected.delete(index);
+      updateSelection();
+    });
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "history-item";
     const name = document.createElement("strong");
-    name.textContent = item.query;
+    name.textContent = (item.starred ? "★ " : "") + item.query;
     const meta = document.createElement("small");
     meta.textContent = (item.category || "all").toUpperCase() + " · " + new Date(item.date).toLocaleString();
-    row.append(name, meta);
-    row.addEventListener("click", () => {
+    open.append(name, meta);
+    open.addEventListener("click", () => {
       showUtilityView(null);
       queryInput.value = item.query;
       setCategory(item.category || "all");
       form?.requestSubmit();
     });
+    const menuWrap = document.createElement("div");
+    menuWrap.className = "history-menu-wrap";
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "history-more";
+    more.textContent = "⋮";
+    more.setAttribute("aria-label", "More options for " + item.query);
+    more.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("div");
+    menu.className = "history-item-menu";
+    menu.hidden = true;
+    const star = document.createElement("button");
+    star.type = "button";
+    star.textContent = item.starred ? "Remove star" : "Star search";
+    star.addEventListener("click", () => {
+      const latest = readSearchHistory();
+      const target = latest.find(entry => entry.query === item.query && entry.date === item.date);
+      if (target) target.starred = !target.starred;
+      writeSearchHistory(latest);
+      renderSearchHistory();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Delete";
+    remove.className = "history-delete-item";
+    remove.addEventListener("click", () => {
+      if (!window.confirm('Delete the search "' + item.query + '" from history?')) return;
+      removeSearchHistoryItem(item);
+    });
+    menu.append(star, remove);
+    more.addEventListener("click", event => {
+      event.stopPropagation();
+      const opening = menu.hidden;
+      historyList.querySelectorAll(".history-item-menu").forEach(other => { other.hidden = true; });
+      historyList.querySelectorAll(".history-more").forEach(button => button.setAttribute("aria-expanded", "false"));
+      menu.hidden = !opening;
+      more.setAttribute("aria-expanded", String(opening));
+    });
+    menuWrap.append(more, menu);
+    row.append(checkbox, open, menuWrap);
     historyList.appendChild(row);
   });
+  updateSelection();
 }
 loadSettings();
 document.documentElement.classList.toggle("reduce-motion", Boolean(getPreference("reduceMotion", false)));
