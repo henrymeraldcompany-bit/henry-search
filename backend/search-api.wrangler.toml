@@ -36,6 +36,10 @@ type = "worker"
   [exports.CachedSearch.cache]
   enabled = true
 
+[limits]
+# Pin the Workers Free external-subrequest ceiling as a hard per-invocation guard.
+subrequests = 50
+
 [observability]
 enabled = true
 head_sampling_rate = 0.1
