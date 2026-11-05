@@ -1635,6 +1635,23 @@ input:focus-visible {
 .history-list{display:grid;gap:9px}
 .history-item{display:grid;gap:6px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer}
 .history-item:hover{border-color:var(--accent)}
+.history-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:9px}
+.history-row>.history-select{width:18px;height:18px;accent-color:var(--accent);justify-self:center}
+.history-row .history-item{min-width:0}
+.history-item strong,.history-item small{overflow-wrap:anywhere}
+.history-selection-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.history-select-all{display:flex;align-items:center;gap:9px;color:var(--text);font-size:14px;font-weight:650}
+.history-select-all input{width:18px;height:18px;accent-color:var(--accent)}
+.history-selection-bar .settings-action:disabled{opacity:.5;cursor:not-allowed}
+.history-menu-wrap{position:relative}
+.history-more{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-size:24px;line-height:1;cursor:pointer}
+.history-item-menu{position:absolute;z-index:5;right:0;top:calc(100% + 5px);display:grid;min-width:150px;padding:5px;border:1px solid var(--border);border-radius:11px;background:var(--surface);box-shadow:0 12px 30px rgba(0,0,0,.22)}
+.history-item-menu[hidden]{display:none}
+.history-item-menu button{padding:10px;border:0;border-radius:7px;background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.history-item-menu button:hover{background:var(--surface-soft)}
+.history-item-menu .history-delete-item{color:var(--danger)}
+@media(max-width:480px){.history-selection-bar{align-items:flex-start;flex-direction:column}.history-row{gap:6px}}
+
 .history-item small{color:var(--muted)}
 /* Google search is presented as an in-app browser view, never a top-level redirect. */
 .google-view{--google-surface:#fff;--google-toolbar:#f3f5f7;--google-border:#e0e4e8;--google-muted:#52606d;--google-button:#fff;--google-text:#334155;width:min(1120px,100%);min-height:70vh}
