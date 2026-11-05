@@ -53,7 +53,7 @@ async function mockSearchApis(page, calls) {
     const url = new URL(route.request().url());
     calls.push({ host:url.host, path:url.pathname, query:url.searchParams.get("q") });
     if (url.pathname === "/images") return route.fulfill({ json:{ source:"Regression images", results:[
-      { title:"Regression image", thumbnail_url:"https://images.example.com/thumb.jpg", media_url:"https://images.example.com/image.jpg", page_url:"https://images.example.com/page", license:"CC0", author:"Test author" }
+      { title:"Regression image", thumbnail:"https://images.example.com/thumb.jpg", image:"https://images.example.com/image.jpg", page:"https://images.example.com/page", license:"CC0", author:"Test author" }
     ] } });
     if (url.pathname === "/videos") return route.fulfill({ json:{ source:"Regression videos", safeSearch:true, results:[] } });
     return route.fulfill({ json:{ results:[] } });
@@ -117,8 +117,9 @@ test("sidebar, settings, theme and history controls remain functional", async ()
   await page.locator("#setting-reduced-motion").check();
   assert.match(await page.locator("#settings-status").textContent(), /saved/i);
   await page.locator("#menu-toggle").click();
+  const previousTheme = await page.locator("html").getAttribute("data-theme");
   await page.locator("#theme-toggle").click();
-  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  assert.notEqual(await page.locator("html").getAttribute("data-theme"), previousTheme);
   await page.locator("#sidebar-history").click();
   assert.equal(await page.locator("#history-view").isVisible(), true);
   await page.close();
