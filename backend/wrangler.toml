@@ -10,3 +10,17 @@ database_id = "c5c6ef5d-25ce-444d-b5ca-c0efaa9b947f"
 [triggers]
 # 07:00 UTC = 08:00 Nigeria time.
 crons = ["0 7 * * *"]
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+redact_query_string = true
+
+  [observability.logs]
+  enabled = true
+  invocation_logs = true
+  head_sampling_rate = 0.1
+  persist = true
+  destinations = ["cloudflare"]
+
+  [observability.issues]
+  enabled = true
