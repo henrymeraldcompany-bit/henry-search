@@ -144,7 +144,7 @@ The daily indexer applies explicit per-invocation limits rather than relying onl
 - Under the current fan-out, at most 25 media-provider save batches, one webpage/news save batch, two bounded retention deletes, and one run-summary write are expected (29 D1 batch requests). The five-request reserve leaves additional room for operational variation.
 - Cloudflare Workers Free documents 100,000 Worker requests/day, 10 ms CPU time per invocation, and 50 external subrequests per invocation. D1 Free documents 5 million rows read/day, 100,000 rows written/day, and 5 GB total storage. The indexer limits only its own workload; these are account-level quotas shared with other Workers and D1 activity, not guaranteed dedicated capacity.
 
-The row and request limits are regression-tested. If providers, seed counts, response caps, or enrichment calls change, update the calculated budgets and tests together.
+The row and request limits are regression-tested. If providers, seed counts, response caps, or enrichment calls change, update the calculated budgets and tests together. The latest successful scheduled run also persists its resource-budget snapshot in `index_runs.stats_json`; `/index/status` exposes the validated snapshot at `latestRun.stats.resourceBudget`.
 
 ### Production usage snapshot — 5 November 2026
 
