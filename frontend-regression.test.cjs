@@ -155,7 +155,7 @@ test("integrates all four search categories through their production API routes"
   assert.equal(await page.locator(".web-result-card").count(), 1);
 
   await searchIn("images", "regression image", "/images", "gozie-search-media.henrymeraldcompany.workers.dev");
-  assert.equal(await page.locator("#results-list img").count(), 1);
+  assert.equal(await page.locator("#results-list img").count(), 1, `Image result did not render. Status: ${await page.locator("#result-status").innerText()}. Results: ${await page.locator("#results-list").innerText()}`);
 
   await searchIn("news", "regression news", "/news", "henry-search-api.henrymeraldcompany.workers.dev");
   assert.equal(await page.locator(".news-preview-card").count(), 1);
