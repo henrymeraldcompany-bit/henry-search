@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/task80-production-smoke.yml"
+      - "backend/worker.js"
   workflow_dispatch:
 
 permissions:
