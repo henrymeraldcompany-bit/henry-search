@@ -116,6 +116,7 @@ test("sidebar, settings, theme and history controls remain functional", async ()
   assert.equal(await page.locator("#settings-view").isVisible(), true);
   await page.locator("#setting-reduced-motion").check();
   assert.match(await page.locator("#settings-status").textContent(), /saved/i);
+  await page.locator("#menu-toggle").click();
   await page.locator("#theme-toggle").click();
   assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
   await page.locator("#sidebar-history").click();
