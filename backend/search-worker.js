@@ -6,6 +6,7 @@ import { buildApiSecurityHeaders, isAllowedApiOrigin } from "./api-security.js";
 import { validateApiRequest } from "./api-validation.js";
 import { checkApiRateLimit } from "./api-rate-limit.js";
 import { createRequestDiagnostic, recordRequestDiagnostic } from "./diagnostics.js";
+import { normalizeNewsArticleUrl } from "./news-url.js";
 export async function runSearch(request, env = {}) {
   const u=new URL(request.url),route=u.pathname,q=(u.searchParams.get("q")||"").trim();
   const cacheable=isCacheableSearchRoute(route)&&!request.headers.has("Authorization");
@@ -62,7 +63,7 @@ export async function runSearch(request, env = {}) {
    const parseNewsRss=(xml,provider)=>{
     const results=[];
     for(const match of String(xml||"").matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)){
-     const item=match[1],title=rssTag(item,"title"),url=rssTag(item,"link");
+     const item=match[1],title=rssTag(item,"title"),url=normalizeNewsArticleUrl(rssTag(item,"link"));
      const source=rssTag(item,"source")||provider;
      const published=normalizeDate(rssTag(item,"pubDate"));
      const description=rssTag(item,"description");
@@ -79,7 +80,7 @@ export async function runSearch(request, env = {}) {
       Object.entries({query:q,mode:"artlist",format:"json",maxrecords:"20",sort:"datedesc"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
       const data=await json(endpoint.toString(),10000);
       return (Array.isArray(data.articles)?data.articles:[]).map(item=>{
-       const url=String(item.url||item.url_mobile||"").trim();
+       const url=normalizeNewsArticleUrl(item.url||item.url_mobile||"");
        const source=String(item.domain||"GDELT").trim();
        const published=normalizeDate(item.seendate||item.published||"");
        return {title:String(item.title||item.domain||"News article").trim().slice(0,250),url,snippet:[source,published].filter(Boolean).join(" · ").slice(0,1200),source,sources:[source],provider:"GDELT",providers:["GDELT"],published};
