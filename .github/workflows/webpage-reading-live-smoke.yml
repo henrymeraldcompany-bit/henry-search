@@ -1,0 +1,54 @@
+name: Webpage reading production smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/webpage-reading-live-smoke.yml"
+      - "backend/search-worker.js"
+      - "backend/search-extract.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  webpage-reading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      API: https://henry-search-api.henrymeraldcompany.workers.dev
+    steps:
+      - name: Verify public webpage extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 35 --output "$body" --write-out '%{http_code}' --get --data-urlencode 'url=https://example.org/' "$API/extract")"
+          [[ "$status" == "200" ]] || { echo "Webpage extraction returned HTTP $status"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (data.source !== "example.org") throw new Error("Extracted source host is incorrect");
+          if (new URL(data.url).hostname !== "example.org") throw new Error("Extracted page URL is incorrect");
+          if (typeof data.title !== "string" || !data.title.trim()) throw new Error("Page title is missing");
+          if (typeof data.text !== "string" || data.text.trim().length < 20) throw new Error("Readable page text is missing");
+          if (data.method !== "public-page-fetch") throw new Error("Unexpected extraction method");
+          if (!Number.isFinite(Date.parse(data.extractedAt))) throw new Error("Extraction timestamp is invalid");
+          console.log("Public webpage reading passed:", data.title, "|", data.text.length, "text characters");
+          NODE
+      - name: Verify private-address rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          status="$(curl --silent --show-error --max-time 20 --output "$body" --write-out '%{http_code}' --get --data-urlencode 'url=http://127.0.0.1/' "$API/extract")"
+          [[ "$status" == "400" ]] || { echo "Private-address validation returned HTTP $status; expected 400"; cat "$body"; exit 1; }
+          node - "$body" <<'NODE'
+          const fs = require("node:fs");
+          const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (typeof data.error !== "string" || !data.error) throw new Error("Private-address rejection message is missing");
+          console.log("Private-address rejection passed");
+          NODE
