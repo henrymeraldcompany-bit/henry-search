@@ -134,6 +134,56 @@ test("sidebar, settings, theme and history controls remain functional", async ()
   await page.close();
 });
 
+test("Google sidebar opens Google results inside GOZIE SEARCH for the last searched query", async () => {
+  const page = await newPage(), calls = [];
+  await mockSearchApis(page, calls);
+  await page.route("https://www.google.com/**", route => route.fulfill({
+    status:200,
+    contentType:"text/html; charset=utf-8",
+    body:"<!doctype html><html><body><main id='google-frame-fixture'>Google embedded test results</main></body></html>"
+  }));
+
+  await page.locator("#query").fill("GOZIE in-app Google test");
+  await page.getByRole("button", { name:"Search", exact:true }).click();
+  await page.getByText("Regression result", { exact:true }).waitFor();
+
+  const mainPageUrl = page.url();
+  const googleResponse = page.waitForResponse(response =>
+    response.url().startsWith("https://www.google.com/search?") && response.status() === 200
+  );
+  await page.locator("#menu-toggle").click();
+  await page.getByRole("button", { name:"Google", exact:true }).click();
+  assert.equal(await page.locator("#google-view").isVisible(), true);
+  assert.equal(await page.locator("#google-frame").isVisible(), true);
+  assert.equal(await page.locator("#google-empty-state").isVisible(), false);
+
+  const googleUrl = new URL(await page.locator("#google-frame").getAttribute("src"));
+  assert.equal(googleUrl.hostname, "www.google.com");
+  assert.equal(googleUrl.pathname, "/search");
+  assert.equal(googleUrl.searchParams.get("igu"), "1");
+  assert.equal(googleUrl.searchParams.get("q"), "GOZIE in-app Google test");
+  assert.equal(page.url(), mainPageUrl, "opening Google must not navigate the GOZIE page");
+  assert.equal(page.context().pages().length, 1, "Google must remain inside the current app tab");
+  await googleResponse;
+  await page.frameLocator("#google-frame").locator("#google-frame-fixture").waitFor();
+  assert.match(await page.locator("#google-query-label").textContent(), /GOZIE in-app Google test/);
+  await page.close();
+});
+
+test("Google sidebar explains that a search is needed before opening Google", async () => {
+  const page = await newPage();
+  const mainPageUrl = page.url();
+  await page.locator("#menu-toggle").click();
+  await page.getByRole("button", { name:"Google", exact:true }).click();
+  assert.equal(await page.locator("#google-view").isVisible(), true);
+  assert.equal(await page.locator("#google-empty-state").isVisible(), true);
+  assert.equal(await page.locator("#google-frame").isVisible(), false);
+  assert.equal(await page.locator("#google-frame").getAttribute("src"), null);
+  assert.match(await page.locator("#google-view-status").textContent(), /search in GOZIE SEARCH first/i);
+  assert.equal(page.url(), mainPageUrl);
+  await page.close();
+});
+
 test("integrates all four search categories through their production API routes", async () => {
   const page = await newPage(), calls = [], errors = [];
   page.on("pageerror", error => errors.push(error.message));
