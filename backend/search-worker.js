@@ -60,6 +60,29 @@ export async function runSearch(request, env = {}) {
     const match=String(item||"").match(new RegExp("<"+name+"(?:\\s[^>]*)?>([\\s\\S]*?)</"+name+">","i"));
     return match?rssText(match[1]):"";
    };
+    const safeNewsImage=value=>{
+     const decoded=String(value||"").trim().replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
+     if(!decoded)return "";
+     try{const parsed=new URL(decoded);return ["http:","https:"].includes(parsed.protocol)?parsed.href.slice(0,2000):""}catch{return ""}
+    };
+    const rssImage=item=>{
+     const tags=String(item||"").match(/<(?:media:content|media:thumbnail|enclosure)\\b[^>]*>/gi)||[];
+     for(const tag of tags){
+      const value=(tag.match(/\\b(?:url|href)\\s*=\\s*(["'])(.*?)\\1/i)||[])[2]||"";
+      const type=(tag.match(/\\btype\\s*=\\s*(["'])(.*?)\\1/i)||[])[2]||"";
+      if(type&&!type.toLowerCase().startsWith("image/")&&!/media:(?:content|thumbnail)/i.test(tag))continue;
+      const image=safeNewsImage(value);
+      if(image)return image;
+     }
+     const contentBlocks=[...String(item||"").matchAll(/<(?:description|content:encoded)\\b[^>]*>([\\s\\S]*?)<\\/(?:description|content:encoded)>/gi)];
+     for(const block of contentBlocks){
+      const imageTag=(block[1]||"").match(/<img\\b[^>]*>/i);
+      const source=imageTag&&(imageTag[0].match(/\\bsrc\\s*=\\s*(["'])(.*?)\\1/i)||[])[2];
+      const image=safeNewsImage(source);
+      if(image)return image;
+     }
+     return "";
+    };
    const parseNewsRss=(xml,provider)=>{
     const results=[];
     for(const match of String(xml||"").matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)){
@@ -67,7 +90,8 @@ export async function runSearch(request, env = {}) {
      const source=rssTag(item,"source")||provider;
      const published=normalizeDate(rssTag(item,"pubDate"));
      const description=rssTag(item,"description");
-     if(title&&canonicalizeResultUrl(url))results.push({title:title.slice(0,250),url,snippet:[source,published,description].filter(Boolean).join(" · ").slice(0,1200),source, sources:[source],provider,providers:[provider],published});
+      const imageUrl=rssImage(item);
+      if(title&&canonicalizeResultUrl(url))results.push({title:title.slice(0,250),url,snippet:[source,published,description].filter(Boolean).join(" · ").slice(0,1200),source,sources:[source],provider,providers:[provider],published,...(imageUrl?{imageUrl}:{})});
      if(results.length>=20)break;
     }
     return results;
@@ -83,7 +107,8 @@ export async function runSearch(request, env = {}) {
        const url=normalizeNewsArticleUrl(item.url||item.url_mobile||"");
        const source=String(item.domain||"GDELT").trim();
        const published=normalizeDate(item.seendate||item.published||"");
-       return {title:String(item.title||item.domain||"News article").trim().slice(0,250),url,snippet:[source,published].filter(Boolean).join(" · ").slice(0,1200),source,sources:[source],provider:"GDELT",providers:["GDELT"],published};
+        const imageUrl=safeNewsImage(item.socialimage||item.socialimageurl||item.image_url||item.image||"");
+        return {title:String(item.title||item.domain||"News article").trim().slice(0,250),url,snippet:[source,published].filter(Boolean).join(" · ").slice(0,1200),source,sources:[source],provider:"GDELT",providers:["GDELT"],published,...(imageUrl?{imageUrl}:{})};
       }).filter(item=>item.title.length>=8&&canonicalizeResultUrl(item.url));
      }
     },
@@ -143,6 +168,7 @@ export async function runSearch(request, env = {}) {
      if(String(item.snippet||"").length>String(existing.snippet||"").length)existing.snippet=item.snippet;
      if(!existing.published||(item.published&&Date.parse(item.published)>Date.parse(existing.published)))existing.published=item.published;
      if(String(item.title||"").length>String(existing.title||"").length)existing.title=item.title;
+      if(!existing.imageUrl&&item.imageUrl)existing.imageUrl=item.imageUrl;
     }
    }
    const liveResults=rankArticles([...merged.values()],q).filter(item=>item.relevanceScore>0);
@@ -166,8 +192,9 @@ export async function runSearch(request, env = {}) {
        publisher:(Array.isArray(item.sources)?item.sources[0]:"")||item.source||item.domain||"",
        summary:String(item.snippet||"").slice(0,1200),
        published:item.published||"",
-       url:item.originalUrl||item.url
-      }
+       url:item.originalUrl||item.url,
+        imageUrl:item.imageUrl||""
+       }
      }))
     });
    }
@@ -183,7 +210,8 @@ export async function runSearch(request, env = {}) {
     const results=(Array.isArray(indexed.results)?indexed.results:[]).map(item=>{
      const url=typeof item?.url==="string"?item.url:"";
      const source=typeof item?.source==="string"&&item.source?item.source:(item?.domain||"");
-     return {title:typeof item?.title==="string"?item.title:"",url,snippet:typeof item?.snippet==="string"?item.snippet:"",source,sources:[source].filter(Boolean),provider:"GOZIE daily news index",providers:["GOZIE daily news index"],published:normalizeDate(item?.published_at||"")};
+      const imageUrl=safeNewsImage(item?.image_url||item?.imageUrl||item?.thumbnail||"");
+      return {title:typeof item?.title==="string"?item.title:"",url,snippet:typeof item?.snippet==="string"?item.snippet:"",source,sources:[source].filter(Boolean),provider:"GOZIE daily news index",providers:["GOZIE daily news index"],published:normalizeDate(item?.published_at||""),...(imageUrl?{imageUrl}:{})};
     }).filter(item=>item.title.trim().length>=8&&canonicalizeResultUrl(item.url));
     if(results.length){
      const rankedIndexedNews=rankArticles(results,q);
@@ -196,8 +224,9 @@ export async function runSearch(request, env = {}) {
        publisher:(Array.isArray(item.sources)?item.sources[0]:"")||item.source||item.domain||"",
        summary:String(item.snippet||"").slice(0,1200),
        published:item.published||"",
-       url:item.originalUrl||item.url
-      }
+       url:item.originalUrl||item.url,
+        imageUrl:item.imageUrl||""
+       }
      }))});
     }
     errors.push("GOZIE daily news index: no indexed articles");

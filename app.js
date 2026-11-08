@@ -9,6 +9,9 @@ const resultsSection = document.querySelector("#results-section");
 const resultsTitle = document.querySelector("#results-title");
 const resultStatus = document.querySelector("#result-status");
 const resultsList = document.querySelector("#results-list");
+const homeNewsFeed = document.querySelector("#home-news-feed");
+const homeNewsGrid = document.querySelector("#home-news-grid");
+const homeNewsStatus = document.querySelector("#home-news-status");
 
 // ========================================
 // TEXT TO SPEECH / READ ALOUD
@@ -299,6 +302,88 @@ function renderWebFilterBar(items) {
 // ========================================
 // DISPLAY NORMAL WEB RESULTS
 // ========================================
+
+
+function getNewsImageUrl(item) {
+  return safeHttpUrl(
+    item?.imageUrl || item?.image_url || item?.image || item?.thumbnail ||
+    item?.socialimage || item?.preview?.imageUrl || item?.preview?.image || ""
+  );
+}
+function renderHomepageNews(items) {
+  if (!homeNewsGrid) return;
+  homeNewsGrid.replaceChildren();
+  for (const item of (Array.isArray(items) ? items : []).slice(0, 12)) {
+    const articleUrl = safeHttpUrl(item.originalUrl || item.url || item.link || "");
+    if (!articleUrl) continue;
+    const card = document.createElement("article");
+    card.className = "home-news-card";
+    const imageLink = makeLink(articleUrl, "");
+    imageLink.className = "home-news-image-link";
+    imageLink.setAttribute("aria-label", "Read " + (item.title || "world news story"));
+    const fallback = document.createElement("span");
+    fallback.className = "home-news-image-fallback";
+    fallback.textContent = "WORLD NEWS";
+    imageLink.appendChild(fallback);
+    const imageUrl = getNewsImageUrl(item);
+    if (imageUrl) {
+      const image = document.createElement("img");
+      image.src = imageUrl;
+      image.alt = item.title ? "Image for " + item.title : "News article image";
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.referrerPolicy = "no-referrer";
+      image.addEventListener("error", () => {
+        image.remove();
+        imageLink.classList.add("is-image-placeholder");
+      }, { once:true });
+      imageLink.appendChild(image);
+    } else {
+      imageLink.classList.add("is-image-placeholder");
+    }
+    const body = document.createElement("div");
+    body.className = "home-news-card-body";
+    const publisher = (Array.isArray(item.sources) ? item.sources : [item.source])
+      .find(value => typeof value === "string" && value.trim()) || item.domain || "World news";
+    const published = item.published && Number.isFinite(Date.parse(item.published))
+      ? new Date(item.published).toLocaleString([], { dateStyle:"medium", timeStyle:"short" })
+      : "";
+    const metadata = document.createElement("p");
+    metadata.className = "home-news-meta";
+    metadata.textContent = [publisher, published].filter(Boolean).join(" · ");
+    const title = makeLink(articleUrl, item.title || "Open news story");
+    title.className = "home-news-title";
+    const summaryText = String(item.preview?.summary || item.snippet || item.description || "")
+      .replace(/\s+/g, " ").trim();
+    const summary = document.createElement("p");
+    summary.className = "home-news-summary";
+    summary.textContent = summaryText.length > 240 ? summaryText.slice(0, 237) + "…" : summaryText;
+    const readLink = makeLink(articleUrl, "Read story ↗");
+    readLink.className = "home-news-read-link";
+    body.append(metadata, title);
+    if (summary.textContent) body.appendChild(summary);
+    body.appendChild(readLink);
+    card.append(imageLink, body);
+    homeNewsGrid.appendChild(card);
+  }
+}
+async function loadHomepageNews() {
+  if (!homeNewsFeed || !homeNewsGrid || !homeNewsStatus) return;
+  homeNewsStatus.textContent = "Loading the latest world news…";
+  try {
+    const endpoint = new URL("/news", SEARCH_API);
+    endpoint.searchParams.set("q", "world");
+    const data = await fetchJson(endpoint.toString(), 16000);
+    const items = Array.isArray(data.results) ? data.results : [];
+    renderHomepageNews(items);
+    homeNewsStatus.textContent = homeNewsGrid.children.length
+      ? "Latest stories · " + (data.source || "News providers")
+      : "No world-news stories are available right now. Please refresh to try again.";
+  } catch (error) {
+    homeNewsGrid.replaceChildren();
+    homeNewsStatus.textContent = "World news is temporarily unavailable. Please refresh to try again.";
+  }
+}
 
 function renderNewsResults(items) {
   if (!resultsList) return;
@@ -1742,6 +1827,7 @@ if (form && queryInput && resultsList) {
     saveSearchHistory(query, currentCategory);
     if (hero) hero.hidden = true;
     if (resultsSection) resultsSection.hidden = false;
+    if (homeNewsFeed) homeNewsFeed.hidden = true;
 
     if (resultsTitle) resultsTitle.textContent = query;
 
@@ -1938,6 +2024,15 @@ function setVoiceListening(listening, message) {
 
   const icon = voiceButton.querySelector("span");
   if (icon) icon.textContent = listening ? "■" : "🎙";
+  const stickyVoiceButton = document.querySelector("#sticky-voice-search");
+  if (stickyVoiceButton) {
+    stickyVoiceButton.classList.toggle("listening", listening);
+    stickyVoiceButton.setAttribute("aria-pressed", String(listening));
+    stickyVoiceButton.setAttribute("aria-label", listening ? "Stop voice search" : "Start voice search");
+    stickyVoiceButton.title = listening ? "Stop voice search" : "Start voice search";
+    const stickyIcon = stickyVoiceButton.querySelector("span");
+    if (stickyIcon) stickyIcon.textContent = listening ? "■" : "🎙";
+  }
 
   if (searchHint && message) searchHint.textContent = message;
   else if (searchHint && !listening) searchHint.textContent = categoryDetails[currentCategory].hint;
@@ -1954,6 +2049,7 @@ function submitVoiceQuery(transcript) {
   const cleaned = transcript.trim().replace(/\\s+/g, " ");
   if (!cleaned || !queryInput || !form) return false;
   queryInput.value = cleaned;
+  queryInput.dispatchEvent(new Event("input", { bubbles:true }));
   if (typeof form.requestSubmit === "function") form.requestSubmit();
   else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   return true;
@@ -2002,7 +2098,10 @@ function startVoiceSearch() {
       }
 
       const preview = (finalTranscript + " " + interimTranscript).trim();
-      if (preview && queryInput) queryInput.value = preview;
+      if (preview && queryInput) {
+        queryInput.value = preview;
+        queryInput.dispatchEvent(new Event("input", { bubbles:true }));
+      }
 
       if (searchHint) {
         searchHint.textContent = interimTranscript.trim()
@@ -2228,6 +2327,7 @@ document.addEventListener("keydown", event => {
 function showUtilityView(view) {
   window.closeGozieAiModeForNavigation?.();
   closeSidebar();
+  if (homeNewsFeed) homeNewsFeed.hidden = Boolean(view);
   if (page) page.classList.toggle("utility-open", Boolean(view));
   if (settingsView) settingsView.hidden = view !== "settings";
   if (historyView) historyView.hidden = view !== "history";
@@ -2450,3 +2550,58 @@ function renderSearchHistory() {
 loadSettings();
 document.documentElement.classList.toggle("reduce-motion", Boolean(getPreference("reduceMotion", false)));
 setCategory(["all", "images", "news", "videos"].includes(getPreference("defaultCategory", "all")) ? getPreference("defaultCategory", "all") : "all");
+
+function installStickySearchBar() {
+  const shell = document.querySelector("#sticky-search-shell");
+  if (!shell || !form || !queryInput) return;
+  const stickyForm = form.cloneNode(true);
+  stickyForm.id = "sticky-search-form";
+  stickyForm.classList.add("sticky-search-form");
+  stickyForm.setAttribute("aria-label", "Search GOZIE SEARCH");
+  const stickyInput = stickyForm.querySelector("#query");
+  if (!stickyInput) return;
+  stickyInput.id = "sticky-query";
+  stickyInput.name = "sticky-q";
+  stickyInput.placeholder = queryInput.placeholder;
+  stickyForm.querySelector('label[for="query"]')?.setAttribute("for", "sticky-query");
+  const stickyVoiceButton = stickyForm.querySelector("#voice-search");
+  if (stickyVoiceButton) stickyVoiceButton.id = "sticky-voice-search";
+  stickyInput.value = queryInput.value;
+  shell.replaceChildren(stickyForm);
+  queryInput.addEventListener("input", () => {
+    if (stickyInput.value !== queryInput.value) stickyInput.value = queryInput.value;
+  });
+  stickyInput.addEventListener("input", () => {
+    queryInput.value = stickyInput.value;
+  });
+  stickyForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const value = stickyInput.value.trim();
+    if (!value) { stickyInput.focus(); return; }
+    queryInput.value = value;
+    form.requestSubmit();
+  });
+  stickyVoiceButton?.addEventListener("click", () => {
+    queryInput.value = stickyInput.value;
+    voiceButton?.click();
+  });
+  function updateStickyVisibility() {
+    const show = form.getBoundingClientRect().bottom < 0 &&
+      !document.body.classList.contains("ai-mode-open") &&
+      !page?.classList.contains("utility-open");
+    shell.hidden = !show;
+    shell.setAttribute("aria-hidden", String(!show));
+    if (show && stickyInput.value !== queryInput.value) stickyInput.value = queryInput.value;
+  }
+  let scrollFramePending = false;
+  const scheduleUpdate = () => {
+    if (scrollFramePending) return;
+    scrollFramePending = true;
+    requestAnimationFrame(() => { scrollFramePending = false; updateStickyVisibility(); });
+  };
+  window.addEventListener("scroll", scheduleUpdate, { passive:true });
+  window.addEventListener("resize", scheduleUpdate, { passive:true });
+  updateStickyVisibility();
+}
+installStickySearchBar();
+loadHomepageNews();

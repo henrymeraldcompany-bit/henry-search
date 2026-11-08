@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="./icons/gozie-search.svg">
   <meta name="description" content="GOZIE SEARCH helps you explore the web, images, news and videos.">
   <title>GOZIE SEARCH — Explore Beyond Limits</title>
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 
 <body>
@@ -116,6 +116,19 @@
 
     </section>
 
+    <section id="home-news-feed" class="home-news-feed" aria-labelledby="home-news-title">
+      <div class="home-news-heading">
+        <div>
+          <p class="eyebrow">WORLDWIDE COVERAGE</p>
+          <h2 id="home-news-title">Latest world news</h2>
+          <p class="home-news-intro">Headlines and reports from publishers around the world.</p>
+        </div>
+        <span class="home-news-live"><span aria-hidden="true"></span> Latest stories</span>
+      </div>
+      <p id="home-news-status" class="home-news-status" role="status" aria-live="polite">Loading the latest world news…</p>
+      <div id="home-news-grid" class="home-news-grid"></div>
+    </section>
+
     <section
       id="results-section"
       class="results-section"
@@ -182,18 +195,11 @@
         <div class="ai-composer-wrap"><button id="ai-scroll-latest" type="button" aria-label="Scroll to latest message" title="Scroll to latest message" hidden>↓</button><div id="ai-attachment-preview" class="ai-attachment-preview" hidden></div><form id="ai-chat-form" class="ai-chat-form"><input id="ai-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp4,audio/wav,audio/ogg,.pdf,.docx,.xlsx,.xlsm,.xlsb,.xls,.csv,.txt,.md,.json,.xml,.html,.htm,.mp3,.m4a,.aac,.flac,.mp4,.webm,.mov,.m4v" multiple hidden><button id="ai-attach-button" type="button" aria-label="Attach a file">＋</button><textarea id="ai-prompt" rows="1" maxlength="12000" placeholder="Ask anything" required></textarea><button id="ai-send-button" type="submit" aria-label="Send message">↑</button></form><p class="ai-disclaimer">Gozie AI can make mistakes. Check important information.</p></div>
       </div>
     </section>
-    <footer class="footer">
-      <a class="footer-brand" href="./">GOZIE SEARCH</a>
-      <span>Explore beyond limits.</span>
-      <span class="footer-note">
-        Search results are provided by external search services. Images remain hosted by their original providers.
-      </span>
-      <span class="footer-note">
-        This product uses the Flickr API but is not endorsed or certified by SmugMug, Inc.
-      </span>
-    </footer>
+    
 
   </main>
+
+  <div id="sticky-search-shell" class="sticky-search-shell" hidden aria-hidden="true"></div>
 
   <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
   <aside id="app-sidebar" class="app-sidebar" role="dialog" aria-modal="true" aria-label="Navigation menu" aria-hidden="true" tabindex="-1">
@@ -208,7 +214,7 @@
     <div class="sidebar-bottom"><span>GOZIE SEARCH</span><small>Explore beyond limits.</small></div>
   </aside>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
   <script src="ai-mode.js?v=6"></script>
   <script src="pwa.js?v=6"></script>
 </body>

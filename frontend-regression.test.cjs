@@ -33,6 +33,15 @@ after(async () => {
 });
 async function newPage() {
   const page = await browser.newPage();
+  await page.route(url => {
+    const parsed = new URL(url);
+    return parsed.hostname === "henry-search-api.henrymeraldcompany.workers.dev" &&
+      parsed.pathname === "/news" && parsed.searchParams.get("q") === "world";
+  }, route => route.fulfill({ json:{ source:"Homepage news fixture", results:[
+    { title:"World leaders meet for a major international summit", url:"https://news.example.com/world-summit", imageUrl:"https://images.example.com/world-summit.jpg", source:"World Desk", sources:["World Desk"], published:"2026-11-08T08:00:00.000Z", snippet:"A report covering the latest international meeting and its global impact." },
+    { title:"New climate report highlights global environment changes", url:"https://news.example.com/climate-report", imageUrl:"https://images.example.com/climate-report.jpg", source:"Climate News", sources:["Climate News"], published:"2026-11-08T07:00:00.000Z", snippet:"A new report looks at environmental changes and the response from researchers." },
+    { title:"Global technology developments draw worldwide attention", url:"https://news.example.com/technology", imageUrl:"https://images.example.com/technology.jpg", source:"Technology Desk", sources:["Technology Desk"], published:"2026-11-08T06:00:00.000Z", snippet:"The latest technology developments and their effect on people around the world." }
+  ] } }));
   await page.goto(baseUrl, { waitUntil:"networkidle" });
   return page;
 }
@@ -45,7 +54,7 @@ async function mockSearchApis(page, calls) {
       { title:"Unsafe URL fixture", url:"javascript:alert(1)", snippet:"This must not render." }
     ] } });
     if (url.pathname === "/news") return route.fulfill({ json:{ source:"Regression news", results:[
-      { title:"Regression news headline", url:"https://news.example.com/story", snippet:"News fixture." }
+      { title:"Regression news headline", url:"https://news.example.com/story", imageUrl:"https://images.example.com/news.jpg", snippet:"News fixture." }
     ] } });
     return route.fulfill({ json:{ results:[] } });
   });
@@ -70,6 +79,40 @@ test("homepage loads with accessible search controls and no page errors", async 
   assert.deepEqual(errors, []);
   await page.close();
 });
+test("homepage removes the old footer and displays image-led world news", async () => {
+  const page = await newPage();
+  assert.equal(await page.locator("footer").count(), 0, "the old footer should be removed completely");
+  assert.equal(await page.getByText("Search results are provided by external search services.", { exact:false }).count(), 0);
+  const cards = page.locator(".home-news-card");
+  await cards.first().waitFor();
+  assert.equal(await cards.count(), 3);
+  assert.equal(await cards.first().locator(".home-news-image-link img").getAttribute("src"), "https://images.example.com/world-summit.jpg");
+  assert.equal(await cards.first().locator(".home-news-title").getAttribute("href"), "https://news.example.com/world-summit");
+  assert.match(await page.locator("#home-news-title").textContent(), /Latest world news/);
+  await page.close();
+});
+
+test("sticky search appears after the original search form scrolls off screen and submits", async () => {
+  const page = await newPage();
+  assert.equal(await page.locator("#sticky-search-shell").isVisible(), false);
+  await page.route("https://henry-search-api.henrymeraldcompany.workers.dev/search", route => route.fulfill({
+    json:{ source:"Sticky search fixture", results:[
+      { title:"Sticky search result", url:"https://example.com/sticky", snippet:"Search submitted from the floating search bar." }
+    ] }
+  }));
+  await page.evaluate(() => {
+    const search = document.querySelector("#search-form");
+    window.scrollTo(0, search.getBoundingClientRect().bottom + window.scrollY + 10);
+  });
+  await page.locator("#sticky-search-shell:not([hidden])").waitFor();
+  assert.equal(await page.locator("#sticky-search-form").evaluate(el => getComputedStyle(el).position), "static");
+  await page.locator("#sticky-query").fill("world from sticky bar");
+  await page.locator("#sticky-search-form button[type='submit']").click();
+  await page.getByText("Sticky search result", { exact:true }).waitFor();
+  assert.equal(await page.locator("#query").inputValue(), "world from sticky bar");
+  await page.close();
+});
+
 test("category tabs update selection and accessible state", async () => {
   const page = await newPage();
   await page.getByRole("button", { name:"Images", exact:true }).click();

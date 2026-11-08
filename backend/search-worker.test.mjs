@@ -459,7 +459,7 @@ test("news route integrates search and publisher feeds, merging duplicates and f
       provider = Object.keys(publisherHosts).includes(url.hostname) ? publisherHosts[url.hostname] : "Publisher";
       publisher = provider;
     }
-    const story = "<item><title>Solar energy research breakthrough reported by science journal</title><link>https://publisher.example/story?utm_source=" + encodeURIComponent(provider.toLowerCase()) + "</link><source>" + publisher + "</source><pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate><description>Additional reporting details about solar energy research.</description></item>";
+    const story = "<item><title>Solar energy research breakthrough reported by science journal</title><link>https://publisher.example/story?utm_source=" + encodeURIComponent(provider.toLowerCase()) + "</link><source>" + publisher + "</source><pubDate>Mon, 02 Nov 2026 09:00:00 GMT</pubDate><description>Additional reporting details about solar energy research.</description><media:thumbnail url=\"https://images.example/solar-story.jpg\"/></item>";
     const unrelated = url.hostname === "feeds.bbci.co.uk"
       ? "<item><title>Unrelated football transfer update from local league</title><link>https://sports.example/transfer</link><description>Sports transfer coverage.</description></item>"
       : "";
@@ -485,6 +485,7 @@ test("news route integrates search and publisher feeds, merging duplicates and f
     assert.ok(payload.results[0].sources.includes("Publisher Bing"));
     assert.ok(payload.results[0].sources.includes("BBC Publisher"));
     assert.equal(payload.results[0].published, "2026-11-02T09:00:00.000Z");
+    assert.equal(payload.results[0].imageUrl, "https://images.example/solar-story.jpg");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -499,7 +500,8 @@ test("news results expose bounded preview metadata and preserve original publish
         title: "Solar energy research breakthrough reported by science journal",
         url: "https://publisher.example/story?utm_source=gdelt",
         domain: "publisher.example",
-        seendate: "20261102T080000Z"
+        seendate: "20261102T080000Z",
+         socialimage: "https://images.example/gdelt-story.jpg"
       }] }), { headers: { "content-type": "application/json" } });
     }
     if (url.hostname === "news.google.com") {
@@ -520,6 +522,8 @@ test("news results expose bounded preview metadata and preserve original publish
     assert.equal(article.preview.publisher, "publisher.example");
     assert.ok(article.preview.summary.length <= 1200);
     assert.equal(article.preview.published, article.published);
+    assert.equal(article.imageUrl, "https://images.example/gdelt-story.jpg");
+    assert.equal(article.preview.imageUrl, article.imageUrl);
   } finally {
     globalThis.fetch = originalFetch;
   }
