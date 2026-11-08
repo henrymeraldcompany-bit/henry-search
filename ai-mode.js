@@ -6,7 +6,18 @@ const page=$("#main-content"),aiView=$("#ai-mode-view"),aiTab=$("#ai-mode-tab"),
 if(!aiView||!form||!aiTab)return;
 let active=false,busy=false,attachments=[],chats=[],currentId=null;
 try{chats=JSON.parse(localStorage.getItem("gozie-ai-mode-history")||"[]");if(!Array.isArray(chats))chats=[];}catch{chats=[];}
-function save(){try{localStorage.setItem("gozie-ai-mode-history",JSON.stringify(chats.slice(0,20).map(c=>({...c,messages:(c.messages||[]).slice(-40).map(m=>({...m,context:typeof m.context==="string"?m.context.slice(0,18000):undefined}))})));}catch{}}
+function save(){
+  try {
+    const stored = chats.slice(0,20).map(chat => ({
+      ...chat,
+      messages: (chat.messages || []).slice(-40).map(message => ({
+        ...message,
+        context: typeof message.context === "string" ? message.context.slice(0,18000) : undefined
+      }))
+    }));
+    localStorage.setItem("gozie-ai-mode-history", JSON.stringify(stored));
+  } catch {}
+}
 function newId(){return "chat-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);}
 function activeChat(){return chats.find(c=>c.id===currentId);}
 function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -28,7 +39,7 @@ function renderAttachments(){preview.replaceChildren();preview.hidden=!attachmen
 function loadScript(src){return new Promise((resolve,reject)=>{const existing=[...document.scripts].find(s=>s.src===src);if(existing){existing.addEventListener("load",resolve,{once:true});if(window.pdfjsLib||window.mammoth||window.XLSX)resolve();return;}const s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error("Could not load document reader library."));document.head.append(s);});}
 async function compressImage(file){const bitmap=await createImageBitmap(file);const scale=Math.min(1,1440/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext("2d");ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return canvas.toDataURL("image/jpeg",0.82);}
 async function videoContactSheet(file){const url=URL.createObjectURL(file),video=document.createElement("video");video.preload="metadata";video.muted=true;video.playsInline=true;video.src=url;try{await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=()=>reject(new Error("This video could not be opened. Try MP4 or WebM."));});if(!Number.isFinite(video.duration)||video.duration<=0)throw new Error("The video has no readable duration.");const cellW=480,cellH=270,canvas=document.createElement("canvas");canvas.width=cellW*2;canvas.height=cellH*2;const ctx=canvas.getContext("2d");ctx.fillStyle="#202124";ctx.fillRect(0,0,canvas.width,canvas.height);const marks=[0.08,0.35,0.65,0.92];for(let i=0;i<marks.length;i++){const target=Math.max(0,Math.min(video.duration-0.05,video.duration*marks[i]));await new Promise((resolve,reject)=>{let timer=setTimeout(()=>reject(new Error("Video frame extraction timed out.")),10000);const done=()=>{clearTimeout(timer);resolve();};video.addEventListener("seeked",done,{once:true});video.currentTime=target;});const x=(i%2)*cellW,y=Math.floor(i/2)*cellH;ctx.drawImage(video,x,y,cellW,cellH);ctx.fillStyle="rgba(0,0,0,.65)";ctx.fillRect(x+8,y+8,75,24);ctx.fillStyle="#fff";ctx.font="14px sans-serif";ctx.fillText(Math.floor(target)+"s",x+17,y+25);}return canvas.toDataURL("image/jpeg",0.8);}finally{URL.revokeObjectURL(url);video.remove();}}
-async function extractFile(file){const name=file.name.toLowerCase(),type=file.type||"";if(type.startsWith("image/")||/\.(png|jpe?g|webp|gif)$/i.test(name)){if(file.size>10*1024*1024)throw new Error(file.name+" is larger than 10 MB.");const data=await compressImage(file);attachments.push({name:file.name,kind:"image",data,size:file.size});return;}
+async function extractFile(file){const name=file.name.toLowerCase(),type=file.type||"";if(type.startsWith("image/")||/\.(png|jpe?g|webp|gif)$/i.test(name)){if(file.size>10*1024*1024)throw new Error(file.name+" is larger than 10 MB.");const data=await compressImage(file);attachments.push({name:file.name,kind:"image",data,size:file.size});return;
 if(type.startsWith("video/")||/\.(mp4|webm|mov|m4v)$/i.test(name)){if(file.size>10*1024*1024)throw new Error(file.name+" is larger than 10 MB.");const data=await videoContactSheet(file);attachments.push({name:file.name,kind:"image",data,size:file.size,note:"Video preview made from four sampled frames."});return;}
 if(type.startsWith("audio/")||/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(name)){if(file.size>10*1024*1024)throw new Error(file.name+" is larger than 10 MB.");const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});attachments.push({name:file.name,kind:"audio",data,size:file.size});return;}
 if(/\.(txt|md|csv|json|xml|html|htm)$/i.test(name)||type.startsWith("text/")){const text=await file.text();attachments.push({name:file.name,kind:"text",text:text.slice(0,50000),size:file.size});return;}
@@ -44,8 +55,84 @@ $("#ai-new-chat")?.addEventListener("click",startNew);$("#ai-new-chat-top")?.add
 $("#ai-mobile-history")?.addEventListener("click",()=>setHistoryOpen(!aiView.classList.contains("history-open")));
 $("#ai-close-history")?.addEventListener("click",()=>setHistoryOpen(false));
 $("#ai-clear-history")?.addEventListener("click",()=>{if(!chats.length)return;if(!confirm("Delete all GOZIE AI conversations from this device?"))return;chats=[];currentId=null;save();renderHistory();renderChat();});
-async function send(){if(busy)return;const question=prompt.value.trim();if(!question&&!attachments.length)return;if(!currentId||!activeChat())createChat();const chat=activeChat();const attached=attachments.splice(0);renderAttachments();const description=attached.map(a=>a.kind==="text"?"\n\n[Uploaded file: "+a.name+"]\n"+a.text:a.kind==="audio"?"\n\n[Uploaded audio: "+a.name+"] (transcribe this audio, then answer the user)":"\n\n[Uploaded image/video: "+a.name+"] "+(a.note||"Image attached.")).join("");const displayText=question+(attached.length?"\n\n📎 "+attached.map(a=>a.name).join(", "):"");const apiContent=[{type:"text",text:(question||"Please inspect the attached file(s).")+description}];attached.filter(a=>a.kind==="image").forEach(a=>apiContent.push({type:"image_url",image_url:{url:a.data}}));attached.filter(a=>a.kind==="audio").forEach(a=>apiContent.push({type:"audio_data",data:a.data}));chat.messages.push({role:"user",content:displayText,context:description});if(chat.messages.length===1)chat.title=(question||attached[0]?.name||"New conversation").slice(0,64);chat.updated=Date.now();save();prompt.value="";renderChat();const typing=document.createElement("div");typing.className="ai-typing";typing.textContent="Gozie AI is thinking…";messagesEl.append(typing);messagesEl.scrollTop=messagesEl.scrollHeight;busy=true;sendButton.disabled=true;
-try{const history=chat.messages.slice(-20).map((m,i)=>{if(m.role==="user"&&i===chat.messages.slice(-20).length-1)return{role:"user",content:apiContent};if(m.role==="user"&&m.context)return{role:"user",content:m.content+"\\n\\n"+m.context};return{role:m.role,content:m.content};});const response=await fetch(AI_API+"/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:history,max_tokens:2048})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||data.detail||"AI request failed ("+response.status+").");const answer=data.choices?.[0]?.message?.content||data.response||"No answer was returned.";chat.messages.push({role:"assistant",content:answer});chat.updated=Date.now();save();}catch(e){const message=e instanceof TypeError?"Gozie AI could not connect to its assistant service. Check your internet connection and try again.":e?.name==="TimeoutError"?"Gozie AI took too long to respond. Please try again.":(e.message||"Please try again later.");chat.messages.push({role:"assistant",content:"I could not complete that request. "+message});save();}finally{busy=false;sendButton.disabled=false;renderHistory();renderChat();}}
+async function send(){
+  if (busy) return;
+  const question = prompt.value.trim();
+  if (!question && !attachments.length) return;
+  if (!currentId || !activeChat()) createChat();
+
+  const chat = activeChat();
+  const attached = attachments.splice(0);
+  renderAttachments();
+
+  const description = attached.map(file => {
+    if (file.kind === "text") return "\\n\\n[Uploaded file: " + file.name + "]\\n" + file.text;
+    if (file.kind === "audio") return "\\n\\n[Uploaded audio: " + file.name + "] (transcribe this audio, then answer the user)";
+    return "\\n\\n[Uploaded image/video: " + file.name + "] " + (file.note || "Image attached.");
+  }).join("");
+  const displayText = question + (attached.length ? "\\n\\n📎 " + attached.map(file => file.name).join(", ") : "");
+  const apiContent = [{ type: "text", text: (question || "Please inspect the attached file(s).") + description }];
+  attached.filter(file => file.kind === "image").forEach(file => {
+    apiContent.push({ type: "image_url", image_url: { url: file.data } });
+  });
+  attached.filter(file => file.kind === "audio").forEach(file => {
+    apiContent.push({ type: "audio_data", data: file.data });
+  });
+
+  chat.messages.push({ role: "user", content: displayText, context: description });
+  if (chat.messages.length === 1) chat.title = (question || attached[0]?.name || "New conversation").slice(0, 64);
+  chat.updated = Date.now();
+  save();
+  prompt.value = "";
+  renderChat();
+
+  const typing = document.createElement("div");
+  typing.className = "ai-typing";
+  typing.textContent = "Gozie AI is thinking…";
+  messagesEl.append(typing);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  busy = true;
+  sendButton.disabled = true;
+
+  try {
+    const recent = chat.messages.slice(-20);
+    const history = recent.map((message, index) => {
+      if (message.role === "user" && index === recent.length - 1) {
+        return { role: "user", content: apiContent };
+      }
+      if (message.role === "user" && message.context) {
+        return { role: "user", content: message.content + "\\n\\n" + message.context };
+      }
+      return { role: message.role, content: message.content };
+    });
+
+    const response = await fetch(AI_API + "/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history, max_tokens: 2048 })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || data.detail || "AI request failed (" + response.status + ").");
+
+    const answer = data.choices?.[0]?.message?.content || data.response || "No answer was returned.";
+    chat.messages.push({ role: "assistant", content: answer });
+    chat.updated = Date.now();
+    save();
+  } catch (error) {
+    const message = error instanceof TypeError
+      ? "Gozie AI could not connect to its assistant service. Check your internet connection and try again."
+      : error?.name === "TimeoutError"
+        ? "Gozie AI took too long to respond. Please try again."
+        : (error.message || "Please try again later.");
+    chat.messages.push({ role: "assistant", content: "I could not complete that request. " + message });
+    save();
+  } finally {
+    busy = false;
+    sendButton.disabled = false;
+    renderHistory();
+    renderChat();
+  }
+}
 $("#ai-chat-form").addEventListener("submit",e=>{e.preventDefault();send();});
 prompt.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}});
 renderHistory();renderChat();
