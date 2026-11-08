@@ -66,18 +66,18 @@ export async function runSearch(request, env = {}) {
      try{const parsed=new URL(decoded);return ["http:","https:"].includes(parsed.protocol)?parsed.href.slice(0,2000):""}catch{return ""}
     };
     const rssImage=item=>{
-     const tags=String(item||"").match(/<(?:media:content|media:thumbnail|enclosure)\\b[^>]*>/gi)||[];
+     const tags=String(item||"").match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*>/gi)||[];
      for(const tag of tags){
-      const value=(tag.match(/\\b(?:url|href)\\s*=\\s*(["'])(.*?)\\1/i)||[])[2]||"";
-      const type=(tag.match(/\\btype\\s*=\\s*(["'])(.*?)\\1/i)||[])[2]||"";
+      const value=(tag.match(/\b(?:url|href)\s*=\s*(["'])(.*?)\1/i)||[])[2]||"";
+      const type=(tag.match(/\btype\s*=\s*(["'])(.*?)\1/i)||[])[2]||"";
       if(type&&!type.toLowerCase().startsWith("image/")&&!/media:(?:content|thumbnail)/i.test(tag))continue;
       const image=safeNewsImage(value);
       if(image)return image;
      }
-     const contentBlocks=[...String(item||"").matchAll(/<(?:description|content:encoded)\\b[^>]*>([\\s\\S]*?)<\\/(?:description|content:encoded)>/gi)];
+     const contentBlocks=[...String(item||"").matchAll(/<(?:description|content:encoded)\b[^>]*>([\s\S]*?)<\/(?:description|content:encoded)>/gi)];
      for(const block of contentBlocks){
-      const imageTag=(block[1]||"").match(/<img\\b[^>]*>/i);
-      const source=imageTag&&(imageTag[0].match(/\\bsrc\\s*=\\s*(["'])(.*?)\\1/i)||[])[2];
+      const imageTag=(block[1]||"").match(/<img\b[^>]*>/i);
+      const source=imageTag&&(imageTag[0].match(/\bsrc\s*=\s*(["'])(.*?)\1/i)||[])[2];
       const image=safeNewsImage(source);
       if(image)return image;
      }
