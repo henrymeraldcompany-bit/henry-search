@@ -47,10 +47,11 @@ function identity(text) {
   if (asksOwner) return "Gozie AI is owned by Henry Cee.";
   return null;
 }
-function productAnswer(text) {
+function productAnswer(text, productContext = false) {
   const q = String(text || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9\\s]/g, " ").replace(/\\s+/g, " ").trim();
-  const mentionsSearch = q.includes("gozie search") || q.includes("search engine") || q.includes("search tabs");
+  const mentionsSearch = q.includes("gozie search") || q.includes("search engine") || q.includes("search tabs") || q.includes("search modes") || q.includes("search categories") || q.includes("search types") || (productContext && /(mode|tab|categor|history|sync|upload|attach|image|video|news|google|voice|setting|theme|webpage|read here)/.test(q));
   if (!mentionsSearch) return null;
+  if (/(who created|who built|who developed|who owns|creator of|owner of)/.test(q)) return "GOZIE SEARCH is a search product created and developed by Henry Cee.";
   if (/(mode|tab|categor|types of search|search options|what can i search)/.test(q)) return "GOZIE SEARCH has five main modes: AI Mode for conversational questions and follow-ups; All for ordinary web results; Images for image discovery and filters; Videos for video discovery, source/date/duration filters and permitted in-page playback; and News for current articles from multiple news sources. AI Mode is the first tab. The other four are All, Images, Videos and News.";
   if (/(history|previous search|past search|saved search|sync|synchroni)/.test(q)) return "GOZIE SEARCH keeps two separate histories: search history and AI chat history. Both are saved locally in your current browser on this device, not automatically synced to another phone or browser. Search history supports reopening, starring, individual deletion and selected/bulk deletion with confirmation.";
   if (/(upload|attach|file|document|pdf|docx|spreadsheet)/.test(q)) return "AI Mode can read PDF, DOCX, XLSX, XLS, XLSM, XLSB, CSV, TXT, Markdown, JSON, XML and HTML files. It can inspect supported images, transcribe audio, and sample up to four frames from a video. Uploads are limited to four files per message, 10 MB per file and 20 MB combined. Long documents are extracted within bounded page/character limits, so very large files may be only partially included.";
@@ -121,7 +122,8 @@ export default {
     if (!last) return json({ error: "A user message is required." }, 400);
     const question = typeof last.content === "string" ? last.content :
       last.content.filter(part => part.type === "text").map(part => part.text).join(" ");
-    const fixed = identity(question) || productAnswer(question);
+    const previousProductContext = messages.slice(0, -1).some(message => typeof message.content === "string" && /gozie\\s+search|search engine|search tabs/i.test(message.content));
+    const fixed = identity(question) || productAnswer(question, previousProductContext);
     if (fixed) return json({
       id: "gozie-" + crypto.randomUUID(), model: MODEL,
       choices: [{ index: 0, message: { role: "assistant", content: fixed }, finish_reason: "stop" }]
