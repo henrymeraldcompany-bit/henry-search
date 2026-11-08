@@ -119,6 +119,8 @@ test("sticky search appears after the original search form scrolls off screen an
   await page.locator("#sticky-search-form button[type='submit']").click();
   await page.getByText("Sticky search result", { exact:true }).waitFor();
   assert.equal(await page.locator("#query").inputValue(), "world from sticky bar");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForFunction(() => document.querySelector("#sticky-search-shell")?.hidden === true);
   await page.close();
 });
 
