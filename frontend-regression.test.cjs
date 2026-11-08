@@ -317,6 +317,22 @@ test("AI Mode opens a chat workspace and sends prompts to the GOZIE AI Worker", 
   await page.close();
 });
 
+
+test("AI Mode automatically runs a query already entered in the main search box", async () => {
+  const page = await newPage();
+  let received = "";
+  await page.route("https://gozie-search-ai.henrymeraldcompany.workers.dev/**", async route => {
+    const body = route.request().postDataJSON();
+    received = JSON.stringify(body.messages);
+    await route.fulfill({ json:{ id:"test-auto", choices:[{ index:0, message:{ role:"assistant", content:"I am Gozie AI, built by Henry Cee." }, finish_reason:"stop" }] } });
+  });
+  await page.locator("#query").fill("Who are you?");
+  await page.locator("#ai-mode-tab").click();
+  await page.getByText("I am Gozie AI, built by Henry Cee.", { exact:true }).waitFor();
+  assert.match(received, /Who are you/);
+  await page.close();
+});
+
 test("mobile layouts remain usable without horizontal overflow at common phone widths", async () => {
   for (const width of [320, 360, 390]) {
     const page = await browser.newPage({
