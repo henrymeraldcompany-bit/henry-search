@@ -132,7 +132,7 @@ export default {
         ? message.content.filter(part => part.type === "image_url")
         : [];
       const combinedText = [textParts.join("\\n"), audioTranscript ? "Audio transcription:\\n" + audioTranscript : ""].filter(Boolean).join("\\n\\n");
-      return { role: "user", content: [{ type: "text", text: combinedText }, ...imageParts] };
+      return { role: "user", content: hasImage ? [{ type: "text", text: combinedText }, ...imageParts] : combinedText };
     });
     let sources = [];
     if (body.web_search !== false && !hasImage && !audioFiles.length) {
