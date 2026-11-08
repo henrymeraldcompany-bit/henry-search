@@ -36,12 +36,13 @@ function allowed(request) {
 }
 function identity(text) {
   const q = String(text || "").toLowerCase().normalize("NFKD")
-    .replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-  const asksName = /\b(who are you|what is your name|whats your name|your name|what are you called|identify yourself)\b/.test(q);
-  const asksCreator = /\b(who created you|who created gozie|who made you|who made gozie|who built you|who developed you|who developed gozie|who founded you|who is your creator|who is your developer|who is your founder|who is behind you|who is behind gozie|creator of gozie|developer of gozie)\b/.test(q);
-  const asksOwner = /\b(who owns you|who owns gozie|who is your owner|owner of gozie)\b/.test(q);
+    .replace(/[^a-z0-9\\s]/g, " ").replace(/\\s+/g, " ").trim();
+  const asksName = /\\b(who are you|what is your name|whats your name|your name|name of this ai|name of this assistant|what are you called|identify yourself)\\b/.test(q);
+  const asksCreator = /\\b(who created you|who created gozie|who made you|who made gozie|who built you|who built gozie|who developed you|who developed gozie|who founded you|who brought you into existence|who is your creator|who is the creator of gozie|who is your developer|who is your founder|who is behind you|who is behind gozie|who is the person behind you|who is responsible for creating you|who is responsible for developing you)\\b/.test(q);
+  const asksOwner = /\\b(who owns you|who is your owner|who owns gozie|owner of gozie|who is gozie owned by|who owns gozie ai|who is the owner of gozie|who owns the gozie ai app)\\b/.test(q);
+  const indirectCreator = /(who|which person|whose).*(made|built|created|developed|founded|behind).*(you|gozie|assistant|ai)/.test(q);
   if (asksName) return "My name is Gozie AI.";
-  if (asksCreator) return "I am Gozie AI, created and developed by Henry Cee.";
+  if (asksCreator || indirectCreator) return "I am Gozie AI, created and developed by Henry Cee.";
   if (asksOwner) return "Gozie AI is owned by Henry Cee.";
   return null;
 }
