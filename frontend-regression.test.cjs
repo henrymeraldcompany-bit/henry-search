@@ -303,13 +303,21 @@ test("AI Mode opens a chat workspace and sends prompts to the GOZIE AI Worker", 
     const body = route.request().postDataJSON();
     assert.equal(body.messages.at(-1).role, "user");
     assert.match(JSON.stringify(body.messages.at(-1).content), /Who are you/);
-    await route.fulfill({ json:{ id:"test", choices:[{ index:0, message:{ role:"assistant", content:"I am Gozie AI, built by Henry Cee." }, finish_reason:"stop" }] } });
+    await route.fulfill({ json:{ id:"test", choices:[{ index:0, message:{ role:"assistant", content:"My name is Gozie AI." }, finish_reason:"stop" }] } });
   });
   await page.locator("#ai-mode-tab").click();
   assert.equal(await page.locator("#ai-mode-view").isVisible(), true);
+  assert.equal(await page.locator("#ai-category-slot .search-tabs .search-tab").first().getAttribute("id"), "ai-mode-tab");
+  assert.equal((await page.locator("#ai-category-slot .search-tabs .search-tab").first().textContent()).trim(), "AI Mode");
+  assert.equal(await page.locator("#ai-history-bottom").count(), 0);
+  assert.equal((await page.locator("#ai-chat-topbar").textContent().catch(()=> "" )).includes("Cloudflare"), false);
+  await page.locator("#ai-mobile-history").click();
+  assert.equal(await page.locator("#ai-mode-view").evaluate(el => el.classList.contains("history-open")), true);
+  await page.locator("#ai-close-history").click();
+  assert.equal(await page.locator("#ai-mode-view").evaluate(el => el.classList.contains("history-open")), false);
   await page.locator("#ai-prompt").fill("Who are you?");
   await page.locator("#ai-send-button").click();
-  await page.getByText("I am Gozie AI, built by Henry Cee.", { exact:true }).waitFor();
+  await page.getByText("My name is Gozie AI.", { exact:true }).waitFor();
   const history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-ai-mode-history") || "[]"));
   assert.equal(history.length, 1);
   assert.equal(history[0].messages.length, 2);
@@ -324,13 +332,45 @@ test("AI Mode automatically runs a query already entered in the main search box"
   await page.route("https://gozie-search-ai.henrymeraldcompany.workers.dev/**", async route => {
     const body = route.request().postDataJSON();
     received = JSON.stringify(body.messages);
-    await route.fulfill({ json:{ id:"test-auto", choices:[{ index:0, message:{ role:"assistant", content:"I am Gozie AI, built by Henry Cee." }, finish_reason:"stop" }] } });
+    await route.fulfill({ json:{ id:"test-auto", choices:[{ index:0, message:{ role:"assistant", content:"My name is Gozie AI." }, finish_reason:"stop" }] } });
   });
   await page.locator("#query").fill("Who are you?");
   await page.locator("#ai-mode-tab").click();
-  await page.getByText("I am Gozie AI, built by Henry Cee.", { exact:true }).waitFor();
+  await page.getByText("My name is Gozie AI.", { exact:true }).waitFor();
   assert.match(received, /Who are you/);
   await page.close();
+});
+
+
+test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests", async () => {
+  const endpoint = "https://gozie-search-ai.henrymeraldcompany.workers.dev";
+  const origin = "https://henrymeraldcompany-bit.github.io";
+  const healthResponse = await fetch(endpoint + "/health", { signal:AbortSignal.timeout(25000) });
+  assert.equal(healthResponse.status, 200, "GOZIE AI Worker health endpoint should respond");
+  const health = await healthResponse.json();
+  assert.equal(health.status, "online");
+  assert.equal(health.identity, "Gozie AI");
+
+  const preflight = await fetch(endpoint + "/v1/chat/completions", {
+    method:"OPTIONS",
+    headers:{
+      Origin:origin,
+      "Access-Control-Request-Method":"POST",
+      "Access-Control-Request-Headers":"content-type"
+    },
+    signal:AbortSignal.timeout(25000)
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+
+  const identityResponse = await fetch(endpoint + "/v1/chat/completions", {
+    method:"POST",
+    headers:{ Origin:origin, "Content-Type":"application/json" },
+    body:JSON.stringify({messages:[{role:"user",content:"Who are you?"}]})
+  });
+  assert.equal(identityResponse.status, 200);
+  const identity = await identityResponse.json();
+  assert.equal(identity.choices?.[0]?.message?.content, "My name is Gozie AI.");
 });
 
 test("mobile layouts remain usable without horizontal overflow at common phone widths", async () => {
