@@ -477,8 +477,8 @@ test("AI Mode colors follow GOZIE SEARCH light and dark themes",async()=>{
   const dark=await getPanel();
   assert.equal(dark,await getRoot());
   await page.locator("#ai-mode-tab").evaluate(el=>el.click());
-  await page.locator("#menu-toggle").click();
-  await page.locator("#theme-toggle").click();
+  await page.locator("#menu-toggle").evaluate(el=>el.click());
+  await page.locator("#theme-toggle").evaluate(el=>el.click());
   await page.locator("#ai-mode-tab").evaluate(el=>el.click());
   const light=await getPanel();
   assert.equal(light,await getRoot());
