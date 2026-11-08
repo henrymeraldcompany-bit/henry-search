@@ -65,7 +65,7 @@ test("homepage loads with accessible search controls and no page errors", async 
   await page.reload({ waitUntil:"networkidle" });
   assert.match(await page.title(), /GOZIE SEARCH/);
   await page.locator("#query").waitFor();
-  assert.equal(await page.locator(".search-tab").count(), 4);
+  assert.equal(await page.locator(".search-tab").count(), 5);
   assert.equal(await page.locator(".search-tab[aria-pressed='true']").textContent(), "All");
   assert.deepEqual(errors, []);
   await page.close();
@@ -295,6 +295,28 @@ test("integrates all four search categories through their production API routes"
 });
 
 
+
+test("AI Mode opens a chat workspace and sends prompts to the GOZIE AI Worker", async () => {
+  const page = await newPage(), errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.route("https://gozie-search-ai.henrymeraldcompany.workers.dev/**", async route => {
+    const body = route.request().postDataJSON();
+    assert.equal(body.messages.at(-1).role, "user");
+    assert.match(JSON.stringify(body.messages.at(-1).content), /Who are you/);
+    await route.fulfill({ json:{ id:"test", choices:[{ index:0, message:{ role:"assistant", content:"I am Gozie AI, built by Henry Cee." }, finish_reason:"stop" }] } });
+  });
+  await page.locator("#ai-mode-tab").click();
+  assert.equal(await page.locator("#ai-mode-view").isVisible(), true);
+  await page.locator("#ai-prompt").fill("Who are you?");
+  await page.locator("#ai-send-button").click();
+  await page.getByText("I am Gozie AI, built by Henry Cee.", { exact:true }).waitFor();
+  const history = await page.evaluate(() => JSON.parse(localStorage.getItem("gozie-ai-mode-history") || "[]"));
+  assert.equal(history.length, 1);
+  assert.equal(history[0].messages.length, 2);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test("mobile layouts remain usable without horizontal overflow at common phone widths", async () => {
   for (const width of [320, 360, 390]) {
     const page = await browser.newPage({
@@ -321,7 +343,7 @@ test("mobile layouts remain usable without horizontal overflow at common phone w
     const tabs = page.locator(".search-tab");
     assert.equal(await query.isVisible(), true, `Search input should be visible at ${width}px`);
     assert.equal(await submit.isVisible(), true, `Search button should be visible at ${width}px`);
-    assert.equal(await tabs.count(), 4);
+    assert.equal(await tabs.count(), 5);
     for (let index = 0; index < await tabs.count(); index++) {
       assert.equal(await tabs.nth(index).isVisible(), true, `Search category tab ${index} should be visible at ${width}px`);
     }
