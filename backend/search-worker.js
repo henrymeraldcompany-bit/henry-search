@@ -37,6 +37,8 @@ export async function runSearch(request, env = {}) {
    return out({query:q,source:"Wikimedia Commons",results});
   }
   if(route==="/news"){
+   const requestedPage=Number(u.searchParams.get("page")||"1");
+   const newsPage=Number.isInteger(requestedPage)&&requestedPage>=1&&requestedPage<=100?requestedPage:1;
    const newsDateFilters={date:u.searchParams.get("date")||"any",from:u.searchParams.get("from")||"",to:u.searchParams.get("to")||""};
    const validatedNewsDates=filterNewsByDate([],newsDateFilters);
    if(!validatedNewsDates.valid)return out({error:validatedNewsDates.error},400);
@@ -179,6 +181,8 @@ export async function runSearch(request, env = {}) {
     const diverseLiveNews=diversifyNewsSources(filteredLiveNews.results);
     return out({
      query:q,
+     page:newsPage,
+     hasMore:newsPage<100&&gdeltPageCount>=20,
      source:successfulProviders.join(" + ")||"News providers",
      providers:successfulProviders,
      attemptedProviders:providers.length,

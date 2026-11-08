@@ -54,7 +54,7 @@ export function validateApiRequest(url) {
   }
   if (route === "/news") {
     const page = url.searchParams.get("page") || "1";
-    if (!/^[1-9]\\d{0,2}$/.test(page) || Number(page) > 100) return { valid: false, error: "The news page must be between 1 and 100." };
+    if (!/^[1-9]\d{0,2}$/.test(page) || Number(page) > 100) return { valid: false, error: "The news page must be between 1 and 100." };
     const date = url.searchParams.get("date") || "any";
     if (!new Set(["any", "day", "week", "month", "year"]).has(date)) return { valid: false, error: "The news date filter is not supported." };
     const from = url.searchParams.get("from") || "", to = url.searchParams.get("to") || "";
