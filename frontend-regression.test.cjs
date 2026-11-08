@@ -406,6 +406,17 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   for (const mode of ["AI Mode", "All", "Images", "Videos", "News"]) {
     assert.ok(answer.includes(mode), "GOZIE AI should accurately explain the " + mode + " mode. Answer: " + answer);
   }
+
+  const reasoningResponse = await fetch(endpoint + "/v1/chat/completions", {
+    method:"POST",
+    headers:{ Origin:origin, "Content-Type":"application/json" },
+    body:JSON.stringify({web_search:false,messages:[{role:"user",content:"What is 7 multiplied by 8? Give only the number."}]})
+  });
+  assert.equal(reasoningResponse.status,200);
+  const reasoning=await reasoningResponse.json();
+  const reasoningAnswer=reasoning.choices?.[0]?.message?.content||"";
+  assert.match(reasoningAnswer,/56/,"GOZIE AI should answer the actual question, not return identity boilerplate.");
+  assert.doesNotMatch(reasoningAnswer,/My name is Gozie AI/i);
 });
 
 
@@ -414,7 +425,7 @@ test("AI Mode history supports select-all, cancel, selected deletion, pin and lo
   await page.route("https://gozie-search-ai.henrymeraldcompany.workers.dev/**",async route=>{
     const body=route.request().postDataJSON();
     const last=body.messages.at(-1);
-    const prompt=typeof last.content==="string"?last.content:"attachment";
+    const prompt=typeof last.content==="string"?last.content:(Array.isArray(last.content)?last.content.find(part=>part.type==="text")?.text:"")||"attachment";
     await route.fulfill({json:{id:"ai-history-fixture",sources:[{title:"Example source",url:"https://example.com/grounded-answer"}],choices:[{index:0,message:{role:"assistant",content:"Answer for "+prompt},finish_reason:"stop"}]}});
   });
   await page.locator("#ai-mode-tab").click();
@@ -465,7 +476,7 @@ test("AI Mode colors follow GOZIE SEARCH light and dark themes",async()=>{
   });
   const dark=await getPanel();
   assert.equal(dark,await getRoot());
-  await page.locator("#ai-mode-tab").click();
+  await page.locator("#ai-mode-tab").evaluate(el=>el.click());
   await page.locator("#menu-toggle").click();
   await page.locator("#theme-toggle").click();
   await page.locator("#menu-toggle").click();
