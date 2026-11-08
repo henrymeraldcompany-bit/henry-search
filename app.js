@@ -414,6 +414,10 @@ function renderResults(items) {
     publisherLabel.textContent = publisherNames.length
       ? "Source: " + publisherNames.join(" · ")
       : "Original source: " + new URL(url).hostname;
+    const publishedDate = item.published && Number.isFinite(Date.parse(item.published))
+      ? new Date(item.published).toLocaleDateString()
+      : "";
+    if (publishedDate) publisherLabel.textContent += " · " + publishedDate;
     attribution.appendChild(publisherLabel);
 
     const originalUrl = safeHttpUrl(item.originalUrl || item.url || item.link || "");
@@ -803,6 +807,13 @@ function renderImageGallery(items, query = "") {
     title.className = "image-card-title";
     title.textContent = item.title || "Untitled image";
 
+    const sourceMeta = document.createElement("p");
+    sourceMeta.className = "image-card-source-meta";
+    const imageMeta = [new URL(sourcePage).hostname.replace(/^www\./i, "")];
+    const imageDate = item.publishedAt || item.createdAt || item.date || item.uploadedAt;
+    if (imageDate && Number.isFinite(Date.parse(imageDate))) imageMeta.push(new Date(imageDate).toLocaleDateString());
+    sourceMeta.textContent = imageMeta.join(" · ");
+
     const license = document.createElement("p");
     license.className = "image-card-license";
     license.textContent = item.license
@@ -822,7 +833,7 @@ function renderImageGallery(items, query = "") {
     const sourceLink = makeLink(sourcePage, "View source ↗");
     sourceLink.className = "image-source-link";
 
-    card.append(previewButton, title, license);
+    card.append(previewButton, title, sourceMeta, license);
     if (creator.textContent) card.appendChild(creator);
     if (attribution.textContent) card.appendChild(attribution);
     if (licenseLink) card.appendChild(licenseLink);
@@ -1517,9 +1528,13 @@ function renderVideoResults(items, query) {
       source.className = "video-card-source";
       const sourceNames = Array.isArray(video.sources) && video.sources.length
         ? video.sources : [video.source || getVideoHost(video.url)];
-      source.textContent = video.channel
-        ? `${video.channel} · ${sourceNames.join(" · ")}`
-        : sourceNames.join(" · ");
+      const videoMeta = [];
+      if (video.channel) videoMeta.push(video.channel);
+      videoMeta.push(...sourceNames);
+      if (video.publishedAt && Number.isFinite(Date.parse(video.publishedAt))) {
+        videoMeta.push("Uploaded " + new Date(video.publishedAt).toLocaleDateString());
+      }
+      source.textContent = videoMeta.filter(Boolean).join(" · ");
 
       card.append(thumbnailButton, playerTarget, title, source);
       if (video.license) {
@@ -1538,13 +1553,6 @@ function renderVideoResults(items, query) {
         duration.className = "video-card-duration";
         duration.textContent = video.duration;
         card.appendChild(duration);
-      }
-
-      if (video.publishedAt) {
-        const date = document.createElement("p");
-        date.className = "video-card-date";
-        date.textContent = `Uploaded ${new Date(video.publishedAt).toLocaleDateString()}`;
-        card.appendChild(date);
       }
 
       if (video.description) {
