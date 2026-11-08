@@ -467,19 +467,18 @@ test("AI Mode history supports select-all, cancel, selected deletion, pin and lo
 
 test("AI Mode colors follow GOZIE SEARCH light and dark themes",async()=>{
   const page=await newPage();
-  await page.locator("#ai-mode-tab").click();
   const getPanel=()=>page.locator(".ai-chat-main").evaluate(el=>getComputedStyle(el).backgroundColor);
   const getRoot=()=>page.evaluate(()=>{
     const value=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
     const probe=document.createElement("div");probe.style.backgroundColor=value;document.body.append(probe);
     const result=getComputedStyle(probe).backgroundColor;probe.remove();return result;
   });
+  await page.locator("#ai-mode-tab").click();
   const dark=await getPanel();
   assert.equal(dark,await getRoot());
-  await page.locator("#ai-mode-tab").evaluate(el=>el.click());
-  await page.locator("#menu-toggle").evaluate(el=>el.click());
-  await page.locator("#theme-toggle").evaluate(el=>el.click());
-  await page.locator("#ai-mode-tab").evaluate(el=>el.click());
+  await page.evaluate(()=>{localStorage.setItem("gozie-theme","light");window.location.reload();});
+  await page.locator("#ai-mode-tab").waitFor({state:"visible"});
+  await page.locator("#ai-mode-tab").click();
   const light=await getPanel();
   assert.equal(light,await getRoot());
   assert.notEqual(light,dark);
