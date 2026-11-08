@@ -2769,3 +2769,8 @@ body.ai-mode-open{overflow:hidden}
 #ai-mobile-history{margin-left:2px;transform:translateX(-2px)}
 .ai-history-top #ai-new-chat{min-width:82px;padding:8px 13px;font-weight:650}
 @media(max-width:680px){#ai-new-chat-top{min-width:82px;height:34px;padding:0 11px;font-size:12px}#ai-mobile-history{margin-left:0;transform:translateX(-3px)}#ai-scroll-latest{right:calc(50% - 17px);bottom:calc(100% + 7px);width:32px;height:32px}}
+
+/* GOZIE SEARCH navigation button beside New chat in AI Mode */
+#ai-open-app-sidebar{flex:none;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;background:var(--surface-soft);color:var(--text);font-size:19px;cursor:pointer}
+#ai-open-app-sidebar:hover{border-color:var(--accent);background:var(--accent-soft)}
+@media(max-width:680px){#ai-open-app-sidebar{width:36px;height:36px;font-size:18px}}
