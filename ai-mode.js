@@ -145,6 +145,7 @@ function createChat(){selectionMode=false;selectedChatIds.clear();const c={id:ne
 function startNew(){selectionMode=false;selectedChatIds.clear();attachments=[];renderAttachments();setHistoryOpen(false);createChat();prompt.value="";prompt.focus();}
 $("#ai-new-chat")?.addEventListener("click",startNew);$("#ai-new-chat-top")?.addEventListener("click",startNew);
 $("#ai-mobile-history")?.addEventListener("click",()=>setHistoryOpen(!aiView.classList.contains("history-open")));
+$("#ai-open-app-sidebar")?.addEventListener("click",()=>$("#menu-toggle")?.click());
 $("#ai-close-history")?.addEventListener("click",()=>setHistoryOpen(false));
 $("#ai-clear-history")?.addEventListener("click",beginDeleteSelection);
 async function send(){
