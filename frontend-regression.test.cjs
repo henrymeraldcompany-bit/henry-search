@@ -60,16 +60,19 @@ async function mockSearchApis(page, calls) {
     ] } });
     if (url.pathname === "/news") {
       const page = Number(url.searchParams.get("page") || "1");
+      const isHomepage = url.searchParams.get("q") === "world";
       const first = [
         { title:"Regression news headline", url:"https://news.example.com/story", imageUrl:"https://images.example.com/news.jpg", snippet:"News fixture." },
-        { title:"Second regression story", url:"https://news.example.com/story-two", imageUrl:"https://images.example.com/news-two.jpg", snippet:"Another fixture." },
-        { title:"Third regression story", url:"https://news.example.com/story-three", imageUrl:"https://images.example.com/news-three.jpg", snippet:"Third fixture." }
+        ...(isHomepage ? [
+          { title:"Second regression story", url:"https://news.example.com/story-two", imageUrl:"https://images.example.com/news-two.jpg", snippet:"Another fixture." },
+          { title:"Third regression story", url:"https://news.example.com/story-three", imageUrl:"https://images.example.com/news-three.jpg", snippet:"Third fixture." }
+        ] : [])
       ];
       const second = [
         { title:"Fourth regression story", url:"https://news.example.com/story-four", imageUrl:"https://images.example.com/news-four.jpg", snippet:"Fourth fixture." },
         { title:"Fifth regression story", url:"https://news.example.com/story-five", imageUrl:"https://images.example.com/news-five.jpg", snippet:"Fifth fixture." }
       ];
-      return route.fulfill({ json:{ source:"Regression news", page, hasMore:page===1, results:page===1?first:page===2?second:[] } });
+      return route.fulfill({ json:{ source:"Regression news", page, hasMore:isHomepage&&page===1, results:page===1?first:page===2&&isHomepage?second:[] } });
     }
     return route.fulfill({ json:{ results:[] } });
   });
