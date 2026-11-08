@@ -17,7 +17,7 @@ function setActive(on){active=on;aiTab.classList.toggle("active",on);aiTab.setAt
 function openAiMode(){setActive(true);const q=$("#query")?.value.trim();if(q){prompt.value=q;send();}}
 aiTab.addEventListener("click",openAiMode);
 $("#sidebar-ai-mode")?.addEventListener("click",()=>{$("#sidebar-close")?.click();openAiMode();});
-document.querySelectorAll(".search-tab[data-category]").forEach(b=>b.addEventListener("click",()=>{if(active)setActive(false);}));
+document.querySelectorAll(".search-tab[data-category]").forEach(b=>b.addEventListener("click",()=>{if(active){setActive(false);const q=$("#query")?.value.trim();if(q)setTimeout(()=>form.requestSubmit(),0);}}));
 $("#sidebar-new-search")?.addEventListener("click",()=>setActive(false));
 document.querySelectorAll("[data-return-home]").forEach(b=>b.addEventListener("click",()=>setActive(false)));
 form.addEventListener("submit",e=>{if(!active)return;e.preventDefault();e.stopImmediatePropagation();const q=$("#query")?.value.trim();if(q)prompt.value=q;send();},true);
@@ -39,7 +39,7 @@ throw new Error("This file type is not supported yet: "+file.name);}
 $("#ai-attach-button").addEventListener("click",()=>fileInput.click());
 fileInput.addEventListener("change",async()=>{const files=[...fileInput.files];const existingBytes=attachments.reduce((n,a)=>n+(a.size||0),0);if(attachments.length+files.length>4){alert("Gozie AI accepts up to 4 attachments in one message.");fileInput.value="";return;}if(files.some(f=>f.size>10*1024*1024)||existingBytes+files.reduce((n,f)=>n+f.size,0)>20*1024*1024){alert("Each attachment must be 10 MB or smaller, and all attachments together must not exceed 20 MB.");fileInput.value="";return;}for(const file of files){try{await extractFile(file);}catch(error){alert(error.message||"Could not read file.");}}renderAttachments();fileInput.value="";});
 function createChat(){const c={id:newId(),title:"New conversation",messages:[],updated:Date.now()};chats.unshift(c);currentId=c.id;save();renderHistory();renderChat();}
-function startNew(){attachments=[];renderAttachments();createChat();prompt.value="";prompt.focus();}
+function startNew(){attachments=[];renderAttachments();setHistoryOpen(false);createChat();prompt.value="";prompt.focus();}
 $("#ai-new-chat")?.addEventListener("click",startNew);$("#ai-new-chat-top")?.addEventListener("click",startNew);
 $("#ai-mobile-history")?.addEventListener("click",()=>setHistoryOpen(!aiView.classList.contains("history-open")));
 $("#ai-close-history")?.addEventListener("click",()=>setHistoryOpen(false));
