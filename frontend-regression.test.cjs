@@ -394,6 +394,18 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   assert.equal(identityResponse.status, 200);
   const identity = await identityResponse.json();
   assert.equal(identity.choices?.[0]?.message?.content, "My name is Gozie AI.");
+
+  const productResponse = await fetch(endpoint + "/v1/chat/completions", {
+    method:"POST",
+    headers:{ Origin:origin, "Content-Type":"application/json" },
+    body:JSON.stringify({web_search:false,messages:[{role:"user",content:"What are all the modes in GOZIE SEARCH?"}]})
+  });
+  assert.equal(productResponse.status, 200);
+  const product = await productResponse.json();
+  const answer = product.choices?.[0]?.message?.content || "";
+  for (const mode of ["AI Mode", "All", "Images", "Videos", "News"]) {
+    assert.ok(answer.includes(mode), "GOZIE AI should accurately explain the " + mode + " mode. Answer: " + answer);
+  }
 });
 
 test("mobile layouts remain usable without horizontal overflow at common phone widths", async () => {
