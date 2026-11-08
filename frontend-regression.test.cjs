@@ -393,7 +393,9 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   });
   assert.equal(identityResponse.status, 200);
   const identity = await identityResponse.json();
-  assert.equal(identity.choices?.[0]?.message?.content, "My name is Gozie AI.");
+  const identityAnswer=identity.choices?.[0]?.message?.content||"";
+  assert.equal(identityAnswer,"GOZIE AI is the assistant built into GOZIE SEARCH.");
+  assert.doesNotMatch(identityAnswer,/I am Gozie AI|My name is Gozie AI/i);
 
   const productResponse = await fetch(endpoint + "/v1/chat/completions", {
     method:"POST",
@@ -416,7 +418,17 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   const reasoning=await reasoningResponse.json();
   const reasoningAnswer=reasoning.choices?.[0]?.message?.content||"";
   assert.match(reasoningAnswer,/56/,"GOZIE AI should answer the actual question, not return identity boilerplate.");
-  assert.doesNotMatch(reasoningAnswer,/My name is Gozie AI/i);
+  assert.doesNotMatch(reasoningAnswer,/I am Gozie AI|My name is Gozie AI/i);
+
+  const creatorResponse=await fetch(endpoint+"/v1/chat/completions",{
+    method:"POST",headers:{Origin:origin,"Content-Type":"application/json"},
+    body:JSON.stringify({web_search:false,messages:[{role:"user",content:"Who created you?"}]})
+  });
+  assert.equal(creatorResponse.status,200);
+  const creator=await creatorResponse.json();
+  const creatorAnswer=creator.choices?.[0]?.message?.content||"";
+  assert.match(creatorAnswer,/created and developed by Henry Cee/i);
+  assert.doesNotMatch(creatorAnswer,/I am Gozie AI|My name is Gozie AI/i);
 });
 
 
