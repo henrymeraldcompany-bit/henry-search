@@ -55,6 +55,9 @@ function cleanMessage(message) {
       else if (part.type === "image_url" && typeof part.image_url?.url === "string" &&
         part.image_url.url.startsWith("data:image/") && part.image_url.url.length <= 5500000) {
         content.push({ type: "image_url", image_url: { url: part.image_url.url } });
+      } else if (part.type === "audio_data" && typeof part.data === "string" &&
+        /^data:audio\/[a-z0-9.+-]+;base64,/i.test(part.data) && part.data.length <= 14000000) {
+        content.push({ type: "audio_data", data: part.data });
       }
     }
     return content.length ? { role: "user", content } : null;
@@ -106,11 +109,33 @@ export default {
     });
 
     const imageData = Array.isArray(last.content) ? last.content.find(part => part.type === "image_url")?.image_url?.url : null;
+    const audioFiles = Array.isArray(last.content) ? last.content.filter(part => part.type === "audio_data") : [];
     const hasImage = Boolean(imageData);
+    let audioTranscript = "";
+    for (const audio of audioFiles) {
+      try {
+        const audioBase64 = audio.data.slice(audio.data.indexOf(",") + 1);
+        const transcription = await env.AI.run("@cf/openai/whisper", { audio: audioBase64 });
+        const text = String(transcription?.text || transcription?.response || "").trim();
+        if (text) audioTranscript += (audioTranscript ? "\\n\\n" : "") + text;
+      } catch (error) {
+        return json({ error: "Gozie AI could not transcribe the attached audio.", detail: String(error?.message || error).slice(0, 220) }, 502);
+      }
+    }
     const model = hasImage ? VISION_MODEL : MODEL;
-    const modelMessages = messages.map(message => message === last && hasImage ? { role: "user", content: question } : message);
+    const modelMessages = messages.map(message => {
+      if (message !== last || (!hasImage && !audioTranscript)) return message;
+      const textParts = Array.isArray(message.content)
+        ? message.content.filter(part => part.type === "text").map(part => part.text)
+        : [String(message.content || "")];
+      const imageParts = Array.isArray(message.content)
+        ? message.content.filter(part => part.type === "image_url")
+        : [];
+      const combinedText = [textParts.join("\\n"), audioTranscript ? "Audio transcription:\\n" + audioTranscript : ""].filter(Boolean).join("\\n\\n");
+      return { role: "user", content: [{ type: "text", text: combinedText }, ...imageParts] };
+    });
     let sources = [];
-    if (body.web_search !== false && !hasImage) {
+    if (body.web_search !== false && !hasImage && !audioFiles.length) {
       try { sources = await webSearch(question); } catch { sources = []; }
     }
     const sourceContext = sources.length
@@ -119,7 +144,7 @@ export default {
       : "";
     try {
       const result = await env.AI.run(model, {
-        messages: [{ role: "system", content: SYSTEM + (sourceContext ? "\n\n" + sourceContext : "") }, ...messages],
+        messages: [{ role: "system", content: SYSTEM + (sourceContext ? "\n\n" + sourceContext : "") }, ...modelMessages],
         max_tokens: Math.min(2048, Math.max(128, Number(body.max_tokens) || 1200)),
         temperature: 0.65
       });
