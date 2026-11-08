@@ -2780,3 +2780,83 @@ body.ai-mode-open{overflow:hidden}
 /* Place the original GOZIE SEARCH drawer above AI Mode's full-screen layer. */
 body.ai-mode-open .sidebar-backdrop{z-index:2098}
 body.ai-mode-open .app-sidebar{z-index:2099}
+
+
+/* Match All and Images filter previews to the compact, single-row Videos layout. */
+.web-filter-bar{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  align-items:end !important;
+  gap:6px !important;
+  padding:7px !important;
+}
+.web-filter{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:4px !important;
+  min-width:0 !important;
+  width:100% !important;
+  font-size:10px !important;
+}
+.web-filter select{
+  display:block;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:32px !important;
+  padding:4px 3px !important;
+  font-size:10px !important;
+  text-overflow:ellipsis;
+}
+.web-filter-count{
+  grid-column:1/-1;
+  margin:0 !important;
+  padding:2px 2px 0 !important;
+  font-size:10px !important;
+}
+.image-filter-bar{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  align-items:end !important;
+  gap:6px !important;
+  padding:7px !important;
+}
+.image-filter{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:4px !important;
+  min-width:0 !important;
+  width:100% !important;
+  font-size:10px !important;
+}
+.image-filter span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10px !important;
+  line-height:1.25;
+}
+.image-filter select{
+  display:block;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:32px !important;
+  padding:4px 3px !important;
+  font-size:10px !important;
+  text-overflow:ellipsis;
+}
+.image-filter-count{
+  grid-column:1/-1;
+  margin:0 !important;
+  padding:2px 2px 0 !important;
+  font-size:10px !important;
+}
+@media(max-width:480px){
+  .web-filter-bar{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:5px !important;padding:7px !important}
+  .web-filter{min-width:0 !important;width:100% !important;font-size:9px !important}
+  .web-filter select{min-width:0 !important;padding:4px 2px !important;font-size:9px !important}
+  .image-filter-bar{grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:5px !important;padding:7px !important}
+  .image-filter{min-width:0 !important;width:100% !important;font-size:9px !important}
+  .image-filter span{font-size:9px !important}
+  .image-filter select{min-width:0 !important;padding:4px 2px !important;font-size:9px !important}
+}
