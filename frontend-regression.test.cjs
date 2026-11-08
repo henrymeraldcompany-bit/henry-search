@@ -485,11 +485,13 @@ test("AI Mode colors follow GOZIE SEARCH light and dark themes",async()=>{
     const probe=document.createElement("div");probe.style.backgroundColor=value;document.body.append(probe);
     const result=getComputedStyle(probe).backgroundColor;probe.remove();return result;
   });
+  await page.evaluate(()=>localStorage.setItem("gozie-theme","dark"));
+  await page.reload({waitUntil:"networkidle"});
   await page.locator("#ai-mode-tab").click();
   const dark=await getPanel();
   assert.equal(dark,await getRoot());
-  await page.evaluate(()=>{localStorage.setItem("gozie-theme","light");window.location.reload();});
-  await page.locator("#ai-mode-tab").waitFor({state:"visible"});
+  await page.evaluate(()=>localStorage.setItem("gozie-theme","light"));
+  await page.reload({waitUntil:"networkidle"});
   await page.locator("#ai-mode-tab").click();
   const light=await getPanel();
   assert.equal(light,await getRoot());
