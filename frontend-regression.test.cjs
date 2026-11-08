@@ -41,7 +41,7 @@ async function mockSearchApis(page, calls) {
     const url = new URL(route.request().url());
     calls.push({ host:url.host, path:url.pathname, query:url.searchParams.get("q") });
     if (url.pathname === "/search") return route.fulfill({ json:{ source:"Regression fixture", results:[
-      { title:"Regression result", url:"https://example.com/regression", snippet:"A safe test result." },
+      { title:"Regression result", url:"https://example.com/regression", originalUrl:"https://example.com/original-regression", sources:["Example Publisher"], published:"2026-11-07T10:00:00.000Z", providers:["Regression Provider"], snippet:"A safe test result." },
       { title:"Unsafe URL fixture", url:"javascript:alert(1)", snippet:"This must not render." }
     ] } });
     if (url.pathname === "/news") return route.fulfill({ json:{ source:"Regression news", results:[
@@ -79,6 +79,30 @@ test("category tabs update selection and accessible state", async () => {
   assert.equal(await page.locator(".search-tab[data-category='videos']").getAttribute("aria-pressed"), "true");
   await page.close();
 });
+test("All search result source, date and website metadata stay on one line on mobile", async () => {
+  const page = await newPage(), calls = [];
+  await page.setViewportSize({ width:360, height:800 });
+  await mockSearchApis(page, calls);
+  await page.locator("#query").fill("metadata line test");
+  await page.getByRole("button", { name:"Search", exact:true }).click();
+  const metadata = page.locator(".web-result-card .result-attribution");
+  await metadata.waitFor();
+  const layout = await metadata.evaluate(el => ({
+    display:getComputedStyle(el).display,
+    whiteSpace:getComputedStyle(el).whiteSpace,
+    height:el.getBoundingClientRect().height,
+    lineHeight:parseFloat(getComputedStyle(el).lineHeight),
+    text:el.innerText
+  }));
+  assert.equal(layout.display, "block");
+  assert.equal(layout.whiteSpace, "nowrap");
+  assert.ok(layout.height <= layout.lineHeight + 1, "metadata should occupy one visual line");
+  assert.match(layout.text, /Example Publisher/);
+  assert.match(layout.text, /Website/);
+  assert.equal(await metadata.locator(".result-source-link").getAttribute("href"), "https://example.com/original-regression");
+  await page.close();
+});
+
 test("web search renders safe results and stores local history", async () => {
   const page = await newPage(), calls = [];
   await mockSearchApis(page, calls);
@@ -325,6 +349,26 @@ test("AI Mode opens a chat workspace and sends prompts to the GOZIE AI Worker", 
   await page.close();
 });
 
+
+test("AI Mode sidebar button opens the original drawer and its links exit AI Mode correctly", async () => {
+  const page = await newPage();
+  await page.setViewportSize({ width:390, height:844 });
+  await page.locator("#ai-mode-tab").click();
+  assert.equal(await page.locator("#ai-mode-view").isVisible(), true);
+  const layers = await page.evaluate(() => ({
+    ai:Number(getComputedStyle(document.querySelector("#ai-mode-view")).zIndex),
+    sidebar:Number(getComputedStyle(document.querySelector("#app-sidebar")).zIndex)
+  }));
+  await page.locator("#ai-open-app-sidebar").click();
+  assert.equal(await page.locator("#app-sidebar").getAttribute("aria-hidden"), "false");
+  assert.equal(await page.locator("#app-sidebar").isVisible(), true);
+  assert.ok(layers.sidebar > layers.ai, "original sidebar must layer above AI Mode");
+  await page.locator("#sidebar-history").click();
+  assert.equal(await page.locator("#ai-mode-view").isVisible(), false);
+  assert.equal(await page.locator("#history-view").isVisible(), true);
+  assert.equal(await page.locator("#app-sidebar").getAttribute("aria-hidden"), "true");
+  await page.close();
+});
 
 test("AI Mode automatically runs a query already entered in the main search box", async () => {
   const page = await newPage();

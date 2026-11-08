@@ -422,7 +422,7 @@ function renderResults(items) {
 
     const originalUrl = safeHttpUrl(item.originalUrl || item.url || item.link || "");
     if (originalUrl) {
-      const originalLink = makeLink(originalUrl, "Open original source");
+      const originalLink = makeLink(originalUrl, "Website ↗");
       originalLink.className = "result-source-link";
       attribution.append(" · ", originalLink);
     }
@@ -2181,6 +2181,7 @@ function openSidebar() {
   document.body.classList.add("sidebar-visible");
   requestAnimationFrame(() => (getSidebarFocusableItems()[0] || sidebar).focus());
 }
+window.openGozieAppSidebar = openSidebar;
 function closeSidebar() {
   if (!sidebar || !sidebar.classList.contains("is-open")) return;
   sidebar.classList.remove("is-open");
@@ -2225,6 +2226,7 @@ document.addEventListener("keydown", event => {
 });
 
 function showUtilityView(view) {
+  window.closeGozieAiModeForNavigation?.();
   closeSidebar();
   if (page) page.classList.toggle("utility-open", Boolean(view));
   if (settingsView) settingsView.hidden = view !== "settings";

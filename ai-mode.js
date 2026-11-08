@@ -28,6 +28,7 @@ function markdown(s){let t=escapeHTML(s);t=t.replace(/```([a-z0-9_-]*)\n([\s\S]*
 function moveCategoryNav(intoAiMode){if(!categoryNav)return;if(intoAiMode&&categorySlot&&categoryNav.parentElement!==categorySlot)categorySlot.append(categoryNav);else if(!intoAiMode&&categoryHome&&categoryNav.parentElement!==categoryHome)categoryHome.insertBefore(categoryNav,categoryHomeNext);}
 function setHistoryOpen(open){aiView.classList.toggle("history-open",Boolean(open));$("#ai-mobile-history")?.setAttribute("aria-expanded",String(Boolean(open)));}
 function setActive(on){active=on;aiTab.classList.toggle("active",on);aiTab.setAttribute("aria-pressed",String(on));if(on){moveCategoryNav(true);document.body.classList.add("ai-mode-open");document.querySelectorAll(".search-tab[data-category]").forEach(b=>{b.classList.remove("active");b.setAttribute("aria-pressed","false");});page.classList.add("utility-open");$("#hero").hidden=true;$("#results-section").hidden=true;["settings-view","history-view","google-view"].forEach(id=>{const e=document.getElementById(id);if(e)e.hidden=true;});aiView.hidden=false;window.scrollTo({top:0,behavior:"auto"});setTimeout(()=>prompt.focus({preventScroll:true}),50);}else{setHistoryOpen(false);aiView.hidden=true;moveCategoryNav(false);document.body.classList.remove("ai-mode-open");page.classList.remove("utility-open");if($("#hero"))$("#hero").hidden=false;}}
+window.closeGozieAiModeForNavigation = () => { if (active) setActive(false); };
 function openAiMode(){setActive(true);const q=$("#query")?.value.trim();if(q){prompt.value=q;send();}}
 aiTab.addEventListener("click",openAiMode);
 $("#sidebar-ai-mode")?.addEventListener("click",()=>{$("#sidebar-close")?.click();openAiMode();});
@@ -145,7 +146,7 @@ function createChat(){selectionMode=false;selectedChatIds.clear();const c={id:ne
 function startNew(){selectionMode=false;selectedChatIds.clear();attachments=[];renderAttachments();setHistoryOpen(false);createChat();prompt.value="";prompt.focus();}
 $("#ai-new-chat")?.addEventListener("click",startNew);$("#ai-new-chat-top")?.addEventListener("click",startNew);
 $("#ai-mobile-history")?.addEventListener("click",()=>setHistoryOpen(!aiView.classList.contains("history-open")));
-$("#ai-open-app-sidebar")?.addEventListener("click",()=>$("#menu-toggle")?.click());
+$("#ai-open-app-sidebar")?.addEventListener("click",()=>{if(typeof window.openGozieAppSidebar==="function")window.openGozieAppSidebar();else $("#menu-toggle")?.click();});
 $("#ai-close-history")?.addEventListener("click",()=>setHistoryOpen(false));
 $("#ai-clear-history")?.addEventListener("click",beginDeleteSelection);
 async function send(){

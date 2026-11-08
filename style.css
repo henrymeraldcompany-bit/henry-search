@@ -2738,15 +2738,18 @@ body.ai-mode-open{overflow:hidden}
 .image-card .image-card-source-meta,.image-card .image-card-license{
   min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal;word-break:normal;
 }
-/* Keep source / date / website metadata on one horizontal line, matching Videos. */
+/* Match Videos: source, date and website are one non-wrapping metadata line. */
 .web-result-card .result-attribution{
-  display:flex;flex-wrap:nowrap;align-items:center;gap:5px;min-width:0;overflow:hidden;white-space:nowrap;
+  display:block;width:100%;min-width:0;max-width:100%;margin:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  overflow-wrap:normal;word-break:normal;line-height:1.4;
 }
-.web-result-card .result-attribution>span{
-  display:block;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.web-result-card .result-attribution>span,
+.web-result-card .result-attribution>.result-source-link{
+  display:inline;white-space:inherit;overflow-wrap:normal;word-break:normal;
 }
 .web-result-card .result-attribution>.result-source-link{
-  display:inline-block;flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  max-width:none;overflow:visible;text-overflow:clip;
 }
 .news-preview-card .result-attribution{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .news-preview-card .result-attribution>*{white-space:nowrap}
@@ -2774,3 +2777,6 @@ body.ai-mode-open{overflow:hidden}
 #ai-open-app-sidebar{flex:none;width:40px;height:40px;border:1px solid var(--border);border-radius:50%;background:var(--surface-soft);color:var(--text);font-size:19px;cursor:pointer}
 #ai-open-app-sidebar:hover{border-color:var(--accent);background:var(--accent-soft)}
 @media(max-width:680px){#ai-open-app-sidebar{width:36px;height:36px;font-size:18px}}
+/* Place the original GOZIE SEARCH drawer above AI Mode's full-screen layer. */
+body.ai-mode-open .sidebar-backdrop{z-index:2098}
+body.ai-mode-open .app-sidebar{z-index:2099}
