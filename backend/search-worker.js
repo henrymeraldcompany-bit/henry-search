@@ -101,7 +101,7 @@ export async function runSearch(request, env = {}) {
      name:"GDELT",
      search:async()=>{
       const endpoint=new URL("https://api.gdeltproject.org/api/v2/doc/doc");
-      Object.entries({query:q,mode:"artlist",format:"json",maxrecords:"20",sort:"datedesc"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
+      Object.entries({query:q,mode:"artlist",format:"json",maxrecords:"20",startrecord:String(1+(newsPage-1)*20),sort:"datedesc"}).forEach(([k,v])=>endpoint.searchParams.set(k,v));
       const data=await json(endpoint.toString(),10000);
       return (Array.isArray(data.articles)?data.articles:[]).map(item=>{
        const url=normalizeNewsArticleUrl(item.url||item.url_mobile||"");
@@ -171,7 +171,9 @@ export async function runSearch(request, env = {}) {
       if(!existing.imageUrl&&item.imageUrl)existing.imageUrl=item.imageUrl;
     }
    }
-   const liveResults=rankArticles([...merged.values()],q).filter(item=>item.relevanceScore>0);
+   const gdeltOutcome=settled[0];
+    const gdeltPageCount=gdeltOutcome?.status==="fulfilled"&&Array.isArray(gdeltOutcome.value)?gdeltOutcome.value.length:0;
+    const liveResults=rankArticles([...merged.values()],q).filter(item=>item.relevanceScore>0);
    const filteredLiveNews=filterNewsByDate(liveResults,newsDateFilters);
    if(liveResults.length){
     const diverseLiveNews=diversifyNewsSources(filteredLiveNews.results);
@@ -217,7 +219,7 @@ export async function runSearch(request, env = {}) {
      const rankedIndexedNews=rankArticles(results,q);
      const filteredIndexedNews=filterNewsByDate(rankedIndexedNews,newsDateFilters);
      const diverseIndexedNews=diversifyNewsSources(filteredIndexedNews.results);
-     return out({query:q,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:diverseIndexedNews.length,sourceDiversity:summarizeNewsSourceDiversity(diverseIndexedNews),results:diverseIndexedNews.map(item=>({
+     return out({query:q,page:newsPage,hasMore:false,source:"GOZIE daily news index",fallback:"daily-index",providers:successfulProviders,attemptedProviders:providers.length,failedProviders,availableDateFilters:["any","day","week","month","year"],appliedFilters:filteredIndexedNews.appliedFilters,totalResults:diverseIndexedNews.length,sourceDiversity:summarizeNewsSourceDiversity(diverseIndexedNews),results:diverseIndexedNews.map(item=>({
       ...item,
       originalUrl:item.originalUrl||item.url,
       preview:{

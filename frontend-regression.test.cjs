@@ -58,9 +58,19 @@ async function mockSearchApis(page, calls) {
       { title:"Regression result", url:"https://example.com/regression", originalUrl:"https://example.com/original-regression", sources:["Example Publisher"], published:"2026-11-07T10:00:00.000Z", providers:["Regression Provider"], snippet:"A safe test result." },
       { title:"Unsafe URL fixture", url:"javascript:alert(1)", snippet:"This must not render." }
     ] } });
-    if (url.pathname === "/news") return route.fulfill({ json:{ source:"Regression news", results:[
-      { title:"Regression news headline", url:"https://news.example.com/story", imageUrl:"https://images.example.com/news.jpg", snippet:"News fixture." }
-    ] } });
+    if (url.pathname === "/news") {
+      const page = Number(url.searchParams.get("page") || "1");
+      const first = [
+        { title:"Regression news headline", url:"https://news.example.com/story", imageUrl:"https://images.example.com/news.jpg", snippet:"News fixture." },
+        { title:"Second regression story", url:"https://news.example.com/story-two", imageUrl:"https://images.example.com/news-two.jpg", snippet:"Another fixture." },
+        { title:"Third regression story", url:"https://news.example.com/story-three", imageUrl:"https://images.example.com/news-three.jpg", snippet:"Third fixture." }
+      ];
+      const second = [
+        { title:"Fourth regression story", url:"https://news.example.com/story-four", imageUrl:"https://images.example.com/news-four.jpg", snippet:"Fourth fixture." },
+        { title:"Fifth regression story", url:"https://news.example.com/story-five", imageUrl:"https://images.example.com/news-five.jpg", snippet:"Fifth fixture." }
+      ];
+      return route.fulfill({ json:{ source:"Regression news", page, hasMore:page===1, results:page===1?first:page===2?second:[] } });
+    }
     return route.fulfill({ json:{ results:[] } });
   });
   await page.route("https://gozie-search-media.henrymeraldcompany.workers.dev/**", async route => {
@@ -91,6 +101,9 @@ test("homepage removes the old footer and displays image-led world news", async 
   const cards = page.locator(".home-news-card");
   await cards.first().waitFor();
   assert.equal(await cards.count(), 3);
+  await page.locator("#home-news-sentinel").scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.querySelectorAll(".home-news-card").length === 5);
+  assert.equal(await cards.count(), 5, "scrolling to the feed end should append the next batch without removing earlier stories");
   assert.equal(await cards.first().locator(".home-news-image-link img").getAttribute("src"), "https://images.example.com/world-summit.jpg");
   assert.equal(await cards.first().locator(".home-news-title").getAttribute("href"), "https://news.example.com/world-summit");
   assert.match(await page.locator("#home-news-title").textContent(), /Latest world news/);

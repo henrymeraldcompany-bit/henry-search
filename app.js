@@ -310,12 +310,23 @@ function getNewsImageUrl(item) {
     item?.socialimage || item?.preview?.imageUrl || item?.preview?.image || ""
   );
 }
-function renderHomepageNews(items) {
+const homeNewsSeenUrls = new Set();
+let homeNewsPage = 1;
+let homeNewsHasMore = true;
+let homeNewsLoading = false;
+let homeNewsObserver = null;
+function renderHomepageNews(items, append = false) {
   if (!homeNewsGrid) return;
-  homeNewsGrid.replaceChildren();
-  for (const item of (Array.isArray(items) ? items : []).slice(0, 12)) {
+  if (!append) {
+    homeNewsGrid.replaceChildren();
+    homeNewsSeenUrls.clear();
+  }
+  for (const item of (Array.isArray(items) ? items : [])) {
     const articleUrl = safeHttpUrl(item.originalUrl || item.url || item.link || "");
     if (!articleUrl) continue;
+    const articleKey = articleUrl.replace(/#.*$/, "").replace(/\/$/, "").toLowerCase();
+    if (homeNewsSeenUrls.has(articleKey)) continue;
+    homeNewsSeenUrls.add(articleKey);
     const card = document.createElement("article");
     card.className = "home-news-card";
     const imageLink = makeLink(articleUrl, "");
@@ -367,22 +378,57 @@ function renderHomepageNews(items) {
     homeNewsGrid.appendChild(card);
   }
 }
-async function loadHomepageNews() {
-  if (!homeNewsFeed || !homeNewsGrid || !homeNewsStatus) return;
-  homeNewsStatus.textContent = "Loading the latest world news…";
+async function loadHomepageNews(append = false) {
+  if (!homeNewsFeed || !homeNewsGrid || !homeNewsStatus || homeNewsLoading) return;
+  if (!append) {
+    homeNewsPage = 1;
+    homeNewsHasMore = true;
+    homeNewsSeenUrls.clear();
+    homeNewsStatus.textContent = "Loading the latest world news…";
+  } else if (!homeNewsHasMore) return;
+  homeNewsLoading = true;
+  if (append) homeNewsStatus.textContent = "Loading more world news…";
   try {
     const endpoint = new URL("/news", SEARCH_API);
     endpoint.searchParams.set("q", "world");
-    const data = await fetchJson(endpoint.toString(), 16000);
-    const items = Array.isArray(data.results) ? data.results : [];
-    renderHomepageNews(items);
-    homeNewsStatus.textContent = homeNewsGrid.children.length
-      ? "Latest stories · " + (data.source || "News providers")
-      : "No world-news stories are available right now. Please refresh to try again.";
+    endpoint.searchParams.set("page", String(homeNewsPage));
+    const data = await fetchJson(endpoint.toString(), 20000);
+    const beforeCount = homeNewsGrid.children.length;
+    renderHomepageNews(Array.isArray(data.results) ? data.results : [], append);
+    const addedCount = homeNewsGrid.children.length - beforeCount;
+    homeNewsHasMore = data.hasMore === true && homeNewsPage < 100;
+    if (addedCount > 0) {
+      homeNewsPage += 1;
+      homeNewsStatus.textContent = "Latest stories · " + (data.source || "News providers");
+    } else if (homeNewsHasMore && append) {
+      homeNewsPage += 1;
+      homeNewsStatus.textContent = "Finding more world-news stories…";
+      if (homeNewsPage <= 100) requestAnimationFrame(() => loadHomepageNews(true));
+    } else {
+      homeNewsHasMore = false;
+      homeNewsStatus.textContent = homeNewsGrid.children.length
+        ? "You're all caught up on the latest available stories."
+        : "No world-news stories are available right now. Please refresh to try again.";
+    }
   } catch (error) {
-    homeNewsGrid.replaceChildren();
-    homeNewsStatus.textContent = "World news is temporarily unavailable. Please refresh to try again.";
+    if (!append) homeNewsGrid.replaceChildren();
+    homeNewsStatus.textContent = homeNewsGrid.children.length
+      ? "Couldn't load more stories. Scroll again to retry."
+      : "World news is temporarily unavailable. Please refresh to try again.";
+  } finally {
+    homeNewsLoading = false;
   }
+}
+function setupEndlessHomepageNews() {
+  const sentinel = document.querySelector("#home-news-sentinel");
+  if (!sentinel || !("IntersectionObserver" in window)) return;
+  homeNewsObserver?.disconnect();
+  homeNewsObserver = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting) && homeNewsHasMore && !homeNewsLoading) {
+      loadHomepageNews(true);
+    }
+  }, { root:null, rootMargin:"900px 0px", threshold:0 });
+  homeNewsObserver.observe(sentinel);
 }
 
 function renderNewsResults(items) {
@@ -2605,3 +2651,4 @@ function installStickySearchBar() {
 }
 installStickySearchBar();
 loadHomepageNews();
+setupEndlessHomepageNews();
