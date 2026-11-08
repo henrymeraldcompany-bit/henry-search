@@ -107,7 +107,11 @@ function renderHistory(){
   });
   updateHistorySelectionUI();
 }
-function renderChat(){messagesEl.replaceChildren();const chat=activeChat();if(!chat||!chat.messages.length){const w=document.createElement("div");w.className="ai-welcome";w.innerHTML='<div class="ai-welcome-mark">✦</div><h1>Ask Gozie AI</h1><p>Explore ideas, understand documents and work through questions with Gozie AI.</p><div class="ai-suggestions"><button type="button" data-ai-prompt="Explain a difficult topic in simple terms.">Explain a topic</button><button type="button" data-ai-prompt="Help me plan a project from start to finish.">Plan a project</button><button type="button" data-ai-prompt="Give me a clear summary of an important subject.">Summarise something</button></div>';messagesEl.append(w);w.querySelectorAll("[data-ai-prompt]").forEach(b=>b.addEventListener("click",()=>{prompt.value=b.dataset.aiPrompt;send();}));return;}chat.messages.forEach(m=>addMessage(m.role,m.content,m.sources));messagesEl.scrollTop=messagesEl.scrollHeight;}
+function updateScrollLatestButton(){const button=$("#ai-scroll-latest");if(!button)return;const distance=messagesEl.scrollHeight-messagesEl.scrollTop-messagesEl.clientHeight;button.hidden=distance<140;}
+function scrollToLatest(){messagesEl.scrollTo({top:messagesEl.scrollHeight,behavior:"smooth"});}
+messagesEl.addEventListener("scroll",updateScrollLatestButton,{passive:true});
+$("#ai-scroll-latest")?.addEventListener("click",scrollToLatest);
+function renderChat(){messagesEl.replaceChildren();const chat=activeChat();if(!chat||!chat.messages.length){const w=document.createElement("div");w.className="ai-welcome";w.innerHTML='<div class="ai-welcome-mark">✦</div><h1>Ask Gozie AI</h1><p>Explore ideas, understand documents and work through questions with Gozie AI.</p><div class="ai-suggestions"><button type="button" data-ai-prompt="Explain a difficult topic in simple terms.">Explain a topic</button><button type="button" data-ai-prompt="Help me plan a project from start to finish.">Plan a project</button><button type="button" data-ai-prompt="Give me a clear summary of an important subject.">Summarise something</button></div>';messagesEl.append(w);w.querySelectorAll("[data-ai-prompt]").forEach(b=>b.addEventListener("click",()=>{prompt.value=b.dataset.aiPrompt;send();}));return;}chat.messages.forEach(m=>addMessage(m.role,m.content,m.sources));messagesEl.scrollTop=messagesEl.scrollHeight;requestAnimationFrame(updateScrollLatestButton);}
 function addMessage(role,content,sources=[]){
   const row=document.createElement("div");row.className="ai-message "+role;
   const avatar=document.createElement("div");avatar.className="ai-message-avatar";avatar.textContent=role==="user"?"Y":"✦";
@@ -121,7 +125,7 @@ function addMessage(role,content,sources=[]){
     }
     const actions=document.createElement("div");actions.className="ai-message-actions";const copy=document.createElement("button");copy.type="button";copy.textContent="Copy";copy.addEventListener("click",()=>navigator.clipboard?.writeText(content));actions.append(copy);body.append(actions);
   }
-  messagesEl.scrollTop=messagesEl.scrollHeight;
+  messagesEl.scrollTop=messagesEl.scrollHeight;requestAnimationFrame(updateScrollLatestButton);
 }
 function renderAttachments(){preview.replaceChildren();preview.hidden=!attachments.length;attachments.forEach((a,i)=>{const chip=document.createElement("div");chip.className="ai-attachment-chip";const name=document.createElement("span");name.textContent=(a.name||"Attachment")+(a.kind==="image"?" · image":"");const remove=document.createElement("button");remove.type="button";remove.textContent="×";remove.setAttribute("aria-label","Remove "+a.name);remove.addEventListener("click",()=>{attachments.splice(i,1);renderAttachments();});chip.append(name,remove);preview.append(chip);});}
 function loadScript(src){return new Promise((resolve,reject)=>{const existing=[...document.scripts].find(s=>s.src===src);if(existing){existing.addEventListener("load",resolve,{once:true});if(window.pdfjsLib||window.mammoth||window.XLSX)resolve();return;}const s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error("Could not load document reader library."));document.head.append(s);});}
