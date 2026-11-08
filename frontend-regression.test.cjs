@@ -309,8 +309,8 @@ test("AI Mode opens a chat workspace and sends prompts to the GOZIE AI Worker", 
   assert.equal(await page.locator("#ai-mode-view").isVisible(), true);
   assert.equal(await page.locator("#ai-category-slot .search-tabs .search-tab").first().getAttribute("id"), "ai-mode-tab");
   assert.equal((await page.locator("#ai-category-slot .search-tabs .search-tab").first().textContent()).trim(), "AI Mode");
-  assert.equal(await page.locator("#ai-history-bottom").count(), 0);
-  assert.equal((await page.locator("#ai-chat-topbar").textContent().catch(()=> "" )).includes("Cloudflare"), false);
+  assert.equal((await page.locator(".ai-history-bottom").textContent()).includes("Henry Cee"), false);
+  assert.equal((await page.locator(".ai-chat-topbar").textContent()).includes("Cloudflare"), false);
   await page.locator("#ai-mobile-history").click();
   assert.equal(await page.locator("#ai-mode-view").evaluate(el => el.classList.contains("history-open")), true);
   await page.locator("#ai-close-history").click();
