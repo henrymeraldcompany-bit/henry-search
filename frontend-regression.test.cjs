@@ -490,7 +490,7 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   assert.equal(identityResponse.status, 200);
   const identity = await identityResponse.json();
   const identityAnswer=identity.choices?.[0]?.message?.content||"";
-  assert.equal(identityAnswer,"GOZIE AI is the assistant built into GOZIE SEARCH. It was created and developed by Henry Cee.");
+  assert.equal(identityAnswer,"GOZIE AI is the assistant built into GOZIE SEARCH. GOZIE AI was created and developed by Henry Cee.");
   assert.doesNotMatch(identityAnswer,/I am Gozie AI|My name is Gozie AI/i);
 
   const productResponse = await fetch(endpoint + "/v1/chat/completions", {
