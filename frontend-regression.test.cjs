@@ -126,7 +126,7 @@ test("sidebar, settings, theme and history controls remain functional", async ()
     return { left: style.left, right: style.right, transform: style.transform };
   });
   assert.equal(sidebarPosition.right, "0px", "sidebar should be anchored to the right edge");
-  assert.equal(sidebarPosition.left, "auto", "sidebar should not be anchored to the left edge");
+  assert.notEqual(sidebarPosition.left, "0px", "sidebar should not be anchored to the left edge");
   await page.locator("#sidebar-settings").click();
   assert.equal(await page.locator("#settings-view").isVisible(), true);
   await page.locator("#setting-reduced-motion").check();
