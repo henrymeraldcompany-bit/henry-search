@@ -342,6 +342,29 @@ test("AI Mode automatically runs a query already entered in the main search box"
 });
 
 
+
+test("GOZIE AI carries an accurate GOZIE SEARCH product knowledge base", () => {
+  const worker = fs.readFileSync(path.join(ROOT, "ai-worker/worker.js"), "utf8");
+  for (const fact of [
+    "GOZIE SEARCH PRODUCT KNOWLEDGE",
+    "All: ordinary web search",
+    "Images: image gallery",
+    "Videos: video discovery",
+    "News: searches current articles",
+    "AI Mode: ask follow-up questions",
+    "Conversation history is saved in this browser on this device",
+    "up to four frames",
+    "speech-to-text transcription",
+    "Google item in the navigation menu",
+    "robots.txt",
+    "does not bypass sign-in, paywalls, CAPTCHAs",
+    "Do not expose internal Worker names"
+  ]) {
+    assert.ok(worker.includes(fact), "GOZIE AI knowledge must include: " + fact);
+  }
+  assert.match(worker, /GOZIE_SEARCH_KNOWLEDGE \+ \(sourceContext/);
+});
+
 test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests", async () => {
   const endpoint = "https://gozie-search-ai.henrymeraldcompany.workers.dev";
   const origin = "https://henrymeraldcompany-bit.github.io";
