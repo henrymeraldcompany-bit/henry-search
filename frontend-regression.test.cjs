@@ -33,6 +33,11 @@ after(async () => {
 });
 async function newPage() {
   const page = await browser.newPage();
+  await page.route("https://images.example.com/**", route => route.fulfill({
+    status:200,
+    contentType:"image/svg+xml",
+    body:"<svg xmlns='http://www.w3.org/2000/svg' width='2' height='2'><rect width='2' height='2' fill='#789'/></svg>"
+  }));
   await page.route(url => {
     const parsed = new URL(url);
     return parsed.hostname === "henry-search-api.henrymeraldcompany.workers.dev" &&
@@ -95,7 +100,11 @@ test("homepage removes the old footer and displays image-led world news", async 
 test("sticky search appears after the original search form scrolls off screen and submits", async () => {
   const page = await newPage();
   assert.equal(await page.locator("#sticky-search-shell").isVisible(), false);
-  await page.route("https://henry-search-api.henrymeraldcompany.workers.dev/search", route => route.fulfill({
+  await page.route(url => {
+    const parsed = new URL(url);
+    return parsed.hostname === "henry-search-api.henrymeraldcompany.workers.dev" &&
+      parsed.pathname === "/search";
+  }, route => route.fulfill({
     json:{ source:"Sticky search fixture", results:[
       { title:"Sticky search result", url:"https://example.com/sticky", snippet:"Search submitted from the floating search bar." }
     ] }
@@ -481,7 +490,7 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   assert.equal(identityResponse.status, 200);
   const identity = await identityResponse.json();
   const identityAnswer=identity.choices?.[0]?.message?.content||"";
-  assert.equal(identityAnswer,"GOZIE AI is the assistant built into GOZIE SEARCH.");
+  assert.equal(identityAnswer,"GOZIE AI is the assistant built into GOZIE SEARCH. It was created and developed by Henry Cee.");
   assert.doesNotMatch(identityAnswer,/I am Gozie AI|My name is Gozie AI/i);
 
   const productResponse = await fetch(endpoint + "/v1/chat/completions", {
