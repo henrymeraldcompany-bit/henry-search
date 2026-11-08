@@ -6,6 +6,8 @@ on:
     paths:
       - "index.html"
       - "app.js"
+      - "ai-mode.js"
+      - "ai-worker/**"
       - "style.css"
       - "pwa.js"
       - "manifest.webmanifest"
@@ -17,6 +19,8 @@ on:
     paths:
       - "index.html"
       - "app.js"
+      - "ai-mode.js"
+      - "ai-worker/**"
       - "style.css"
       - "pwa.js"
       - "manifest.webmanifest"
