@@ -84,6 +84,7 @@
           data-category="videos"
           aria-pressed="false"
         >Videos</button>
+        <button type="button" class="search-tab ai-mode-tab" id="ai-mode-tab" aria-pressed="false">✦ AI Mode</button>
       </nav>
 
       <form id="search-form" class="search-form">
@@ -197,6 +198,13 @@
       </div>
       <p id="google-view-status" class="google-view-status" role="status" aria-live="polite">Google results will be displayed inside GOZIE SEARCH.</p>
     </section>
+    <section id="ai-mode-view" class="ai-mode-view" hidden aria-label="GOZIE AI conversation">
+      <aside class="ai-history-panel"><div class="ai-history-top"><strong>GOZIE AI</strong><button id="ai-new-chat" type="button">＋ New chat</button></div><div class="ai-history-heading">RECENT CHATS</div><div id="ai-history-list" class="ai-history-list"></div><div class="ai-history-bottom"><button id="ai-clear-history" type="button">Clear history</button><span>Built by Henry Cee</span></div></aside>
+      <div class="ai-chat-main"><div class="ai-chat-topbar"><button id="ai-mobile-history" type="button" aria-label="Open chat history">☰</button><div><strong>✦ Gozie AI</strong><small>AI Mode · Cloudflare Workers AI</small></div><button id="ai-new-chat-top" type="button" aria-label="New chat">＋</button></div>
+        <div id="ai-chat-messages" class="ai-chat-messages" aria-live="polite"><div class="ai-welcome"><div class="ai-welcome-mark">✦</div><h1>Ask Gozie AI</h1><p>Explore ideas, understand documents and work through questions with Gozie AI.</p><div class="ai-suggestions"><button type="button" data-ai-prompt="Explain a difficult topic in simple terms.">Explain a topic</button><button type="button" data-ai-prompt="Help me plan a project from start to finish.">Plan a project</button><button type="button" data-ai-prompt="Give me a clear summary of an important subject.">Summarise something</button></div></div></div>
+        <div class="ai-composer-wrap"><div id="ai-attachment-preview" class="ai-attachment-preview" hidden></div><form id="ai-chat-form" class="ai-chat-form"><input id="ai-file-input" type="file" accept="image/jpeg,image/png,image/webp,.pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json" multiple hidden><button id="ai-attach-button" type="button" aria-label="Attach a file">＋</button><textarea id="ai-prompt" rows="1" maxlength="12000" placeholder="Ask Gozie AI anything..." required></textarea><button id="ai-send-button" type="submit" aria-label="Send message">↑</button></form><p class="ai-disclaimer">Gozie AI can make mistakes. Check important information. Free model usage is subject to Cloudflare daily limits.</p></div>
+      </div>
+    </section>
     <footer class="footer">
       <a class="footer-brand" href="./">GOZIE SEARCH</a>
       <span>Explore beyond limits.</span>
@@ -216,6 +224,7 @@
     <button id="sidebar-new-search" class="sidebar-item primary-sidebar-item" type="button"><span>＋</span> New search</button>
     <button id="sidebar-history" class="sidebar-item" type="button"><span>◷</span> Search history</button>
     <button id="sidebar-google" class="sidebar-item" type="button"><span aria-hidden="true">G</span> Google</button>
+    <button id="sidebar-ai-mode" class="sidebar-item" type="button"><span>✦</span> AI Mode</button>
     <button id="sidebar-settings" class="sidebar-item" type="button"><span>⚙</span> Settings</button>
     <div class="sidebar-divider"></div>
     <button id="theme-toggle" class="sidebar-item theme-sidebar-item" type="button" aria-label="Switch to light mode"><span id="theme-icon">☀</span><span class="theme-label">Light mode</span></button>
@@ -223,6 +232,7 @@
   </aside>
 
   <script src="app.js?v=6"></script>
+  <script src="ai-mode.js?v=1"></script>
   <script src="pwa.js?v=6"></script>
 </body>
 </html>
