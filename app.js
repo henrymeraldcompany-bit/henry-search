@@ -417,6 +417,10 @@ async function loadHomepageNews(append = false) {
       : "World news is temporarily unavailable. Please refresh to try again.";
   } finally {
     homeNewsLoading = false;
+    const sentinel = document.querySelector("#home-news-sentinel");
+    if (homeNewsHasMore && sentinel && sentinel.getBoundingClientRect().top < window.innerHeight + 900) {
+      requestAnimationFrame(() => loadHomepageNews(true));
+    }
   }
 }
 function setupEndlessHomepageNews() {
