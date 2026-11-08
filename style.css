@@ -2871,6 +2871,7 @@ body.ai-mode-open .app-sidebar{z-index:2099}
 .home-news-live span{width:7px;height:7px;border-radius:50%;background:var(--accent)}
 .home-news-status{margin:0 0 13px;color:var(--muted);font-size:12px;line-height:1.5}
 .home-news-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.home-news-sentinel{width:100%;min-height:2px;pointer-events:none}
 .home-news-card{display:grid;min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:17px;background:var(--surface);box-shadow:var(--shadow);transition:transform .18s ease,border-color .18s ease}
 .home-news-card:hover{transform:translateY(-2px);border-color:var(--accent)}
 .home-news-image-link{position:relative;display:block;min-width:0;aspect-ratio:16/9;overflow:hidden;background:linear-gradient(135deg,var(--surface-soft),var(--accent-soft));color:var(--muted)}
