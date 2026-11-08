@@ -4,19 +4,22 @@ const AI_API="https://gozie-search-ai.henrymeraldcompany.workers.dev";
 const $=s=>document.querySelector(s);
 const page=$("#main-content"),aiView=$("#ai-mode-view"),aiTab=$("#ai-mode-tab"),form=$("#search-form"),prompt=$("#ai-prompt"),messagesEl=$("#ai-chat-messages"),historyEl=$("#ai-history-list"),fileInput=$("#ai-file-input"),preview=$("#ai-attachment-preview"),sendButton=$("#ai-send-button"),categoryNav=document.querySelector(".search-tabs"),categorySlot=$("#ai-category-slot"),categoryHome=categoryNav?.parentElement,categoryHomeNext=categoryNav?.nextSibling;
 if(!aiView||!form||!aiTab)return;
-let active=false,busy=false,attachments=[],chats=[],currentId=null;
+let active=false,busy=false,attachments=[],chats=[],currentId=null,selectionMode=false;
+const selectedChatIds=new Set();
 try{chats=JSON.parse(localStorage.getItem("gozie-ai-mode-history")||"[]");if(!Array.isArray(chats))chats=[];}catch{chats=[];}
 function save(){
+  chats.sort((a,b)=>Number(Boolean(b.pinned))-Number(Boolean(a.pinned))||(b.updated||0)-(a.updated||0));
   try {
-    const stored = chats.slice(0,20).map(chat => ({
-      ...chat,
-      messages: (chat.messages || []).slice(-40).map(message => ({
+    const stored=chats.slice(0,40).map(chat=>({
+      ...chat,pinned:Boolean(chat.pinned),
+      messages:(chat.messages||[]).slice(-40).map(message=>({
         ...message,
-        context: typeof message.context === "string" ? message.context.slice(0,18000) : undefined
+        context:typeof message.context==="string"?message.context.slice(0,18000):undefined,
+        sources:Array.isArray(message.sources)?message.sources.slice(0,6).map(source=>({title:String(source.title||"").slice(0,220),url:String(source.url||"").slice(0,1200)})):undefined
       }))
     }));
-    localStorage.setItem("gozie-ai-mode-history", JSON.stringify(stored));
-  } catch {}
+    localStorage.setItem("gozie-ai-mode-history",JSON.stringify(stored));
+  }catch{}
 }
 function newId(){return "chat-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);}
 function activeChat(){return chats.find(c=>c.id===currentId);}
@@ -32,9 +35,94 @@ document.querySelectorAll(".search-tab[data-category]").forEach(b=>b.addEventLis
 $("#sidebar-new-search")?.addEventListener("click",()=>setActive(false));
 document.querySelectorAll("[data-return-home]").forEach(b=>b.addEventListener("click",()=>setActive(false)));
 form.addEventListener("submit",e=>{if(!active)return;e.preventDefault();e.stopImmediatePropagation();const q=$("#query")?.value.trim();if(q)prompt.value=q;send();},true);
-function renderHistory(){historyEl.replaceChildren();if(!chats.length){const p=document.createElement("p");p.className="ai-history-empty";p.textContent="Your conversations will appear here.";historyEl.append(p);return;}chats.forEach(c=>{const b=document.createElement("button");b.type="button";b.className="ai-history-item"+(c.id===currentId?" active":"");const s=document.createElement("span");s.textContent=c.title||"New conversation";b.append("◷",s);b.addEventListener("click",()=>{currentId=c.id;attachments=[];renderAttachments();renderChat();renderHistory();aiView.classList.remove("history-open");});historyEl.append(b);});}
-function renderChat(){messagesEl.replaceChildren();const chat=activeChat();if(!chat||!chat.messages.length){const w=document.createElement("div");w.className="ai-welcome";w.innerHTML='<div class="ai-welcome-mark">✦</div><h1>Ask Gozie AI</h1><p>Explore ideas, understand documents and work through questions with Gozie AI.</p><div class="ai-suggestions"><button type="button" data-ai-prompt="Explain a difficult topic in simple terms.">Explain a topic</button><button type="button" data-ai-prompt="Help me plan a project from start to finish.">Plan a project</button><button type="button" data-ai-prompt="Give me a clear summary of an important subject.">Summarise something</button></div>';messagesEl.append(w);w.querySelectorAll("[data-ai-prompt]").forEach(b=>b.addEventListener("click",()=>{prompt.value=b.dataset.aiPrompt;send();}));return;}chat.messages.forEach(m=>addMessage(m.role,m.content));messagesEl.scrollTop=messagesEl.scrollHeight;}
-function addMessage(role,content){const row=document.createElement("div");row.className="ai-message "+role;const avatar=document.createElement("div");avatar.className="ai-message-avatar";avatar.textContent=role==="user"?"Y":"✦";const body=document.createElement("div");body.className="ai-message-content";body.innerHTML=markdown(content);row.append(avatar,body);messagesEl.append(row);if(role==="assistant"){const actions=document.createElement("div");actions.className="ai-message-actions";const copy=document.createElement("button");copy.type="button";copy.textContent="Copy";copy.addEventListener("click",()=>navigator.clipboard?.writeText(content));actions.append(copy);body.append(actions);}messagesEl.scrollTop=messagesEl.scrollHeight;}
+function updateHistorySelectionUI(){
+  const selectedCount=selectedChatIds.size,total=chats.length;
+  const all=historyEl.querySelector("#ai-select-all-chats");
+  if(all){all.checked=total>0&&selectedCount===total;all.indeterminate=selectedCount>0&&selectedCount<total;}
+  const count=historyEl.querySelector("#ai-selection-count");if(count)count.textContent=selectedCount+" selected";
+  const remove=historyEl.querySelector("#ai-delete-selected");if(remove)remove.disabled=selectedCount===0;
+}
+function toggleChatSelection(id){
+  if(selectedChatIds.has(id))selectedChatIds.delete(id);else selectedChatIds.add(id);
+  const checkbox=historyEl.querySelector('[data-ai-chat-select="'+CSS.escape(id)+'"]');
+  if(checkbox)checkbox.checked=selectedChatIds.has(id);updateHistorySelectionUI();
+}
+function chooseChat(id){if(selectionMode){toggleChatSelection(id);return;}currentId=id;attachments=[];renderAttachments();renderChat();renderHistory();setHistoryOpen(false);}
+function deleteChatById(id){
+  const target=chats.find(chat=>chat.id===id);if(!target)return;
+  if(!confirm('Delete "'+(target.title||"this conversation")+'" from this device?'))return;
+  chats=chats.filter(chat=>chat.id!==id);selectedChatIds.delete(id);
+  if(currentId===id){const next=[...chats].sort((a,b)=>Number(Boolean(b.pinned))-Number(Boolean(a.pinned))||(b.updated||0)-(a.updated||0))[0];currentId=next?.id||null;}
+  save();renderHistory();renderChat();
+}
+function toggleChatPin(id){const chat=chats.find(item=>item.id===id);if(!chat)return;chat.pinned=!chat.pinned;save();renderHistory();}
+function openChatOptions(id,row){
+  historyEl.querySelectorAll(".ai-history-menu").forEach(menu=>menu.remove());
+  const chat=chats.find(item=>item.id===id);if(!chat)return;
+  const menu=document.createElement("div");menu.className="ai-history-menu";
+  const pin=document.createElement("button");pin.type="button";pin.textContent=chat.pinned?"Unpin chat":"Pin chat";pin.addEventListener("click",()=>toggleChatPin(id));
+  const remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete chat";remove.addEventListener("click",()=>{menu.remove();deleteChatById(id);});
+  menu.append(pin,remove);row.append(menu);
+}
+function beginDeleteSelection(){if(!chats.length)return;selectionMode=true;selectedChatIds.clear();renderHistory();}
+function cancelDeleteSelection(){selectionMode=false;selectedChatIds.clear();renderHistory();}
+function deleteSelectedChats(){
+  const ids=[...selectedChatIds].filter(id=>chats.some(chat=>chat.id===id));if(!ids.length)return;
+  if(!confirm("Delete "+ids.length+" selected conversation"+(ids.length===1?"":"s")+"?"))return;
+  const removed=new Set(ids);chats=chats.filter(chat=>!removed.has(chat.id));
+  if(currentId&&removed.has(currentId)){const next=[...chats].sort((a,b)=>Number(Boolean(b.pinned))-Number(Boolean(a.pinned))||(b.updated||0)-(a.updated||0))[0];currentId=next?.id||null;}
+  selectionMode=false;selectedChatIds.clear();save();renderHistory();renderChat();
+}
+function renderHistory(){
+  historyEl.replaceChildren();
+  const ordered=[...chats].sort((a,b)=>Number(Boolean(b.pinned))-Number(Boolean(a.pinned))||(b.updated||0)-(a.updated||0));
+  if(selectionMode&&ordered.length){
+    const bar=document.createElement("div");bar.className="ai-history-selection-bar";
+    const top=document.createElement("div");top.className="ai-history-selection-top";
+    const label=document.createElement("label");label.className="ai-history-select-all";
+    const all=document.createElement("input");all.type="checkbox";all.id="ai-select-all-chats";
+    all.checked=selectedChatIds.size===ordered.length;all.indeterminate=selectedChatIds.size>0&&selectedChatIds.size<ordered.length;
+    all.addEventListener("change",()=>{selectedChatIds.clear();if(all.checked)ordered.forEach(chat=>selectedChatIds.add(chat.id));renderHistory();});
+    const labelText=document.createElement("span");labelText.textContent="Select all";label.append(all,labelText);
+    const count=document.createElement("span");count.id="ai-selection-count";count.textContent=selectedChatIds.size+" selected";top.append(label,count);
+    const actions=document.createElement("div");actions.className="ai-history-selection-actions";
+    const cancel=document.createElement("button");cancel.type="button";cancel.textContent="Cancel";cancel.addEventListener("click",cancelDeleteSelection);
+    const remove=document.createElement("button");remove.type="button";remove.id="ai-delete-selected";remove.textContent="Delete selected";remove.disabled=selectedChatIds.size===0;remove.addEventListener("click",deleteSelectedChats);
+    actions.append(cancel,remove);bar.append(top,actions);historyEl.append(bar);
+  }
+  if(!ordered.length){const p=document.createElement("p");p.className="ai-history-empty";p.textContent="Your conversations will appear here.";historyEl.append(p);return;}
+  ordered.forEach(chat=>{
+    const row=document.createElement("div");row.className="ai-history-row";row.dataset.chatId=chat.id;
+    if(selectionMode){const check=document.createElement("input");check.type="checkbox";check.className="ai-history-select";check.setAttribute("aria-label","Select "+(chat.title||"conversation"));check.dataset.aiChatSelect=chat.id;check.checked=selectedChatIds.has(chat.id);check.addEventListener("change",()=>{if(check.checked)selectedChatIds.add(chat.id);else selectedChatIds.delete(chat.id);updateHistorySelectionUI();});row.append(check);}
+    const button=document.createElement("button");button.type="button";button.className="ai-history-item"+(chat.id===currentId?" active":"");button.setAttribute("aria-label",(selectionMode?"Select conversation: ":"Open conversation: ")+(chat.title||"New conversation"));
+    const title=document.createElement("span");title.textContent=(chat.pinned?"📌 ":"")+(chat.title||"New conversation");button.append("◷",title);
+    let pressTimer=null,didLongPress=false;
+    button.addEventListener("pointerdown",event=>{if(selectionMode||event.button!==0)return;didLongPress=false;clearTimeout(pressTimer);pressTimer=setTimeout(()=>{didLongPress=true;openChatOptions(chat.id,row);},600);});
+    const stopPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}};
+    button.addEventListener("pointerup",stopPress);button.addEventListener("pointercancel",stopPress);button.addEventListener("pointerleave",stopPress);
+    button.addEventListener("contextmenu",event=>{event.preventDefault();didLongPress=true;openChatOptions(chat.id,row);});
+    button.addEventListener("click",event=>{if(didLongPress){event.preventDefault();didLongPress=false;return;}chooseChat(chat.id);});row.append(button);
+    if(!selectionMode){const more=document.createElement("button");more.type="button";more.className="ai-chat-more";more.textContent="⋯";more.title="Pin or delete chat";more.setAttribute("aria-label","More options for "+(chat.title||"conversation"));more.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();openChatOptions(chat.id,row);});row.append(more);}
+    historyEl.append(row);
+  });
+  updateHistorySelectionUI();
+}
+function renderChat(){messagesEl.replaceChildren();const chat=activeChat();if(!chat||!chat.messages.length){const w=document.createElement("div");w.className="ai-welcome";w.innerHTML='<div class="ai-welcome-mark">✦</div><h1>Ask Gozie AI</h1><p>Explore ideas, understand documents and work through questions with Gozie AI.</p><div class="ai-suggestions"><button type="button" data-ai-prompt="Explain a difficult topic in simple terms.">Explain a topic</button><button type="button" data-ai-prompt="Help me plan a project from start to finish.">Plan a project</button><button type="button" data-ai-prompt="Give me a clear summary of an important subject.">Summarise something</button></div>';messagesEl.append(w);w.querySelectorAll("[data-ai-prompt]").forEach(b=>b.addEventListener("click",()=>{prompt.value=b.dataset.aiPrompt;send();}));return;}chat.messages.forEach(m=>addMessage(m.role,m.content,m.sources));messagesEl.scrollTop=messagesEl.scrollHeight;}
+function addMessage(role,content,sources=[]){
+  const row=document.createElement("div");row.className="ai-message "+role;
+  const avatar=document.createElement("div");avatar.className="ai-message-avatar";avatar.textContent=role==="user"?"Y":"✦";
+  const body=document.createElement("div");body.className="ai-message-content";body.innerHTML=markdown(content);row.append(avatar,body);messagesEl.append(row);
+  if(role==="assistant"){
+    if(Array.isArray(sources)&&sources.length){
+      const sourceList=document.createElement("div");sourceList.className="ai-source-list";sourceList.setAttribute("aria-label","Web sources");
+      const heading=document.createElement("strong");heading.textContent="Sources";sourceList.append(heading);
+      sources.slice(0,6).forEach((source,index)=>{let safe=null;try{const parsed=new URL(source.url);if(["https:","http:"].includes(parsed.protocol))safe=parsed.href;}catch{}if(!safe)return;const link=document.createElement("a");link.href=safe;link.target="_blank";link.rel="noopener noreferrer";link.textContent=(index+1)+". "+String(source.title||new URL(safe).hostname).slice(0,160);sourceList.append(link);});
+      if(sourceList.querySelector("a"))body.append(sourceList);
+    }
+    const actions=document.createElement("div");actions.className="ai-message-actions";const copy=document.createElement("button");copy.type="button";copy.textContent="Copy";copy.addEventListener("click",()=>navigator.clipboard?.writeText(content));actions.append(copy);body.append(actions);
+  }
+  messagesEl.scrollTop=messagesEl.scrollHeight;
+}
 function renderAttachments(){preview.replaceChildren();preview.hidden=!attachments.length;attachments.forEach((a,i)=>{const chip=document.createElement("div");chip.className="ai-attachment-chip";const name=document.createElement("span");name.textContent=(a.name||"Attachment")+(a.kind==="image"?" · image":"");const remove=document.createElement("button");remove.type="button";remove.textContent="×";remove.setAttribute("aria-label","Remove "+a.name);remove.addEventListener("click",()=>{attachments.splice(i,1);renderAttachments();});chip.append(name,remove);preview.append(chip);});}
 function loadScript(src){return new Promise((resolve,reject)=>{const existing=[...document.scripts].find(s=>s.src===src);if(existing){existing.addEventListener("load",resolve,{once:true});if(window.pdfjsLib||window.mammoth||window.XLSX)resolve();return;}const s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error("Could not load document reader library."));document.head.append(s);});}
 async function compressImage(file){const bitmap=await createImageBitmap(file);const scale=Math.min(1,1440/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext("2d");ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();return canvas.toDataURL("image/jpeg",0.82);}
@@ -49,12 +137,12 @@ if(/\.(xlsx|xls|xlsm|xlsb)$/i.test(name)){if(file.size>10*1024*1024)throw new Er
 throw new Error("This file type is not supported yet: "+file.name);}
 $("#ai-attach-button").addEventListener("click",()=>fileInput.click());
 fileInput.addEventListener("change",async()=>{const files=[...fileInput.files];const existingBytes=attachments.reduce((n,a)=>n+(a.size||0),0);if(attachments.length+files.length>4){alert("Gozie AI accepts up to 4 attachments in one message.");fileInput.value="";return;}if(files.some(f=>f.size>10*1024*1024)||existingBytes+files.reduce((n,f)=>n+f.size,0)>20*1024*1024){alert("Each attachment must be 10 MB or smaller, and all attachments together must not exceed 20 MB.");fileInput.value="";return;}for(const file of files){try{await extractFile(file);}catch(error){alert(error.message||"Could not read file.");}}renderAttachments();fileInput.value="";});
-function createChat(){const c={id:newId(),title:"New conversation",messages:[],updated:Date.now()};chats.unshift(c);currentId=c.id;save();renderHistory();renderChat();}
-function startNew(){attachments=[];renderAttachments();setHistoryOpen(false);createChat();prompt.value="";prompt.focus();}
+function createChat(){selectionMode=false;selectedChatIds.clear();const c={id:newId(),title:"New conversation",messages:[],updated:Date.now(),pinned:false};chats.unshift(c);currentId=c.id;save();renderHistory();renderChat();}
+function startNew(){selectionMode=false;selectedChatIds.clear();attachments=[];renderAttachments();setHistoryOpen(false);createChat();prompt.value="";prompt.focus();}
 $("#ai-new-chat")?.addEventListener("click",startNew);$("#ai-new-chat-top")?.addEventListener("click",startNew);
 $("#ai-mobile-history")?.addEventListener("click",()=>setHistoryOpen(!aiView.classList.contains("history-open")));
 $("#ai-close-history")?.addEventListener("click",()=>setHistoryOpen(false));
-$("#ai-clear-history")?.addEventListener("click",()=>{if(!chats.length)return;if(!confirm("Delete all GOZIE AI conversations from this device?"))return;chats=[];currentId=null;save();renderHistory();renderChat();});
+$("#ai-clear-history")?.addEventListener("click",beginDeleteSelection);
 async function send(){
   if (busy) return;
   const question = prompt.value.trim();
@@ -115,12 +203,13 @@ async function send(){
     if (!response.ok) throw new Error(data.error || data.detail || "AI request failed (" + response.status + ").");
 
     const answer = data.choices?.[0]?.message?.content || data.response || "No answer was returned.";
-    chat.messages.push({ role: "assistant", content: answer });
+    const sources=Array.isArray(data.sources)?data.sources.slice(0,6):[];
+    chat.messages.push({ role: "assistant", content: answer, sources });
     chat.updated = Date.now();
     save();
   } catch (error) {
     const message = error instanceof TypeError
-      ? "Gozie AI could not connect to its assistant service. Check your internet connection and try again."
+      ? "Gozie AI could not reach the assistant service. Check your internet connection, then try sending again."
       : error?.name === "TimeoutError"
         ? "Gozie AI took too long to respond. Please try again."
         : (error.message || "Please try again later.");

@@ -408,6 +408,82 @@ test("GOZIE AI Worker is online and accepts GOZIE SEARCH cross-origin requests",
   }
 });
 
+
+test("AI Mode history supports select-all, cancel, selected deletion, pin and long-press", async () => {
+  const page=await newPage();
+  await page.route("https://gozie-search-ai.henrymeraldcompany.workers.dev/**",async route=>{
+    const body=route.request().postDataJSON();
+    const last=body.messages.at(-1);
+    const prompt=typeof last.content==="string"?last.content:"attachment";
+    await route.fulfill({json:{id:"ai-history-fixture",sources:[{title:"Example source",url:"https://example.com/grounded-answer"}],choices:[{index:0,message:{role:"assistant",content:"Answer for "+prompt},finish_reason:"stop"}]}});
+  });
+  await page.locator("#ai-mode-tab").click();
+  await page.locator("#ai-prompt").fill("First conversation");
+  await page.locator("#ai-send-button").click();
+  await page.getByText("Answer for First conversation",{exact:true}).waitFor();
+  await page.getByRole("link",{name:"1. Example source"}).waitFor();
+  await page.locator("#ai-new-chat-top").click();
+  await page.locator("#ai-prompt").fill("Second conversation");
+  await page.locator("#ai-send-button").click();
+  await page.getByText("Answer for Second conversation",{exact:true}).waitFor();
+  await page.locator("#ai-mobile-history").click();
+
+  const first=page.getByRole("button",{name:"Open conversation: First conversation"});
+  await first.dispatchEvent("pointerdown",{button:0,pointerId:1,pointerType:"touch"});
+  await page.waitForTimeout(650);
+  await first.dispatchEvent("pointerup",{button:0,pointerId:1,pointerType:"touch"});
+  await page.getByRole("button",{name:"Pin chat",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Pin chat",exact:true}).click();
+  let chats=await page.evaluate(()=>JSON.parse(localStorage.getItem("gozie-ai-mode-history")||"[]"));
+  assert.equal(chats.find(chat=>chat.title==="First conversation").pinned,true);
+  assert.equal(chats[0].title,"First conversation");
+
+  await page.locator("#ai-clear-history").click();
+  assert.equal(await page.locator("#ai-select-all-chats").isVisible(),true);
+  await page.locator("#ai-select-all-chats").check();
+  assert.equal(await page.locator(".ai-history-select:checked").count(),2);
+  await page.getByRole("button",{name:"Cancel",exact:true}).click();
+  assert.equal(await page.locator("#ai-select-all-chats").count(),0);
+
+  await page.locator("#ai-clear-history").click();
+  await page.locator(".ai-history-select").last().check();
+  page.once("dialog",dialog=>dialog.accept());
+  await page.getByRole("button",{name:"Delete selected"}).click();
+  chats=await page.evaluate(()=>JSON.parse(localStorage.getItem("gozie-ai-mode-history")||"[]"));
+  assert.equal(chats.length,1);
+  await page.close();
+});
+
+test("AI Mode colors follow GOZIE SEARCH light and dark themes",async()=>{
+  const page=await newPage();
+  await page.locator("#ai-mode-tab").click();
+  const getPanel=()=>page.locator(".ai-chat-main").evaluate(el=>getComputedStyle(el).backgroundColor);
+  const getRoot=()=>page.evaluate(()=>{
+    const value=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    const probe=document.createElement("div");probe.style.backgroundColor=value;document.body.append(probe);
+    const result=getComputedStyle(probe).backgroundColor;probe.remove();return result;
+  });
+  const dark=await getPanel();
+  assert.equal(dark,await getRoot());
+  await page.locator("#ai-mode-tab").click();
+  await page.locator("#menu-toggle").click();
+  await page.locator("#theme-toggle").click();
+  await page.locator("#menu-toggle").click();
+  await page.locator("#ai-mode-tab").click();
+  const light=await getPanel();
+  assert.equal(light,await getRoot());
+  assert.notEqual(light,dark);
+  await page.close();
+});
+
+test("GOZIE AI uses a stronger free-plan-compatible model and question-first prompts",()=>{
+  const worker=fs.readFileSync(path.join(ROOT,"ai-worker/worker.js"),"utf8");
+  assert.match(worker,/const MODEL = "@cf\/zai-org\/glm-4\.7-flash"/);
+  assert.match(worker,/Always answer the user's actual question first/);
+  assert.match(worker,/GOZIE SEARCH LIVE WEB RESULTS/);
+  assert.match(worker,/Cite factual claims supported by search results with \[1\]/);
+});
+
 test("mobile layouts remain usable without horizontal overflow at common phone widths", async () => {
   for (const width of [320, 360, 390]) {
     const page = await browser.newPage({
