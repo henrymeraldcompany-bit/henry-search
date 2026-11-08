@@ -2747,3 +2747,12 @@ body.ai-mode-open{overflow:hidden}
 @media(max-width:600px){
   .web-result-card .result-attribution,.news-preview-card .result-attribution,.video-card .video-card-source,.image-card .image-card-source-meta,.image-card .image-card-license{font-size:10px}
 }
+
+/* Floating return-to-latest control, positioned just above the composer */
+#ai-scroll-latest{position:absolute;z-index:5;right:calc(50% - 22px);bottom:calc(100% + 8px);display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--muted);font-size:19px;line-height:1;box-shadow:0 3px 12px rgba(0,0,0,.12);opacity:.82;cursor:pointer;transition:opacity .15s ease,transform .15s ease}
+#ai-scroll-latest:hover{opacity:1;transform:translateY(2px);color:var(--text);border-color:var(--accent)}
+#ai-scroll-latest[hidden]{display:none}
+#ai-new-chat-top{width:auto;min-width:94px;height:36px;padding:0 13px;border:1px solid var(--border);border-radius:20px;font-size:12px;font-weight:650;white-space:nowrap;margin-left:auto}
+#ai-mobile-history{margin-left:2px;transform:translateX(-2px)}
+.ai-history-top #ai-new-chat{min-width:82px;padding:8px 13px;font-weight:650}
+@media(max-width:680px){#ai-new-chat-top{min-width:82px;height:34px;padding:0 11px;font-size:12px}#ai-mobile-history{margin-left:0;transform:translateX(-3px)}#ai-scroll-latest{right:calc(50% - 17px);bottom:calc(100% + 7px);width:32px;height:32px}}
