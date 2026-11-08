@@ -47,6 +47,23 @@ function identity(text) {
   if (asksOwner) return "Gozie AI is owned by Henry Cee.";
   return null;
 }
+function productAnswer(text) {
+  const q = String(text || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9\\s]/g, " ").replace(/\\s+/g, " ").trim();
+  const mentionsSearch = q.includes("gozie search") || q.includes("search engine") || q.includes("search tabs");
+  if (!mentionsSearch) return null;
+  if (/(mode|tab|categor|types of search|search options|what can i search)/.test(q)) return "GOZIE SEARCH has five main modes: AI Mode for conversational questions and follow-ups; All for ordinary web results; Images for image discovery and filters; Videos for video discovery, source/date/duration filters and permitted in-page playback; and News for current articles from multiple news sources. AI Mode is the first tab. The other four are All, Images, Videos and News.";
+  if (/(history|previous search|past search|saved search|sync|synchroni)/.test(q)) return "GOZIE SEARCH keeps two separate histories: search history and AI chat history. Both are saved locally in your current browser on this device, not automatically synced to another phone or browser. Search history supports reopening, starring, individual deletion and selected/bulk deletion with confirmation.";
+  if (/(upload|attach|file|document|pdf|docx|spreadsheet)/.test(q)) return "AI Mode can read PDF, DOCX, XLSX, XLS, XLSM, XLSB, CSV, TXT, Markdown, JSON, XML and HTML files. It can inspect supported images, transcribe audio, and sample up to four frames from a video. Uploads are limited to four files per message, 10 MB per file and 20 MB combined. Long documents are extracted within bounded page/character limits, so very large files may be only partially included.";
+  if (/(video|film|clip|movie)/.test(q) && /(upload|attach|understand|analyse|analyze|watch|play|search|find)/.test(q)) return "GOZIE SEARCH has a Videos tab with source, upload-date and duration filters. Some PeerTube results can play inside GOZIE when their embed is permitted; other results open at their original source. In AI Mode, an uploaded video is represented by a contact sheet of up to four sampled frames, not full video playback or full-motion analysis.";
+  if (/(image|picture|photo)/.test(q) && /(search|find|filter|upload|attach|analyse|analyze|understand)/.test(q)) return "The Images tab shows a gallery with date, dimensions, source and format filters. Select a thumbnail to open the full-size preview, then use the source or license link to visit the original page. GOZIE SEARCH does not re-host those images. AI Mode can also inspect supported image attachments.";
+  if (/(news|article|headline)/.test(q) && /(search|find|source|date|filter)/.test(q)) return "The News tab searches current article feeds, combines results from multiple publishers, removes duplicate stories, and shows source and publication-date details. Open the original publisher link to read the article. News availability can vary when individual feeds are unavailable.";
+  if (/(google|embed|iframe)/.test(q)) return "GOZIE SEARCH includes a Google view in its navigation menu. It opens Google results for your last submitted query inside an embedded frame. Google or another website can block embedded display using its own security rules, so some pages may remain blank or refuse to load; GOZIE cannot override those restrictions.";
+  if (/(voice|speak|microphone|read aloud|speech)/.test(q)) return "GOZIE SEARCH supports browser-based voice search where available, with language choices for English (Nigeria), English (UK), English (US), Igbo, Yoruba and Hausa. Search results can also be read aloud with play, pause and stop controls. Availability depends on your browser and device.";
+  if (/(setting|theme|dark mode|light mode|preference|motion)/.test(q)) return "GOZIE SEARCH settings include opening results in a new tab, reducing motion and choosing the default search category. The navigation menu also lets you switch between dark and light themes. These preferences are remembered on the current device.";
+  if (/(read here|read page|read webpage|open article|page preview|webpage)/.test(q)) return "Some ordinary web results provide a Read here in GOZIE preview. It can extract a short text preview from a public HTML page when that site's robots.txt allows the GOZIE bot. It does not bypass logins, paywalls, CAPTCHAs or blocked robots rules.";
+  if (/(what is|about|features|can do|purpose|overview|explain)/.test(q)) return "GOZIE SEARCH is an independent, phone-friendly search product with five modes: AI Mode, All, Images, Videos and News. It also includes local search and AI chat history, dark/light themes, settings, voice search, read-aloud controls, an embedded Google view, safe video previews and a limited public-page reader. Search results come from external providers and indexed public sources, so availability and coverage can vary.";
+  return null;
+}
 function cleanMessage(message) {
   if (!message || !["user", "assistant"].includes(message.role)) return null;
   if (typeof message.content === "string") return { role: message.role, content: message.content.slice(0, 12000) };
@@ -104,7 +121,7 @@ export default {
     if (!last) return json({ error: "A user message is required." }, 400);
     const question = typeof last.content === "string" ? last.content :
       last.content.filter(part => part.type === "text").map(part => part.text).join(" ");
-    const fixed = identity(question);
+    const fixed = identity(question) || productAnswer(question);
     if (fixed) return json({
       id: "gozie-" + crypto.randomUUID(), model: MODEL,
       choices: [{ index: 0, message: { role: "assistant", content: fixed }, finish_reason: "stop" }]
